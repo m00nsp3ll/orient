@@ -1,0 +1,436 @@
+"use client"
+
+import { useQuery } from "@tanstack/react-query"
+import { format } from "date-fns"
+import { tr } from "date-fns/locale"
+import {
+  Calendar,
+  Clock,
+  CheckCircle,
+  Users,
+  Plus,
+  Banknote,
+  Building2,
+  Phone,
+  Mail,
+  Navigation,
+} from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { useState } from "react"
+import { AppointmentForm } from "@/components/forms/appointment-form"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
+interface DashboardStats {
+  todayAppointments: number
+  pendingAppointments: number
+  completedToday: number
+  totalCustomers: number
+}
+
+interface Appointment {
+  id: string
+  startTime: string
+  endTime: string
+  status: string
+  notes?: string
+  pax?: number
+  customerName?: string
+  customerPhone?: string
+  customer?: { name: string; email?: string; phone?: string } | null
+  service: { name: string; duration: number; price: number }
+  staff?: { user: { name: string } } | null
+  agency?: {
+    id: string
+    companyName: string
+    address?: string
+    user?: {
+      name: string
+      email: string
+      phone?: string
+    }
+  } | null
+  hotel?: {
+    name: string
+    distanceToMarina?: number | null
+    region?: { name: string }
+  } | null
+}
+
+export default function DashboardPage() {
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [selectedAgency, setSelectedAgency] = useState<Appointment["agency"] | null>(null)
+
+  const { data: stats } = useQuery<DashboardStats>({
+    queryKey: ["dashboard-stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard/stats")
+      if (!res.ok) throw new Error("Failed to fetch stats")
+      return res.json()
+    },
+  })
+
+  const today = new Date()
+  const { data: todayAppointments } = useQuery<Appointment[]>({
+    queryKey: ["appointments", "today"],
+    queryFn: async () => {
+      const startDate = format(today, "yyyy-MM-dd")
+      const endDate = format(today, "yyyy-MM-dd")
+      const res = await fetch(
+        `/api/appointments?startDate=${startDate}T00:00:00&endDate=${endDate}T23:59:59`
+      )
+      if (!res.ok) throw new Error("Failed to fetch appointments")
+      return res.json()
+    },
+  })
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "CONFIRMED":
+        return <Badge className="bg-green-100 text-green-800">Onaylı</Badge>
+      case "PENDING":
+        return <Badge className="bg-yellow-100 text-yellow-800">Bekliyor</Badge>
+      case "COMPLETED":
+        return <Badge className="bg-blue-100 text-blue-800">Tamamlandı</Badge>
+      case "CANCELLED":
+        return <Badge className="bg-red-100 text-red-800">İptal</Badge>
+      default:
+        return <Badge>{status}</Badge>
+    }
+  }
+
+  const isRest = (appointment: Appointment) => appointment.notes === "REST"
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-gray-500">
+            {format(today, "d MMMM yyyy, EEEE", { locale: tr })}
+          </p>
+        </div>
+        <Button onClick={() => setShowAppointmentForm(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Yeni Randevu
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Bugünün Randevuları
+            </CardTitle>
+            <Calendar className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats?.todayAppointments || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Bekleyen</CardTitle>
+            <Clock className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats?.pendingAppointments || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Bugün Tamamlanan
+            </CardTitle>
+            <CheckCircle className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats?.completedToday || 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Toplam Müşteri
+            </CardTitle>
+            <Users className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats?.totalCustomers || 0}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Today's Appointments */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Bugünün Randevuları</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {todayAppointments && todayAppointments.length > 0 ? (
+            <div className="space-y-3">
+              {todayAppointments
+                .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                .map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => setSelectedAppointment(appointment)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="text-center min-w-[60px]">
+                      <div className="text-lg font-bold">
+                        {format(new Date(appointment.startTime), "HH:mm")}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {format(new Date(appointment.endTime), "HH:mm")}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {appointment.customerName || appointment.customer?.name || "-"}
+                        </span>
+                        {appointment.pax && appointment.pax > 1 && (
+                          <Badge variant="outline" className="text-xs">
+                            {appointment.pax} kişi
+                          </Badge>
+                        )}
+                        {isRest(appointment) && (
+                          <Badge className="bg-red-500 text-white flex items-center gap-1">
+                            <Banknote className="h-3 w-3" />
+                            ÖDEME KAPIDA
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {appointment.service.name}
+                      </div>
+                      {appointment.agency && (
+                        <button
+                          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedAgency(appointment.agency)
+                          }}
+                        >
+                          <Building2 className="h-3 w-3" />
+                          {appointment.agency.companyName}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(appointment.status)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Bugün için randevu bulunmuyor
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <AppointmentForm
+        open={showAppointmentForm}
+        onOpenChange={setShowAppointmentForm}
+      />
+
+      {/* Appointment Detail Dialog */}
+      <Dialog
+        open={!!selectedAppointment}
+        onOpenChange={() => setSelectedAppointment(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Randevu Detayı</DialogTitle>
+          </DialogHeader>
+
+          {selectedAppointment && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500">Durum</span>
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(selectedAppointment.status)}
+                  {isRest(selectedAppointment) && (
+                    <Badge className="bg-red-500 text-white flex items-center gap-1">
+                      <Banknote className="h-3 w-3" />
+                      ÖDEME KAPIDA
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {selectedAppointment.agency && (
+                <div
+                  className="bg-blue-50 p-3 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
+                  onClick={() => {
+                    setSelectedAgency(selectedAppointment.agency)
+                  }}
+                >
+                  <div className="flex items-center gap-2 text-blue-700 font-medium">
+                    <Building2 className="h-4 w-4" />
+                    {selectedAppointment.agency.companyName}
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">Detaylar için tıklayın</div>
+                </div>
+              )}
+
+              {selectedAppointment.hotel && (
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="font-medium text-green-800">
+                    {selectedAppointment.hotel.name}
+                  </div>
+                  {selectedAppointment.hotel.region && (
+                    <div className="text-sm text-green-700">
+                      {selectedAppointment.hotel.region.name}
+                    </div>
+                  )}
+                  {selectedAppointment.hotel.distanceToMarina && (
+                    <div className="flex items-center gap-4 text-sm mt-1">
+                      <div className="flex items-center gap-1 text-green-700">
+                        <Navigation className="h-3 w-3" />
+                        <span>{selectedAppointment.hotel.distanceToMarina} km</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-green-700">
+                        <Clock className="h-3 w-3" />
+                        <span>~{Math.round(selectedAppointment.hotel.distanceToMarina * 2)} dk</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedAppointment.pax && selectedAppointment.pax > 0 && (
+                <div className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                  <span className="text-gray-500">Kişi Sayısı (PAX)</span>
+                  <span className="font-medium">{selectedAppointment.pax}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-sm text-gray-500">Müşteri</span>
+                  <p className="font-medium">
+                    {selectedAppointment.customerName || selectedAppointment.customer?.name || "-"}
+                  </p>
+                  {selectedAppointment.customerPhone && (
+                    <p className="text-sm text-gray-500">{selectedAppointment.customerPhone}</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-sm text-gray-500">Personel</span>
+                  <p className="font-medium">{selectedAppointment.staff?.user?.name || "-"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-sm text-gray-500">Hizmet</span>
+                  <p className="font-medium">{selectedAppointment.service.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {selectedAppointment.service.duration} dk - {selectedAppointment.service.price}₺
+                  </p>
+                </div>
+                <div>
+                  <span className="text-sm text-gray-500">Tarih & Saat</span>
+                  <p className="font-medium">
+                    {format(new Date(selectedAppointment.startTime), "dd.MM.yyyy")}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {format(new Date(selectedAppointment.startTime), "HH:mm")} -{" "}
+                    {format(new Date(selectedAppointment.endTime), "HH:mm")}
+                  </p>
+                </div>
+              </div>
+
+              {selectedAppointment.notes && selectedAppointment.notes !== "REST" && (
+                <div>
+                  <span className="text-sm text-gray-500">Notlar</span>
+                  <p>{selectedAppointment.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Agency Detail Dialog */}
+      <Dialog
+        open={!!selectedAgency}
+        onOpenChange={() => setSelectedAgency(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Acenta Bilgileri
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedAgency && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-bold text-blue-800">
+                  {selectedAgency.companyName}
+                </h3>
+                {selectedAgency.address && (
+                  <p className="text-sm text-blue-700 mt-1">{selectedAgency.address}</p>
+                )}
+              </div>
+
+              {selectedAgency.user && (
+                <div className="space-y-3">
+                  <h4 className="font-medium text-gray-700">Yetkili Bilgileri</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                      <Users className="h-4 w-4 text-gray-500" />
+                      <span>{selectedAgency.user.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                      <Mail className="h-4 w-4 text-gray-500" />
+                      <a href={`mailto:${selectedAgency.user.email}`} className="text-blue-600 hover:underline">
+                        {selectedAgency.user.email}
+                      </a>
+                    </div>
+                    {selectedAgency.user.phone && (
+                      <div className="flex items-center gap-3 p-2 bg-gray-50 rounded">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <a href={`tel:${selectedAgency.user.phone}`} className="text-blue-600 hover:underline">
+                          {selectedAgency.user.phone}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

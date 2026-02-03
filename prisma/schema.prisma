@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  password      String
+  name          String
+  phone         String?
+  role          Role          @default(CUSTOMER)
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  accounts      Account[]
+  agency        Agency?
+  appointments  Appointment[] @relation("CustomerAppointments")
+  sessions      Session[]
+  staff         Staff?
+  driver        Driver?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  services    Service[]
+}
+
+model Service {
+  id            String           @id @default(cuid())
+  name          String
+  description   String?
+  duration      Int
+  price         Float
+  isActive      Boolean          @default(true)
+  categoryId    String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  appointments  Appointment[]
+  category      ServiceCategory? @relation(fields: [categoryId], references: [id])
+  staffServices StaffService[]
+}
+
+model Staff {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  specializations String[]
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  appointments    Appointment[]
+  blockedTimes    BlockedTime[]
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffServices   StaffService[]
+  workingHours    WorkingHours[]
+}
+
+model StaffService {
+  id        String  @id @default(cuid())
+  staffId   String
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff     Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, serviceId])
+}
+
+model WorkingHours {
+  id        String   @id @default(cuid())
+  staffId   String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, dayOfWeek])
+}
+
+model BlockedTime {
+  id        String   @id @default(cuid())
+  staffId   String
+  startTime DateTime
+  endTime   DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id            String            @id @default(cuid())
+  customerId    String?
+  staffId       String?
+  serviceId     String
+  agencyId      String?
+  hotelId       String?
+  pax           Int?
+  customerName  String?
+  customerPhone String?
+  startTime     DateTime
+  endTime       DateTime
+  status        AppointmentStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  agency        Agency?           @relation(fields: [agencyId], references: [id])
+  customer      User?             @relation("CustomerAppointments", fields: [customerId], references: [id])
+  hotel         Hotel?            @relation(fields: [hotelId], references: [id])
+  service       Service           @relation(fields: [serviceId], references: [id])
+  staff         Staff?            @relation(fields: [staffId], references: [id])
+  transfers     Transfer[]
+
+  @@index([startTime])
+  @@index([staffId, startTime])
+  @@index([agencyId])
+}
+
+model Agency {
+  id           String        @id @default(cuid())
+  userId       String?       @unique
+  name         String
+  code         String        @unique
+  companyName  String?
+  contactName  String?
+  phone        String?
+  email        String?
+  address      String?
+  commission   Float         @default(0)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+}
+
+model TimeSlotQuota {
+  id        String   @id @default(cuid())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  maxQuota  Int      @default(5)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([dayOfWeek, startTime])
+}
+
+model Hotel {
+  id               String        @id @default(cuid())
+  name             String
+  address          String?
+  distanceToMarina Float?
+  regionId         String
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  googleMapsUrl    String?
+  lat              Float?
+  lng              Float?
+  appointments     Appointment[]
+  region           Region        @relation(fields: [regionId], references: [id])
+}
+
+model Region {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hotels    Hotel[]
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  AGENCY
+  CUSTOMER
+  DRIVER
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum TransferStatus {
+  PENDING
+  PICKING_UP
+  AT_SPA
+  IN_SERVICE
+  DROPPING_OFF
+  COMPLETED
+  CANCELLED
+}
+
+model Driver {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  phone     String
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transfers Transfer[]
+}
+
+model Transfer {
+  id            String         @id @default(cuid())
+  appointmentId String
+  driverId      String?
+  status        TransferStatus @default(PENDING)
+  pickupTime    DateTime?
+  arrivalTime   DateTime?
+  departureTime DateTime?
+  dropoffTime   DateTime?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  driver        Driver?        @relation(fields: [driverId], references: [id])
+
+  @@index([appointmentId])
+  @@index([driverId])
+  @@index([status])
+}
