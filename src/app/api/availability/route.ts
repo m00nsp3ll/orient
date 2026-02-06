@@ -8,9 +8,9 @@ export async function GET(req: NextRequest) {
   const serviceId = searchParams.get("serviceId")
   const date = searchParams.get("date")
 
-  if (!serviceId || !date) {
+  if (!date) {
     return NextResponse.json(
-      { error: "serviceId ve date parametreleri gerekli" },
+      { error: "date parametresi gerekli" },
       { status: 400 }
     )
   }
@@ -20,13 +20,19 @@ export async function GET(req: NextRequest) {
   const selectedDate = new Date(year, month - 1, day)
   const dayOfWeek = selectedDate.getDay()
 
-  // Get service duration
-  const service = await prisma.service.findUnique({
-    where: { id: serviceId },
-  })
+  // Get service duration - if serviceId provided, use it; otherwise use default
+  let serviceDuration = 60 // Default duration in minutes
 
-  if (!service) {
-    return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
+  if (serviceId) {
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId },
+    })
+
+    if (!service) {
+      return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
+    }
+
+    serviceDuration = service.duration
   }
 
   // Get quotas for this day
@@ -90,9 +96,9 @@ export async function GET(req: NextRequest) {
 
   let currentSlot = workStart
 
-  while (isBefore(addMinutes(currentSlot, service.duration), workEnd) ||
-         format(addMinutes(currentSlot, service.duration), "HH:mm") === format(workEnd, "HH:mm")) {
-    const slotEnd = addMinutes(currentSlot, service.duration)
+  while (isBefore(addMinutes(currentSlot, serviceDuration), workEnd) ||
+         format(addMinutes(currentSlot, serviceDuration), "HH:mm") === format(workEnd, "HH:mm")) {
+    const slotEnd = addMinutes(currentSlot, serviceDuration)
     const slotTimeStr = format(currentSlot, "HH:mm")
 
     // Check if slot is in the past (only for today)

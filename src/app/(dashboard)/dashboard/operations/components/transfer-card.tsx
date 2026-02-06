@@ -30,7 +30,8 @@ import {
   Car,
   Banknote,
   MoreHorizontal,
-  AlertTriangle
+  AlertTriangle,
+  Send
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -85,6 +86,7 @@ interface TransferCardProps {
   busyDriverIds: string[]
   onStatusChange: (transferId: string, newStatus: string) => void
   onDriverChange: (transferId: string, driverId: string | null) => void
+  onStartDropoff?: (transferId: string) => void
 }
 
 const statusFlow: Record<string, string> = {
@@ -117,23 +119,42 @@ export function TransferCard({
   busyDriverIds,
   onStatusChange,
   onDriverChange,
+  onStartDropoff,
 }: TransferCardProps) {
   const [showDetails, setShowDetails] = useState(false)
   const [showRestWarning, setShowRestWarning] = useState(false)
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(transfer.driverId)
+
   const { appointment } = transfer
   const isRest = appointment.notes?.includes("REST")
   const nextStatus = statusFlow[transfer.status]
   const canAdvance = nextStatus && transfer.status !== "COMPLETED" && transfer.status !== "CANCELLED"
 
   const handleStatusChange = () => {
-    // Şoför kontrolü: PENDING -> PICKING_UP veya DROPPING_OFF -> COMPLETED için şoför gerekli
-    if ((transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId) {
-      toast.error("Lütfen önce şoför seçin!")
+    // PENDING -> "Almaya Git" sadece şoför ata
+    if (transfer.status === "PENDING") {
+      if (!selectedDriverId) {
+        toast.error("Lütfen önce şoför seçin!")
+        return
+      }
+      // Sadece şoför ata - Araç Hazırlık'a düşsün
+      onDriverChange(transfer.id, selectedDriverId)
       return
     }
 
-    // REST uyarısı: IN_SERVICE -> DROPPING_OFF (Hizmeti Bitir) veya DROPPING_OFF -> COMPLETED (Bırakıldı)
-    if (isRest && (transfer.status === "IN_SERVICE" || transfer.status === "DROPPING_OFF")) {
+    // DROPPING_OFF -> "Bırakmaya Gönder" sadece şoför ata
+    if (transfer.status === "DROPPING_OFF") {
+      if (!selectedDriverId) {
+        toast.error("Lütfen önce şoför seçin!")
+        return
+      }
+      // Sadece şoför ata - Araç Hazırlık'a düşsün
+      onDriverChange(transfer.id, selectedDriverId)
+      return
+    }
+
+    // REST uyarısı: IN_SERVICE -> DROPPING_OFF (Hizmeti Bitir)
+    if (isRest && transfer.status === "IN_SERVICE") {
       setShowRestWarning(true)
     } else {
       onStatusChange(transfer.id, nextStatus)
@@ -253,19 +274,26 @@ export function TransferCard({
           </div>
         )}
 
-        {/* Şoför Seçici - Sadece PENDING ve DROPPING_OFF (Transfer Bekliyor) durumlarında göster */}
-        {/* PICKING_UP'da şoför zaten atanmış, değiştirme yok */}
-        {(transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && (
+        {/* Şoför Seçici - Sadece PENDING ve DROPPING_OFF durumlarında göster */}
+        {(transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId && (
           <div className="mt-2">
             <DriverSelector
               drivers={drivers}
-              value={transfer.driverId}
-              onValueChange={(driverId) => onDriverChange(transfer.id, driverId)}
+              value={selectedDriverId}
+              onValueChange={(driverId) => setSelectedDriverId(driverId)}
               disabled={false}
               busyDriverIds={busyDriverIds}
-              currentDriverId={transfer.driverId}
+              currentDriverId={selectedDriverId}
               compact
             />
+          </div>
+        )}
+
+        {/* Şoför seçildiyse göster (local state) */}
+        {(transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId && selectedDriverId && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+            <Car className="h-3 w-3 text-blue-600" />
+            <span className="font-medium">{drivers.find(d => d.id === selectedDriverId)?.user.name}</span>
           </div>
         )}
 

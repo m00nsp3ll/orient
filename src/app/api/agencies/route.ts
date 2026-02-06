@@ -83,6 +83,18 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Yeni acentaya tüm hizmetleri ata
+    const allServices = await prisma.service.findMany()
+    if (allServices.length > 0) {
+      await prisma.agencyService.createMany({
+        data: allServices.map(service => ({
+          agencyId: agency.id,
+          serviceId: service.id,
+        })),
+        skipDuplicates: true,
+      })
+    }
+
     return NextResponse.json(agency)
   } catch (error) {
     if (error instanceof z.ZodError) {

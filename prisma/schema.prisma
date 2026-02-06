@@ -71,18 +71,20 @@ model ServiceCategory {
 }
 
 model Service {
-  id            String           @id @default(cuid())
-  name          String
-  description   String?
-  duration      Int
-  price         Float
-  isActive      Boolean          @default(true)
-  categoryId    String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  appointments  Appointment[]
-  category      ServiceCategory? @relation(fields: [categoryId], references: [id])
-  staffServices StaffService[]
+  id                  String               @id @default(cuid())
+  name                String
+  description         String?
+  duration            Int
+  price               Float
+  isActive            Boolean              @default(true)
+  categoryId          String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  appointments        Appointment[]
+  category            ServiceCategory?     @relation(fields: [categoryId], references: [id])
+  staffServices       StaffService[]
+  agencyServices      AgencyService[]
+  appointmentServices AppointmentService[]
 }
 
 model Staff {
@@ -135,49 +137,80 @@ model BlockedTime {
 }
 
 model Appointment {
-  id            String            @id @default(cuid())
-  customerId    String?
-  staffId       String?
-  serviceId     String
-  agencyId      String?
-  hotelId       String?
-  pax           Int?
-  customerName  String?
-  customerPhone String?
-  startTime     DateTime
-  endTime       DateTime
-  status        AppointmentStatus @default(PENDING)
-  notes         String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  agency        Agency?           @relation(fields: [agencyId], references: [id])
-  customer      User?             @relation("CustomerAppointments", fields: [customerId], references: [id])
-  hotel         Hotel?            @relation(fields: [hotelId], references: [id])
-  service       Service           @relation(fields: [serviceId], references: [id])
-  staff         Staff?            @relation(fields: [staffId], references: [id])
-  transfers     Transfer[]
+  id             String               @id @default(cuid())
+  customerId     String?
+  staffId        String?
+  serviceId      String
+  agencyId       String?
+  hotelId        String?
+  pax            Int?
+  customerName   String?
+  customerPhone  String?
+  startTime      DateTime
+  endTime        DateTime
+  status         AppointmentStatus    @default(PENDING)
+  approvalStatus ApprovalStatus       @default(APPROVED)
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  agency         Agency?              @relation(fields: [agencyId], references: [id])
+  customer       User?                @relation("CustomerAppointments", fields: [customerId], references: [id])
+  hotel          Hotel?               @relation(fields: [hotelId], references: [id])
+  service        Service              @relation(fields: [serviceId], references: [id])
+  staff          Staff?               @relation(fields: [staffId], references: [id])
+  transfers      Transfer[]
+  services       AppointmentService[]
 
   @@index([startTime])
   @@index([staffId, startTime])
   @@index([agencyId])
+  @@index([approvalStatus])
+}
+
+model AppointmentService {
+  id            String      @id @default(cuid())
+  appointmentId String
+  serviceId     String
+  price         Float
+  duration      Int
+  createdAt     DateTime    @default(now())
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  service       Service     @relation(fields: [serviceId], references: [id])
+
+  @@unique([appointmentId, serviceId])
+  @@index([appointmentId])
 }
 
 model Agency {
-  id           String        @id @default(cuid())
-  userId       String?       @unique
-  name         String
-  code         String        @unique
-  companyName  String?
-  contactName  String?
-  phone        String?
-  email        String?
-  address      String?
-  commission   Float         @default(0)
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  appointments Appointment[]
+  id             String          @id @default(cuid())
+  userId         String?         @unique
+  name           String
+  code           String          @unique
+  companyName    String?
+  contactName    String?
+  phone          String?
+  email          String?
+  address        String?
+  commission     Float           @default(0)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  user           User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments   Appointment[]
+  allowedServices AgencyService[]
+}
+
+model AgencyService {
+  id        String   @id @default(cuid())
+  agencyId  String
+  serviceId String
+  passPrice Float?   @map("paxPrice") // Acenta için özel Pass fiyatı (null ise service.price kullanılır)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyId, serviceId])
 }
 
 model TimeSlotQuota {
@@ -231,6 +264,12 @@ enum AppointmentStatus {
   CONFIRMED
   COMPLETED
   CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
 }
 
 enum TransferStatus {

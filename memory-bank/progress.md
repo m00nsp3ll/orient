@@ -71,6 +71,11 @@
 - [x] Otel seçimi
 - [x] PAX girişi
 - [x] 3 test acentası
+- [x] **Onay sistemi (Approval Workflow)**
+- [x] **Admin onay/red API**
+- [x] **Onay bekleyen rezervasyonlar component**
+- [x] **Rol bazlı görünüm (Admin/Acenta)**
+- [x] **Otomatik query invalidation**
 
 ### Hizmet (Service) Yönetimi
 - [x] ServiceCategory modeli
@@ -100,7 +105,18 @@
 - [ ] Gelir raporları
 - [ ] Acenta yönetim sayfası
 
-## Versiyon: v0.5.0 (Mevcut)
+## Versiyon: v0.6.0 (Mevcut)
+
+### v0.6.0 Değişiklikler (2026-02-05)
+- Acenta onay sistemi (Approval Workflow) eklendi
+- Admin onay/red API endpoint'i
+- Onay bekleyen rezervasyonlar component (rol bazlı)
+- Acenta takvimi sadece APPROVED rezervasyonları gösteriyor
+- Dashboard metrikleri düzeltildi (Bekleyen, Tamamlanan, PAX)
+- Transfer COMPLETED olduğunda appointment otomatik COMPLETED
+- Otomatik query invalidation (F5'e gerek yok)
+- Demo data sistemi güncellendi (14 operasyon + 5 pending)
+- Next.js 16+ params Promise issue düzeltildi
 
 ### v0.5.0 Değişiklikler (2026-02-03)
 - Rota planlama sistemi eklendi (tam ekran modal)

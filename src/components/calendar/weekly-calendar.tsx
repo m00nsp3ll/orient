@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import {
   format,
   startOfWeek,
@@ -51,7 +51,8 @@ export function WeeklyCalendar({
   // Notify parent when week changes
   useEffect(() => {
     onWeekChange?.(weekStart, weekEnd)
-  }, [weekStart.getTime(), weekEnd.getTime(), onWeekChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart.getTime(), weekEnd.getTime()])
 
   const appointmentsByDay = useMemo(() => {
     const grouped: Record<string, Appointment[]> = {}

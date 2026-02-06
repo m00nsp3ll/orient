@@ -15,7 +15,7 @@ export async function GET() {
   const dayStart = startOfDay(today)
   const dayEnd = endOfDay(today)
 
-  const [todayAppointments, pendingAppointments, completedToday, totalCustomers] =
+  const [todayAppointments, pendingAppointments, completedToday, totalPax] =
     await Promise.all([
       prisma.appointment.count({
         where: {
@@ -24,7 +24,7 @@ export async function GET() {
         },
       }),
       prisma.appointment.count({
-        where: { status: "PENDING" },
+        where: { approvalStatus: "PENDING_APPROVAL" },
       }),
       prisma.appointment.count({
         where: {
@@ -32,8 +32,14 @@ export async function GET() {
           status: "COMPLETED",
         },
       }),
-      prisma.user.count({
-        where: { role: "CUSTOMER" },
+      prisma.appointment.aggregate({
+        where: {
+          startTime: { gte: dayStart, lte: dayEnd },
+          status: { not: "CANCELLED" },
+        },
+        _sum: {
+          pax: true,
+        },
       }),
     ])
 
@@ -41,6 +47,6 @@ export async function GET() {
     todayAppointments,
     pendingAppointments,
     completedToday,
-    totalCustomers,
+    totalPax: totalPax._sum.pax || 0,
   })
 }

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Navigation, Clock, Building2, CalendarDays, Calendar as CalendarIcon, Banknote } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
 import { AppointmentForm } from "@/components/forms/appointment-form"
@@ -26,12 +26,14 @@ import { Button as Btn } from "@/components/ui/button"
 import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSession } from "next-auth/react"
 
 interface Appointment {
   id: string
   startTime: string
   endTime: string
   status: string
+  approvalStatus: string
   notes?: string
   pax?: number
   customerName?: string
@@ -50,6 +52,8 @@ interface Appointment {
 }
 
 export default function AppointmentsPage() {
+  const { data: session } = useSession()
+  const isAgency = session?.user?.role === "AGENCY"
   const queryClient = useQueryClient()
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -116,6 +120,19 @@ export default function AppointmentsPage() {
         return <Badge className="bg-red-100 text-red-800">İptal</Badge>
       default:
         return <Badge>{status}</Badge>
+    }
+  }
+
+  const getApprovalBadge = (approvalStatus: string) => {
+    switch (approvalStatus) {
+      case "PENDING_APPROVAL":
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-300">⏳ Onay Bekliyor</Badge>
+      case "APPROVED":
+        return <Badge className="bg-green-100 text-green-800 border-green-300">✓ Onaylandı</Badge>
+      case "REJECTED":
+        return <Badge className="bg-red-100 text-red-800 border-red-300">✗ Reddedildi</Badge>
+      default:
+        return null
     }
   }
 
@@ -194,6 +211,7 @@ export default function AppointmentsPage() {
                               {format(new Date(appointment.startTime), "HH:mm")} - {format(new Date(appointment.endTime), "HH:mm")}
                             </span>
                             {getStatusBadge(appointment.status)}
+                            {isAgency && getApprovalBadge(appointment.approvalStatus)}
                             {appointment.notes === "REST" && (
                               <Badge className="bg-red-500 text-white flex items-center gap-1">
                                 <Banknote className="h-3 w-3" />
@@ -201,19 +219,29 @@ export default function AppointmentsPage() {
                               </Badge>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div className={`grid gap-4 text-sm ${isAgency ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4'}`}>
                             <div>
-                              <span className="text-gray-500">Müşteri:</span>
+                              <span className="text-gray-500">Misafir:</span>
                               <p className="font-medium">{appointment.customerName || appointment.customer?.name || "-"}</p>
+                              {appointment.pax && appointment.pax > 0 && (
+                                <div className="flex items-center gap-1 mt-1">
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    {appointment.pax} PAX
+                                  </Badge>
+                                </div>
+                              )}
                             </div>
                             <div>
                               <span className="text-gray-500">Program:</span>
                               <p className="font-medium">{appointment.service?.name || "REST"}</p>
                             </div>
-                            <div>
-                              <span className="text-gray-500">Personel:</span>
-                              <p className="font-medium">{appointment.staff?.user?.name || "-"}</p>
-                            </div>
+                            {!isAgency && (
+                              <div>
+                                <span className="text-gray-500">Personel:</span>
+                                <p className="font-medium">{appointment.staff?.user?.name || "-"}</p>
+                              </div>
+                            )}
                             {appointment.hotel && (
                               <div>
                                 <span className="text-gray-500">Otel:</span>
@@ -229,14 +257,6 @@ export default function AppointmentsPage() {
                                   {appointment.hotel.name}
                                 </p>
                                 <p className="text-xs text-gray-500 mt-0.5">{appointment.hotel.region.name}</p>
-                                {appointment.hotel.distanceToMarina && (
-                                  <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                                    <Navigation className="h-3 w-3" />
-                                    <span>{appointment.hotel.distanceToMarina} km</span>
-                                    <Clock className="h-3 w-3 ml-2" />
-                                    <span>~{Math.round(appointment.hotel.distanceToMarina * 2)} dk</span>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>
@@ -301,18 +321,6 @@ export default function AppointmentsPage() {
                   <div className="text-sm text-green-700">
                     {selectedAppointment.hotel.region?.name}
                   </div>
-                  {selectedAppointment.hotel.distanceToMarina !== null && (
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1 text-green-700">
-                        <Navigation className="h-3 w-3" />
-                        <span>{selectedAppointment.hotel.distanceToMarina} km</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-green-700">
-                        <Clock className="h-3 w-3" />
-                        <span>~{Math.round(selectedAppointment.hotel.distanceToMarina * 2)} dk transfer</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 

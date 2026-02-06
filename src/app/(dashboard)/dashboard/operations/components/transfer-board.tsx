@@ -21,6 +21,7 @@ interface Transfer {
   status: string
   driverId: string | null
   arrivalTime: string | null
+  dropoffTime: string | null
   appointment: {
     id: string
     startTime: string
@@ -36,9 +37,17 @@ interface Transfer {
     hotel: {
       id: string
       name: string
+      address: string | null
+      lat: number | null
+      lng: number | null
       region: {
         name: string
       }
+    } | null
+    agency: {
+      id: string
+      name: string
+      code: string
     } | null
   }
   driver: {
@@ -65,6 +74,7 @@ interface TransferBoardProps {
   drivers: Driver[]
   onStatusChange: (transferId: string, newStatus: string) => void
   onDriverChange: (transferId: string, driverId: string | null) => void
+  onStartDropoff: (transferId: string) => void
 }
 
 const columns = [
@@ -123,6 +133,7 @@ export function TransferBoard({
   drivers,
   onStatusChange,
   onDriverChange,
+  onStartDropoff,
 }: TransferBoardProps) {
   const [sortMode, setSortMode] = useState<Record<string, "region" | "time">>({
     PENDING: "region",
@@ -133,13 +144,31 @@ export function TransferBoard({
   const [showCompletedModal, setShowCompletedModal] = useState(false)
 
   const getTransfersByStatus = (status: string) => {
-    return transfers.filter((t) => t.status === status)
+    const filtered = transfers.filter((t) => t.status === status)
+
+    // PENDING: Şoför atanmamış olanları göster
+    // "Almaya Git" butonu şoför atayıp durumu PENDING'de tutar
+    // Ama kolondan kaybolması için şoförü olmayanları gösteriyoruz
+    if (status === "PENDING") {
+      return filtered.filter((t) => !t.driverId)
+    }
+
+    // DROPPING_OFF: Şoför atanmamış olanları göster
+    // "Bırakmaya Gönder" butonu şoför atayıp kolondan kaldırır
+    if (status === "DROPPING_OFF") {
+      return filtered.filter((t) => !t.driverId)
+    }
+
+    return filtered
   }
 
-  // Yolda olan şoförlerin ID'lerini bul (sadece PICKING_UP - alışta olanlar)
-  // DROPPING_OFF'ta aynı şoför birden fazla müşteriye atanabilir
+  // Yolda olan şoförlerin ID'lerini bul (PICKING_UP veya DROPPING_OFF - arrivalTime olan)
+  // Bu şoförlere yeni atama yapılamaz
   const busyDriverIds = transfers
-    .filter((t) => t.status === "PICKING_UP")
+    .filter((t) =>
+      t.status === "PICKING_UP" ||
+      (t.status === "DROPPING_OFF" && t.arrivalTime !== null)
+    )
     .map((t) => t.driverId)
     .filter((id): id is string => id !== null)
 
@@ -149,14 +178,13 @@ export function TransferBoard({
   }
 
   const handleAssignRoute = async (transferIds: string[], driverId: string) => {
-    // Tüm transferlere şoför ata ve durumu güncelle
+    // Rota planlayıcıdan atama yapıldığında:
+    // - Şoför ataması yapılır
+    // - Durum değişmez (PENDING veya DROPPING_OFF kalır)
+    // - arrivalTime null kalır (henüz yola çıkmadı)
+    // Böylece transferler üst bardaki "Araç Hazırlık" bölümünde toplanır
     for (const transferId of transferIds) {
       await onDriverChange(transferId, driverId)
-      // Durumu güncelle: PENDING -> PICKING_UP, DROPPING_OFF kalır
-      const transfer = transfers.find((t) => t.id === transferId)
-      if (transfer?.status === "PENDING") {
-        await onStatusChange(transferId, "PICKING_UP")
-      }
     }
   }
 
@@ -276,6 +304,7 @@ export function TransferBoard({
                             busyDriverIds={busyDriverIds}
                             onStatusChange={onStatusChange}
                             onDriverChange={onDriverChange}
+                            onStartDropoff={onStartDropoff}
                           />
                         ))}
                       </div>
@@ -301,6 +330,7 @@ export function TransferBoard({
                         busyDriverIds={busyDriverIds}
                         onStatusChange={onStatusChange}
                         onDriverChange={onDriverChange}
+                        onStartDropoff={onStartDropoff}
                       />
                     </div>
                   ))
@@ -324,6 +354,7 @@ export function TransferBoard({
                               busyDriverIds={busyDriverIds}
                               onStatusChange={onStatusChange}
                               onDriverChange={onDriverChange}
+                              onStartDropoff={onStartDropoff}
                             />
                           </div>
                         ))}
@@ -340,6 +371,7 @@ export function TransferBoard({
                       busyDriverIds={busyDriverIds}
                       onStatusChange={onStatusChange}
                       onDriverChange={onDriverChange}
+                      onStartDropoff={onStartDropoff}
                     />
                   ))
                 )}

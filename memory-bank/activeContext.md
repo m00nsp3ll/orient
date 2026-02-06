@@ -1,92 +1,94 @@
 # Orient SPA - Aktif Bağlam
 
 ## Son Çalışma Oturumu
-**Tarih:** 2026-02-04
+**Tarih:** 2026-02-05
 
 ## Tamamlanan İşler
 
-### Operasyon Paneli - Rota Planlama Sistemi
-1. **Rota Oluşturma Modal**
-   - Tam ekran modal (98vw x 95vh)
-   - Sol panel: Mevcut transferler listesi
-   - Sağ panel: Rota sırası (drag-drop ile sıralama)
-   - Bölge/Saat sıralama toggle butonları
+### Acenta Onay Sistemi (Approval Workflow)
 
-2. **Rota Optimizasyonu**
-   - "Konuma Göre Sırala" butonu
-   - Haversine mesafe formülü ile en yakın komşu algoritması
-   - Orient SPA'dan başlayarak en yakın noktaları sıralar
+1. **Approval Status Field**
+   - Prisma schema'ya `approvalStatus` eklendi (PENDING_APPROVAL, APPROVED, REJECTED)
+   - Acentalar randevu oluşturduğunda otomatik PENDING_APPROVAL
 
-3. **Google Maps Entegrasyonu**
-   - Leaflet yerine Google Maps kullanımı
-   - Otel adreslerinden Geocoding ile koordinat çözümleme
-   - Gerçek yol rotaları (Directions API)
-   - Özel markerlar: Yeşil "S" (SPA), Mavi numaralı duraklar
-   - Rota bilgisi kutusu: durak sayısı, mesafe, süre
+2. **Admin Onay/Reddetme API**
+   - `/api/appointments/[id]/approve` endpoint
+   - Next.js 16+ params Promise issue düzeltildi
+   - Admin ve Staff yetkili
 
-4. **Rota Atama Onay Dialogu**
-   - "Rotayı Ata" butonunda onay penceresi
-   - Şoför, durak sayısı, toplam kişi bilgisi
-   - Harita önizlemesi
-   - Durak listesi badge'leri
+3. **Onay Bekleyen Rezervasyonlar Component**
+   - Rol bazlı görünüm (Admin: tüm acentalar, Acenta: sadece kendisi)
+   - 10 saniyelik otomatik yenileme
+   - Onay dialogu ile detay gösterimi
 
-5. **Konum Seçici (Location Picker)**
-   - Otel düzenleme/ekleme formlarında harita entegrasyonu
-   - Koordinatı olmayan oteller için manuel konum işaretleme
-   - Sürükle-bırak marker ile hassas konum belirleme
-   - Uydu ve sokak görünümü desteği
+4. **Dashboard Entegrasyonu**
+   - Hem admin hem acenta dashboard'ında görünür
+   - Appointments sayfasından kaldırıldı
+   - Acenta panelinde acenta ismi kolonu gizli
 
-### Operasyon Paneli - Workflow İyileştirmeleri
-1. **Kolon İsimleri Güncellendi**
-   - AT_SPA → "Müşteri Bekliyor"
-   - DROPPING_OFF → "Transfer Bekliyor"
+### Filtre ve Takvim Düzeltmeleri
 
-2. **Şoför Atama Kuralları**
-   - PENDING: Şoför atanabilir
-   - PICKING_UP: Şoför değiştirilemez (gösterilir)
-   - DROPPING_OFF: Aynı şoför birden fazla transfere atanabilir
+1. **Acenta Takvimi**
+   - Acentalar sadece APPROVED rezervasyonları görür
+   - Pending rezervasyonlar takvimde görünmez
+   - Admin onayladıktan sonra takvime düşer
 
-3. **REST Ödeme Uyarısı**
-   - IN_SERVICE ve DROPPING_OFF durumlarında uyarı dialogu
-   - "Ödeme Alındı, Devam Et" onay butonu
+2. **API Filtreleme**
+   - Acenta için varsayılan: `approvalStatus = "APPROVED"`
+   - Parametreyle pending'ler çekilebilir
 
-4. **Bölge/Şoför Gruplama**
-   - PENDING ve DROPPING_OFF: Bölgeye göre gruplama
-   - PICKING_UP: Şoföre göre gruplama
+### Dashboard Metrikleri Düzeltmeleri
 
-5. **Boşta Olan Şoförler Barı**
-   - Yolda olanlar (mavi/turuncu) ve boşta olanlar (yeşil)
-   - Kompakt yan yana görünüm
+1. **"Bekleyen" Kartı**
+   - `approvalStatus: "PENDING_APPROVAL"` sayıyor (doğru)
 
-### Randevu Formu Düzeltmeleri
-- DatePicker timezone sorunu çözüldü
-- Bugünün tarihi seçildiğinde geçmiş saatler disabled
-- Tüm saatler gösteriliyor (müsait olmayanlar disabled)
+2. **"Bugün Tamamlanan" Kartı**
+   - Transfer COMPLETED olduğunda appointment otomatik COMPLETED
 
-### OneSignal Devre Dışı
-- Push notification şimdilik kapatıldı
-- Mobil uygulama daha sonra yapılacak
+3. **"Toplam PAX" Kartı**
+   - "Toplam Müşteri" → "Bugünkü Toplam PAX"
+   - Prisma aggregate ile toplamı hesaplıyor
 
-### Google Maps API
-- API Key eklendi: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-- Geocoding API aktif
-- Directions API aktif
+### Otomatik Yenileme (Query Invalidation)
+
+1. **Pending Approvals**
+   - Onay/Red sonrası tüm queryler invalidate
+   - F5'e gerek kalmadı
+
+2. **Appointment Form**
+   - Yeni randevu oluşturulunca dashboard otomatik güncelleniyor
+
+### Demo Data Sistemi
+
+1. **Demo Operations**
+   - 14 operasyon kaydı (APPROVED - transferli)
+   - 5 onay bekleyen rezervasyon (PENDING_APPROVAL)
+   - "Demo Data Yükle" butonu toplam 19 kayıt oluşturur
+
+2. **Demo Appointments Script**
+   - Mevcut dataları korur
+   - 5 onay bekleyen ekler
+   - Sunway Travel acentasından
 
 ## Önemli Dosyalar
 
-### Rota Planlama
-- `src/app/(dashboard)/dashboard/operations/components/route-planner-modal.tsx`
-- `src/app/(dashboard)/dashboard/operations/components/route-map-preview.tsx`
+### API Endpoints
+- `src/app/api/appointments/[id]/approve/route.ts`
+- `src/app/api/appointments/route.ts`
+- `src/app/api/dashboard/stats/route.ts`
+- `src/app/api/transfers/[id]/route.ts`
+- `src/app/api/demo/reset-operations/route.ts`
 
-### Operasyon Paneli
-- `src/app/(dashboard)/dashboard/operations/page.tsx`
-- `src/app/(dashboard)/dashboard/operations/components/active-drivers-bar.tsx`
-- `src/app/(dashboard)/dashboard/operations/components/transfer-card.tsx`
-- `src/app/(dashboard)/dashboard/operations/components/transfer-board.tsx`
-- `src/app/(dashboard)/dashboard/operations/components/driver-selector.tsx`
+### Components
+- `src/components/admin/pending-approvals.tsx`
+- `src/components/forms/appointment-form.tsx`
 
-### API
-- `src/app/api/availability/route.ts` (timezone fix)
+### Pages
+- `src/app/(dashboard)/dashboard/page.tsx`
+- `src/app/(dashboard)/dashboard/appointments/page.tsx`
+
+### Scripts
+- `scripts/create-demo-appointments.ts`
 
 ## Environment Variables
 ```
@@ -102,7 +104,7 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="AIzaSyBlA-1EN7u4pfYGIVOnC9Tl-3kX8L2YubQ"
 |-----|-------|-------|
 | Admin | admin@orientspa.com | admin123 |
 | Şoför | sofor@orientspa.com | driver123 |
-| Acenta 1 | ahmet@turizm.com | test123 |
+| Acenta 1 (Sunway) | ahmet@turizm.com | test123 |
 | Acenta 2 | mehmet@suntravel.com | test123 |
 | Acenta 3 | ayse@blueholiday.com | test123 |
 
@@ -116,12 +118,21 @@ npm run dev
 docker start orient-postgres
 npx prisma db push
 npx prisma generate
+
+# Demo Data
+npx tsx scripts/create-demo-appointments.ts
 ```
 
 ## Sonraki Oturum İçin Yapılacaklar
 
+### Approval System
+- [ ] Admin onayladığında otomatik transfer kaydı oluştur
+- [ ] Acenta email bildirimi (onaylandı/reddedildi)
+- [ ] Toplu onaylama özelliği
+- [ ] Reddetme nedeni ekleme
+
 ### Rota Sistemi
-- [ ] Otellerin adres bilgilerini kontrol et (bazıları eksik olabilir)
+- [ ] Otellerin adres bilgilerini kontrol et
 - [ ] Rota atandığında transfer durumlarını güncelle
 - [ ] Rota geçmişi/kayıt sistemi
 

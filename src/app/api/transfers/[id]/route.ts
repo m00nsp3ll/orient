@@ -128,6 +128,14 @@ export async function PATCH(
       },
     })
 
+    // Transfer COMPLETED olduğunda appointment'ı da COMPLETED yap
+    if (validatedData.status === "COMPLETED") {
+      await prisma.appointment.update({
+        where: { id: transfer.appointmentId },
+        data: { status: "COMPLETED" },
+      })
+    }
+
     // Şoför yeni atandıysa bildirim gönder
     if (validatedData.driverId && transfer.driverId) {
       try {

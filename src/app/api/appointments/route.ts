@@ -17,6 +17,12 @@ const appointmentSchema = z.object({
   pax: z.number().optional().nullable(),
   customerName: z.string().optional().nullable(),
   customerPhone: z.string().optional().nullable(),
+  // Sepet sistemi için
+  services: z.array(z.object({
+    id: z.string(),
+    price: z.number(),
+    duration: z.number(),
+  })).optional(),
 })
 
 export async function GET(req: NextRequest) {
@@ -31,6 +37,7 @@ export async function GET(req: NextRequest) {
   const endDate = searchParams.get("endDate")
   const staffId = searchParams.get("staffId")
   const status = searchParams.get("status")
+  const approvalStatus = searchParams.get("approvalStatus")
 
   const where: Record<string, unknown> = {}
 
@@ -49,6 +56,10 @@ export async function GET(req: NextRequest) {
     where.status = status
   }
 
+  if (approvalStatus) {
+    where.approvalStatus = approvalStatus
+  }
+
   // Customers can only see their own appointments
   if (session.user.role === "CUSTOMER") {
     where.customerId = session.user.id
@@ -61,6 +72,15 @@ export async function GET(req: NextRequest) {
     })
     if (agency) {
       where.agencyId = agency.id
+    }
+    // Acentalar approvalStatus parametresi belirtilmediyse sadece onaylanmış rezervasyonları görür
+    if (!approvalStatus) {
+      where.approvalStatus = "APPROVED"
+    }
+  } else {
+    // Admin ve diğer kullanıcılar için: approvalStatus belirtilmemişse sadece onaylanmış rezervasyonları göster
+    if (!approvalStatus) {
+      where.approvalStatus = "APPROVED"
     }
   }
 
@@ -111,17 +131,34 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const validatedData = appointmentSchema.parse(body)
 
-    // Get service duration
-    const service = await prisma.service.findUnique({
-      where: { id: validatedData.serviceId },
-    })
+    // Get service duration - toplam süreyi sepetten hesapla
+    let totalDuration = 0
+    let servicesToSave = []
 
-    if (!service) {
-      return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
+    if (validatedData.services && validatedData.services.length > 0) {
+      // Sepet sistemi - birden fazla hizmet
+      totalDuration = validatedData.services.reduce((sum, s) => sum + s.duration, 0)
+      servicesToSave = validatedData.services
+    } else {
+      // Eski sistem - tek hizmet
+      const service = await prisma.service.findUnique({
+        where: { id: validatedData.serviceId },
+      })
+
+      if (!service) {
+        return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
+      }
+
+      totalDuration = service.duration
+      servicesToSave = [{
+        id: service.id,
+        price: service.price,
+        duration: service.duration,
+      }]
     }
 
     const endTime = new Date(validatedData.startTime)
-    endTime.setMinutes(endTime.getMinutes() + service.duration)
+    endTime.setMinutes(endTime.getMinutes() + totalDuration)
 
     // Skip conflict check if no staffId
     if (validatedData.staffId) {
@@ -163,6 +200,9 @@ export async function POST(req: NextRequest) {
       agencyId = agency?.id || null
     }
 
+    // Acenta rezervasyonları onay bekler, diğerleri otomatik onaylanır
+    const approvalStatus = agencyId ? "PENDING_APPROVAL" : "APPROVED"
+
     const appointment = await prisma.appointment.create({
       data: {
         customerId: validatedData.customerId || undefined,
@@ -177,6 +217,7 @@ export async function POST(req: NextRequest) {
         customerName: validatedData.customerName || undefined,
         customerPhone: validatedData.customerPhone || undefined,
         status: session.user.role === "CUSTOMER" ? "PENDING" : "CONFIRMED",
+        approvalStatus,
       },
       include: {
         customer: {
@@ -191,11 +232,28 @@ export async function POST(req: NextRequest) {
         },
         service: true,
         hotel: true,
+        services: {
+          include: {
+            service: true,
+          },
+        },
       },
     })
 
+    // Sepetteki tüm hizmetleri AppointmentService tablosuna kaydet
+    if (servicesToSave.length > 0) {
+      await prisma.appointmentService.createMany({
+        data: servicesToSave.map(s => ({
+          appointmentId: appointment.id,
+          serviceId: s.id,
+          price: s.price,
+          duration: s.duration,
+        })),
+      })
+    }
+
     // Auto-create transfer record for appointments with hotel
-    if (validatedData.hotelId) {
+    if (validatedData.hotelId && approvalStatus === "APPROVED") {
       await prisma.transfer.create({
         data: {
           appointmentId: appointment.id,

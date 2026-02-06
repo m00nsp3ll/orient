@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { CalendarIcon, RefreshCw } from "lucide-react"
+import { CalendarIcon, RefreshCw, Database } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -118,10 +118,20 @@ export default function OperationsPage() {
 
   const handleStatusChange = async (transferId: string, newStatus: string) => {
     try {
+      // IN_SERVICE -> DROPPING_OFF geçişinde şoförü ve arrivalTime'ı temizle
+      // Böylece transfer "Transfer Bekliyor" kolonuna düşer ve yeni şöför seçilebilir
+      const body: { status: string; driverId?: null; arrivalTime?: null } = { status: newStatus }
+
+      const currentTransfer = transfers.find(t => t.id === transferId)
+      if (currentTransfer?.status === "IN_SERVICE" && newStatus === "DROPPING_OFF") {
+        body.driverId = null
+        body.arrivalTime = null // Bırakış zamanını da temizle
+      }
+
       const res = await fetch(`/api/transfers/${transferId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(body),
       })
 
       if (res.ok) {
@@ -139,12 +149,50 @@ export default function OperationsPage() {
     }
   }
 
+  const handleStartRoute = async (driverTransfers: Transfer[]) => {
+    try {
+      setLoading(true)
+
+      // Tüm transferlere arrivalTime set et ve durumu güncelle
+      for (const transfer of driverTransfers) {
+        const newStatus = transfer.status === "PENDING" ? "PICKING_UP" : transfer.status
+
+        await fetch(`/api/transfers/${transfer.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            arrivalTime: new Date(),
+            status: newStatus,
+          }),
+        })
+      }
+
+      // Verileri yenile
+      await fetchData()
+      toast.success("Araç yola çıktı!")
+    } catch (error) {
+      console.error("Araç gönderme hatası:", error)
+      toast.error("Araç gönderilemedi")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDriverChange = async (transferId: string, driverId: string | null) => {
     try {
+      // DROPPING_OFF durumunda şoför seçildiğinde arrivalTime null kalmalı
+      // "Bırakmaya Gönder" butonuna basınca arrivalTime set edilecek
+      const currentTransfer = transfers.find(t => t.id === transferId)
+      const body: { driverId: string | null; arrivalTime?: null } = { driverId }
+
+      if (currentTransfer?.status === "DROPPING_OFF" && driverId) {
+        body.arrivalTime = null // Şoför seçildiğinde arrivalTime temizle
+      }
+
       const res = await fetch(`/api/transfers/${transferId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId }),
+        body: JSON.stringify(body),
       })
 
       if (res.ok) {
@@ -159,6 +207,35 @@ export default function OperationsPage() {
     } catch (error) {
       console.error("Şoför atama hatası:", error)
       toast.error("Şoför atanamadı")
+    }
+  }
+
+  const handleLoadDemoData = async () => {
+    if (!confirm("Bu günün tüm operasyonları silinip demo data yüklenecek. Emin misiniz?")) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      const res = await fetch("/api/demo/reset-operations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: format(date, "yyyy-MM-dd") }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(data.message || "Demo data yüklendi")
+        await fetchData() // Verileri yenile
+      } else {
+        const error = await res.json()
+        toast.error(error.error || "Demo data yüklenemedi")
+      }
+    } catch (error) {
+      console.error("Demo data yükleme hatası:", error)
+      toast.error("Demo data yüklenemedi")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -194,6 +271,15 @@ export default function OperationsPage() {
               />
             </PopoverContent>
           </Popover>
+          <Button
+            variant="outline"
+            onClick={handleLoadDemoData}
+            disabled={loading}
+            className="gap-2"
+          >
+            <Database className="h-4 w-4" />
+            Demo Data Yükle
+          </Button>
           <Button variant="outline" size="icon" onClick={fetchData}>
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
@@ -202,7 +288,13 @@ export default function OperationsPage() {
 
       {/* Yolda Olan Şoförler */}
       {!loading && transfers.length > 0 && (
-        <ActiveDriversBar transfers={transfers} drivers={drivers} onStatusChange={handleStatusChange} />
+        <ActiveDriversBar
+          transfers={transfers}
+          drivers={drivers}
+          onStatusChange={handleStatusChange}
+          onDriverChange={handleDriverChange}
+          onStartRoute={handleStartRoute}
+        />
       )}
 
       {loading ? (

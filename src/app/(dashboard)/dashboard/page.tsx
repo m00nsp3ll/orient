@@ -26,12 +26,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { PendingApprovals } from "@/components/admin/pending-approvals"
+import { useSession } from "next-auth/react"
 
 interface DashboardStats {
   todayAppointments: number
   pendingAppointments: number
   completedToday: number
-  totalCustomers: number
+  totalPax: number
 }
 
 interface Appointment {
@@ -64,6 +66,9 @@ interface Appointment {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "STAFF"
+  const isAgency = session?.user?.role === "AGENCY"
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [selectedAgency, setSelectedAgency] = useState<Appointment["agency"] | null>(null)
@@ -169,17 +174,20 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
-              Toplam Müşteri
+              Bugünkü Toplam PAX
             </CardTitle>
             <Users className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats?.totalCustomers || 0}
+              {stats?.totalPax || 0}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending Approvals - Admin and Agency */}
+      {(isAdmin || isAgency) && <PendingApprovals />}
 
       {/* Today's Appointments */}
       <Card>
