@@ -111,11 +111,11 @@ export default function AppointmentsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "CONFIRMED":
-        return <Badge className="bg-green-100 text-green-800">Onaylı</Badge>
+        return <Badge className="bg-blue-100 text-blue-800">Onaylı</Badge>
       case "PENDING":
         return <Badge className="bg-yellow-100 text-yellow-800">Bekliyor</Badge>
       case "COMPLETED":
-        return <Badge className="bg-blue-100 text-blue-800">Tamamlandı</Badge>
+        return <Badge className="bg-green-100 text-green-800">Tamamlandı</Badge>
       case "CANCELLED":
         return <Badge className="bg-red-100 text-red-800">İptal</Badge>
       default:
@@ -144,6 +144,25 @@ export default function AppointmentsPage() {
           <p className="text-gray-500">Randevu takvimini görüntüleyin ve yönetin</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Renk Kodları */}
+          <div className="flex items-center gap-3 text-xs border rounded-lg px-3 py-1.5 bg-white">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-blue-500"></div>
+              <span>Onaylı</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-yellow-500"></div>
+              <span>Bekliyor</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-green-500"></div>
+              <span>Tamamlandı</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-red-500"></div>
+              <span>İptal</span>
+            </div>
+          </div>
           {/* View Mode Selector */}
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "weekly" | "daily")}>
             <TabsList>

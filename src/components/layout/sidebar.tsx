@@ -25,6 +25,7 @@ import {
   Hotel,
   Truck,
   UserCog,
+  BarChart3,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -32,6 +33,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "STAFF", "AGENCY"] },
   { name: "Randevular", href: "/dashboard/appointments", icon: Calendar, roles: ["ADMIN", "STAFF", "AGENCY"] },
   { name: "Operasyon", href: "/dashboard/operations", icon: Truck, roles: ["ADMIN", "STAFF", "DRIVER"] },
+  { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"] },
   { name: "Şoförler", href: "/dashboard/operations/drivers", icon: UserCog, roles: ["ADMIN"] },
   { name: "Hizmetler", href: "/dashboard/services", icon: Scissors, roles: ["ADMIN", "STAFF"] },
   { name: "Personel", href: "/dashboard/staff", icon: Users, roles: ["ADMIN", "STAFF"] },
