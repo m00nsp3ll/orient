@@ -21,6 +21,7 @@ interface Appointment {
   startTime: string
   endTime: string
   status: string
+  approvalStatus: string
   customerName?: string
   customer: { id: string; name: string; email: string; phone?: string } | null
   service: { name: string; duration: number; price: number }
