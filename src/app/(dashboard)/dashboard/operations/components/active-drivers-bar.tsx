@@ -18,6 +18,9 @@ interface Transfer {
   status: string
   driverId: string | null
   arrivalTime: string | null
+  dropoffTime: string | null
+  pickupTime: string | null
+  departureTime: string | null
   appointment: {
     id: string
     startTime: string
@@ -33,9 +36,17 @@ interface Transfer {
     hotel: {
       id: string
       name: string
+      address: string | null
+      lat: number | null
+      lng: number | null
       region: {
         name: string
       }
+    } | null
+    agency: {
+      id: string
+      name: string
+      code: string
     } | null
   }
   driver: {
@@ -62,7 +73,7 @@ interface ActiveDriversBarProps {
   drivers: Driver[]
   onStatusChange: (transferId: string, newStatus: string) => void
   onDriverChange: (transferId: string, driverId: string | null) => void
-  onStartRoute: (driverTransfers: Transfer[]) => void
+  onStartRoute: (driverTransfers: Transfer[]) => Promise<void> | void
 }
 
 type DriverGroup = {

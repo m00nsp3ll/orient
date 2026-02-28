@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { getSessionTimesForHotel } from "@/lib/region-utils"
 
 const appointmentSchema = z.object({
   customerId: z.string().optional().nullable(),
@@ -11,6 +12,8 @@ const appointmentSchema = z.object({
   startTime: z.string().transform((str) => new Date(str)),
   notes: z.string().optional().nullable(),
   isRest: z.boolean().optional(),
+  restAmount: z.number().optional(),
+  restCurrency: z.string().optional(),
   // Agency specific fields
   agencyId: z.string().optional().nullable(),
   hotelId: z.string().optional().nullable(),
@@ -131,6 +134,22 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const validatedData = appointmentSchema.parse(body)
 
+    // REST validation: restAmount ve restCurrency zorunlu
+    if (validatedData.isRest) {
+      if (!validatedData.restAmount || validatedData.restAmount <= 0) {
+        return NextResponse.json(
+          { error: "REST seçildiğinde tutar girilmelidir" },
+          { status: 400 }
+        )
+      }
+      if (!validatedData.restCurrency) {
+        return NextResponse.json(
+          { error: "REST seçildiğinde para birimi seçilmelidir" },
+          { status: 400 }
+        )
+      }
+    }
+
     // Get service duration - toplam süreyi sepetten hesapla
     let totalDuration = 0
     let servicesToSave = []
@@ -159,6 +178,22 @@ export async function POST(req: NextRequest) {
 
     const endTime = new Date(validatedData.startTime)
     endTime.setMinutes(endTime.getMinutes() + totalDuration)
+
+    // Validate session time against region's allowed times
+    if (validatedData.hotelId) {
+      const allowedTimes = await getSessionTimesForHotel(validatedData.hotelId)
+      if (allowedTimes.length > 0) {
+        const appointmentHour = validatedData.startTime.getHours().toString().padStart(2, "0")
+        const appointmentMin = validatedData.startTime.getMinutes().toString().padStart(2, "0")
+        const appointmentTime = `${appointmentHour}:${appointmentMin}`
+        if (!allowedTimes.includes(appointmentTime)) {
+          return NextResponse.json(
+            { error: `Bu bölge için izin verilen saatler: ${allowedTimes.join(", ")}` },
+            { status: 400 }
+          )
+        }
+      }
+    }
 
     // Skip conflict check if no staffId
     if (validatedData.staffId) {
@@ -216,6 +251,8 @@ export async function POST(req: NextRequest) {
         pax: validatedData.pax || undefined,
         customerName: validatedData.customerName || undefined,
         customerPhone: validatedData.customerPhone || undefined,
+        restAmount: validatedData.isRest ? validatedData.restAmount : undefined,
+        restCurrency: validatedData.isRest ? validatedData.restCurrency : undefined,
         status: session.user.role === "CUSTOMER" ? "PENDING" : "CONFIRMED",
         approvalStatus,
       },

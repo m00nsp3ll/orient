@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
     const agency = await prisma.agency.create({
       data: {
         userId: user.id,
+        name: validatedData.companyName,
+        code: `AGN${Date.now()}`, // Benzersiz kod oluştur
         companyName: validatedData.companyName,
         address: validatedData.address,
       },

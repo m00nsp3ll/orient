@@ -21,25 +21,27 @@ import {
   Menu,
   X,
   Building2,
-  Clock,
   Hotel,
   Truck,
   UserCog,
   BarChart3,
+  Car,
+  Timer,
 } from "lucide-react"
 import { useState } from "react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "STAFF", "AGENCY"] },
+  { name: "Şoför Paneli", href: "/driver", icon: Car, roles: ["DRIVER"] },
   { name: "Randevular", href: "/dashboard/appointments", icon: Calendar, roles: ["ADMIN", "STAFF", "AGENCY"] },
-  { name: "Operasyon", href: "/dashboard/operations", icon: Truck, roles: ["ADMIN", "STAFF", "DRIVER"] },
+  { name: "Operasyon", href: "/dashboard/operations", icon: Truck, roles: ["ADMIN", "STAFF"] },
   { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"] },
   { name: "Şoförler", href: "/dashboard/operations/drivers", icon: UserCog, roles: ["ADMIN"] },
   { name: "Hizmetler", href: "/dashboard/services", icon: Scissors, roles: ["ADMIN", "STAFF"] },
   { name: "Personel", href: "/dashboard/staff", icon: Users, roles: ["ADMIN", "STAFF"] },
   { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN"] },
+  { name: "Alınış Saatleri", href: "/dashboard/session-times", icon: Timer, roles: ["ADMIN"] },
   { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN"] },
-  { name: "Kota Yönetimi", href: "/dashboard/quotas", icon: Clock, roles: ["ADMIN"] },
   { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
 ]
 

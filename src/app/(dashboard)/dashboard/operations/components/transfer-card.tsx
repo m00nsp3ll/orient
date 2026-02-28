@@ -48,6 +48,8 @@ interface Transfer {
     pax: number | null
     customerName: string | null
     notes: string | null
+    restAmount: number | null
+    restCurrency: string | null
     service: {
       id: string
       name: string
@@ -123,10 +125,14 @@ export function TransferCard({
 }: TransferCardProps) {
   const [showDetails, setShowDetails] = useState(false)
   const [showRestWarning, setShowRestWarning] = useState(false)
+  const [restWarningAction, setRestWarningAction] = useState<"complete" | "dropoff">("complete")
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(transfer.driverId)
 
   const { appointment } = transfer
   const isRest = appointment.notes?.includes("REST")
+  const restLabel = isRest && appointment.restAmount && appointment.restCurrency
+    ? `${appointment.restAmount} ${appointment.restCurrency}`
+    : null
   const nextStatus = statusFlow[transfer.status]
   const canAdvance = nextStatus && transfer.status !== "COMPLETED" && transfer.status !== "CANCELLED"
 
@@ -137,24 +143,28 @@ export function TransferCard({
         toast.error("Lütfen önce şoför seçin!")
         return
       }
-      // Sadece şoför ata - Araç Hazırlık'a düşsün
       onDriverChange(transfer.id, selectedDriverId)
       return
     }
 
-    // DROPPING_OFF -> "Bırakmaya Gönder" sadece şoför ata
+    // DROPPING_OFF -> "Bırakmaya Gönder" - REST ise önce uyarı, sonra şoför ata
     if (transfer.status === "DROPPING_OFF") {
       if (!selectedDriverId) {
         toast.error("Lütfen önce şoför seçin!")
         return
       }
-      // Sadece şoför ata - Araç Hazırlık'a düşsün
-      onDriverChange(transfer.id, selectedDriverId)
+      if (isRest) {
+        setRestWarningAction("dropoff")
+        setShowRestWarning(true)
+      } else {
+        onDriverChange(transfer.id, selectedDriverId)
+      }
       return
     }
 
     // REST uyarısı: IN_SERVICE -> DROPPING_OFF (Hizmeti Bitir)
     if (isRest && transfer.status === "IN_SERVICE") {
+      setRestWarningAction("complete")
       setShowRestWarning(true)
     } else {
       onStatusChange(transfer.id, nextStatus)
@@ -163,7 +173,11 @@ export function TransferCard({
 
   const handleRestConfirm = () => {
     setShowRestWarning(false)
-    onStatusChange(transfer.id, nextStatus)
+    if (restWarningAction === "dropoff") {
+      onDriverChange(transfer.id, selectedDriverId)
+    } else {
+      onStatusChange(transfer.id, nextStatus)
+    }
   }
 
   return (
@@ -178,9 +192,9 @@ export function TransferCard({
         </div>
         <div className="flex items-center gap-1">
           {isRest && (
-            <Badge className="bg-red-500 text-white text-[10px] px-1 py-0 h-4">
-              <Banknote className="h-2.5 w-2.5 mr-0.5" />
-              REST
+            <Badge className="bg-red-500 text-white text-[10px] px-1 py-0 h-4 flex items-center gap-0.5">
+              <Banknote className="h-2.5 w-2.5" />
+              {restLabel ? `REST ${restLabel}` : "REST"}
             </Badge>
           )}
           {appointment.pax && (
@@ -321,13 +335,12 @@ export function TransferCard({
         )}
       </div>
 
-      {/* REST Ödeme Uyarı Dialog */}
       <AlertDialog open={showRestWarning} onOpenChange={setShowRestWarning}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
               <AlertTriangle className="h-5 w-5" />
-              Ödeme Hatırlatması
+              {restWarningAction === "dropoff" ? "Bırakmadan Önce Ödeme Kontrolü" : "Ödeme Hatırlatması"}
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p className="text-base font-medium text-foreground">
@@ -336,8 +349,19 @@ export function TransferCard({
               <p>
                 <strong>{appointment.customerName || "Misafir"}</strong> - {appointment.service.name}
               </p>
+              {restLabel && (
+                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
+                  <Banknote className="h-5 w-5 text-red-600 shrink-0" />
+                  <div>
+                    <p className="text-xs text-red-500 font-medium">Tahsil Edilecek Tutar</p>
+                    <p className="text-lg font-bold text-red-700">{restLabel}</p>
+                  </div>
+                </div>
+              )}
               <p className="text-orange-600 font-medium">
-                Lütfen ödemenin alındığından emin olun.
+                {restWarningAction === "dropoff"
+                  ? "Müşteriyi bırakmadan önce ödemenin alındığından emin olun."
+                  : "Lütfen ödemenin alındığından emin olun."}
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>

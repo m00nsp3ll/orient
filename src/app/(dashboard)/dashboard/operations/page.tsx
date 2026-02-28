@@ -22,6 +22,8 @@ interface Transfer {
   driverId: string | null
   arrivalTime: string | null
   dropoffTime: string | null
+  pickupTime: string | null
+  departureTime: string | null
   appointment: {
     id: string
     startTime: string
@@ -210,6 +212,27 @@ export default function OperationsPage() {
     }
   }
 
+  const handleStartDropoff = async (transferId: string) => {
+    try {
+      const response = await fetch(`/api/transfers/${transferId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          arrivalTime: new Date(),
+          status: "DROPPING_OFF",
+        }),
+      })
+
+      if (!response.ok) throw new Error("Transfer başlatılamadı")
+
+      await fetchData()
+      toast.success("Transfer başlatıldı!")
+    } catch (error) {
+      console.error("Transfer başlatma hatası:", error)
+      toast.error("Transfer başlatılamadı")
+    }
+  }
+
   const handleLoadDemoData = async () => {
     if (!confirm("Bu günün tüm operasyonları silinip demo data yüklenecek. Emin misiniz?")) {
       return
@@ -312,6 +335,7 @@ export default function OperationsPage() {
           drivers={drivers}
           onStatusChange={handleStatusChange}
           onDriverChange={handleDriverChange}
+          onStartDropoff={handleStartDropoff}
         />
       )}
     </div>

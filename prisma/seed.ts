@@ -204,8 +204,10 @@ async function main() {
     update: {},
     create: {
       userId: agencyUser.id,
+      name: "Test Turizm A.Ş.",
       companyName: "Test Turizm A.Ş.",
       address: "İstanbul, Türkiye",
+      code: "TEST001",
       isActive: true,
     },
   })
@@ -213,7 +215,10 @@ async function main() {
 
   // Create Alanya regions
   const regions = [
-    "Alanya Merkez",
+    "Kleopatra",
+    "Damlataş",
+    "Atatürk Anıtı",
+    "Çenger",
     "Konaklı",
     "Mahmutlar",
     "Oba",
@@ -237,7 +242,59 @@ async function main() {
     })
     regionMap[regionName] = region.id
   }
+
+  // Also create Alanya Merkez as inactive (for backward compat)
+  const alanyaMerkez = await prisma.region.upsert({
+    where: { name: "Alanya Merkez" },
+    update: { isActive: false },
+    create: { name: "Alanya Merkez", isActive: false },
+  })
+  regionMap["Alanya Merkez"] = alanyaMerkez.id
+
+  // Set pickupTimeRegionId references
+  // Payallar → Okurcalar
+  await prisma.region.update({
+    where: { id: regionMap["Payallar"] },
+    data: { pickupTimeRegionId: regionMap["Okurcalar"] },
+  })
+  // Cikcilli → Tosmur
+  await prisma.region.update({
+    where: { id: regionMap["Cikcilli"] },
+    data: { pickupTimeRegionId: regionMap["Tosmur"] },
+  })
+
   console.log("Regions created:", regions.length)
+
+  // Seed RegionSessionTimes
+  const sessionTimesMap: Record<string, string[]> = {
+    "Çenger": ["08:20", "13:30"],
+    "Okurcalar": ["08:30", "13:50", "15:50"],
+    "İncekum": ["08:40", "14:00", "16:00"],
+    "Avsallar": ["08:50", "14:10", "16:10"],
+    "Türkler": ["09:00", "11:00", "14:20", "16:20"],
+    "Konaklı": ["09:10", "11:10", "14:30", "16:30"],
+    "Kargıcak": ["13:50"],
+    "Mahmutlar": ["09:30", "14:00"],
+    "Kestel": ["09:40", "14:10"],
+    "Tosmur": ["09:45", "14:15", "16:15"],
+    "Oba": ["09:50", "14:20", "16:20"],
+    "Atatürk Anıtı": ["10:00", "12:00", "14:00", "16:00"],
+    "Damlataş": ["09:00", "11:00", "13:00", "14:00", "16:00", "17:00"],
+    "Kleopatra": ["09:10", "11:10", "13:10", "14:10", "16:10", "17:10"],
+  }
+
+  for (const [regionName, times] of Object.entries(sessionTimesMap)) {
+    const regionId = regionMap[regionName]
+    if (!regionId) continue
+    for (const time of times) {
+      await prisma.regionSessionTime.upsert({
+        where: { regionId_time: { regionId, time } },
+        update: {},
+        create: { regionId, time, isActive: true },
+      })
+    }
+  }
+  console.log("Session times seeded")
 
   // Create Alanya hotels with regions (from OpenStreetMap)
   const alanyaHotels = [
@@ -257,25 +314,25 @@ async function main() {
     { name: "Xeno Eftalia Resort", region: "Konaklı" },
     { name: "Larissa Holiday Beach Club", region: "Konaklı" },
     { name: "Bayar Garden Beach", region: "Konaklı" },
-    { name: "Grand Okan", region: "Alanya Merkez" },
-    { name: "Grand Zaman Garden", region: "Alanya Merkez" },
-    { name: "Kleopatra Atlas Hotel", region: "Alanya Merkez" },
-    { name: "Kleopatra Ramira", region: "Alanya Merkez" },
-    { name: "Kleopatra Royal Palm", region: "Alanya Merkez" },
-    { name: "Kleopatra Beach Yıldız Otel", region: "Alanya Merkez" },
-    { name: "Kleopatra Life Hotel", region: "Alanya Merkez" },
-    { name: "Kleopatra Suit Hotel", region: "Alanya Merkez" },
-    { name: "Kleopatra Palmera Beach", region: "Alanya Merkez" },
-    { name: "Sunpark Ocean", region: "Alanya Merkez" },
-    { name: "Elysse Hotel", region: "Alanya Merkez" },
-    { name: "Alladin Beach", region: "Alanya Merkez" },
-    { name: "Royal Palm", region: "Alanya Merkez" },
-    { name: "Glaros Hotel", region: "Alanya Merkez" },
-    { name: "Ramira Joy Hotel", region: "Alanya Merkez" },
-    { name: "Vega Green", region: "Alanya Merkez" },
-    { name: "Margarita Hotel", region: "Alanya Merkez" },
-    { name: "Akman Beach", region: "Alanya Merkez" },
-    { name: "Fougere Apart Hotel", region: "Alanya Merkez" },
+    { name: "Grand Okan", region: "Damlataş" },
+    { name: "Grand Zaman Garden", region: "Damlataş" },
+    { name: "Kleopatra Atlas Hotel", region: "Kleopatra" },
+    { name: "Kleopatra Ramira", region: "Kleopatra" },
+    { name: "Kleopatra Royal Palm", region: "Kleopatra" },
+    { name: "Kleopatra Beach Yıldız Otel", region: "Kleopatra" },
+    { name: "Kleopatra Life Hotel", region: "Kleopatra" },
+    { name: "Kleopatra Suit Hotel", region: "Kleopatra" },
+    { name: "Kleopatra Palmera Beach", region: "Kleopatra" },
+    { name: "Sunpark Ocean", region: "Damlataş" },
+    { name: "Elysse Hotel", region: "Damlataş" },
+    { name: "Alladin Beach", region: "Damlataş" },
+    { name: "Royal Palm", region: "Damlataş" },
+    { name: "Glaros Hotel", region: "Damlataş" },
+    { name: "Ramira Joy Hotel", region: "Atatürk Anıtı" },
+    { name: "Vega Green", region: "Atatürk Anıtı" },
+    { name: "Margarita Hotel", region: "Atatürk Anıtı" },
+    { name: "Akman Beach", region: "Atatürk Anıtı" },
+    { name: "Fougere Apart Hotel", region: "Atatürk Anıtı" },
     { name: "Europa Beach Hotel", region: "Tosmur" },
     { name: "Luna Playa", region: "Tosmur" },
     { name: "Blue Sky Hotel", region: "Tosmur" },

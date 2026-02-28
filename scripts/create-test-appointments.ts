@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, AppointmentStatus } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -66,7 +66,7 @@ async function createTestAppointments() {
       pax: 2,
       customerName: 'Ahmet Yılmaz',
       notes: 'REST - Ödeme Kapıda',
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -77,7 +77,7 @@ async function createTestAppointments() {
       pax: 3,
       customerName: 'Mehmet Demir',
       notes: null,
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -88,7 +88,7 @@ async function createTestAppointments() {
       pax: 4,
       customerName: 'Ayşe Kaya',
       notes: 'REST - Ödeme Kapıda',
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -99,7 +99,7 @@ async function createTestAppointments() {
       pax: 2,
       customerName: 'Fatma Şahin',
       notes: null,
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -110,7 +110,7 @@ async function createTestAppointments() {
       pax: 3,
       customerName: 'Ali Çelik',
       notes: null,
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -121,7 +121,7 @@ async function createTestAppointments() {
       pax: 2,
       customerName: 'Zeynep Arslan',
       notes: 'REST - Ödeme Kapıda',
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -132,7 +132,7 @@ async function createTestAppointments() {
       pax: 4,
       customerName: 'Hasan Yıldız',
       notes: null,
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
     {
       customerId: customer.id,
@@ -143,7 +143,7 @@ async function createTestAppointments() {
       pax: 2,
       customerName: 'Elif Öztürk',
       notes: 'REST - Ödeme Kapıda',
-      status: 'CONFIRMED',
+      status: 'CONFIRMED' as AppointmentStatus,
     },
   ]
 

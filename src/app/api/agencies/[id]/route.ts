@@ -103,7 +103,7 @@ export async function DELETE(
       select: { userId: true },
     })
 
-    if (agency) {
+    if (agency && agency.userId) {
       await prisma.user.delete({
         where: { id: agency.userId },
       })

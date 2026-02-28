@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient, TransferStatus } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
@@ -168,7 +168,7 @@ async function main() {
     const transfer = await prisma.transfer.create({
       data: {
         appointmentId: appointment.id,
-        status: customer.status,
+        status: customer.status as TransferStatus,
         arrivalTime: ["IN_SERVICE", "DROPPING_OFF", "COMPLETED"].includes(customer.status) ? startTime : null,
         dropoffTime: customer.status === "COMPLETED" ? new Date(endTime.getTime() + 30 * 60000) : null, // +30 dk bırakış süresi
       },

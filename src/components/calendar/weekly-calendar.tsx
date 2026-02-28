@@ -11,7 +11,7 @@ import {
   subWeeks,
 } from "date-fns"
 import { tr } from "date-fns/locale"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -23,6 +23,9 @@ interface Appointment {
   status: string
   approvalStatus: string
   customerName?: string
+  notes?: string
+  restAmount?: number | null
+  restCurrency?: string | null
   customer: { id: string; name: string; email: string; phone?: string } | null
   service: { name: string; duration: number; price: number }
   staff: { user: { name: string } } | null
@@ -167,30 +170,41 @@ export function WeeklyCalendar({
                         onSlotClick?.(day, `${hour.toString().padStart(2, "0")}:00`)
                       }
                     >
-                      {hourAppointments.map((apt) => (
-                        <div
-                          key={apt.id}
-                          className={cn(
-                            "text-xs p-1 rounded border mb-1 cursor-pointer",
-                            getStatusColor(apt.status)
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onAppointmentClick?.(apt)
-                          }}
-                        >
-                          <div className="font-medium truncate">
-                            {apt.customerName || apt.customer?.name || "-"}
+                      {hourAppointments.map((apt) => {
+                        const isRest = apt.notes?.includes("REST")
+                        return (
+                          <div
+                            key={apt.id}
+                            className={cn(
+                              "text-xs p-1 rounded border mb-1 cursor-pointer",
+                              getStatusColor(apt.status)
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onAppointmentClick?.(apt)
+                            }}
+                          >
+                            <div className="font-medium truncate flex items-center gap-1">
+                              {isRest && <Banknote className="h-2.5 w-2.5 shrink-0 text-red-500" />}
+                              {apt.customerName || apt.customer?.name || "-"}
+                            </div>
+                            <div className="truncate opacity-75">
+                              {apt.service.name}
+                            </div>
+                            <div className="text-[10px] flex items-center justify-between">
+                              <span>
+                                {format(new Date(apt.startTime), "HH:mm")} -{" "}
+                                {format(new Date(apt.endTime), "HH:mm")}
+                              </span>
+                              {isRest && apt.restAmount && apt.restCurrency && (
+                                <span className="font-bold text-red-600">
+                                  {apt.restAmount} {apt.restCurrency}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="truncate opacity-75">
-                            {apt.service.name}
-                          </div>
-                          <div className="text-[10px]">
-                            {format(new Date(apt.startTime), "HH:mm")} -{" "}
-                            {format(new Date(apt.endTime), "HH:mm")}
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )
                 })}

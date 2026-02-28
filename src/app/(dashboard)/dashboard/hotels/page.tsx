@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Pencil, Trash2, Check, X, Hotel, MapPin, Navigation, Search, Map as MapIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -303,22 +303,17 @@ export default function HotelsPage() {
     return Array.from(similarIds)
   }
 
-  const duplicateHotelIds = findSimilarHotels()
+  const duplicateHotelIds = useMemo(() => findSimilarHotels(), [hotels])
 
-  const filteredHotels = selectedHotelId
-    ? hotels.filter(h => h.id === selectedHotelId)
-    : hotels.filter(h => {
-        // Region filter
-        if (selectedRegion !== "all" && h.regionId !== selectedRegion) return false
-
-        // No address filter
-        if (showNoAddress && (h.lat !== null || h.lng !== null)) return false
-
-        // Duplicates/Similar filter
-        if (showDuplicates && !duplicateHotelIds.includes(h.id)) return false
-
-        return true
-      })
+  const filteredHotels = useMemo(() => {
+    if (selectedHotelId) return hotels.filter(h => h.id === selectedHotelId)
+    return hotels.filter(h => {
+      if (selectedRegion !== "all" && h.regionId !== selectedRegion) return false
+      if (showNoAddress && (h.lat !== null || h.lng !== null)) return false
+      if (showDuplicates && !duplicateHotelIds.includes(h.id)) return false
+      return true
+    })
+  }, [hotels, selectedHotelId, selectedRegion, showNoAddress, showDuplicates, duplicateHotelIds])
 
   return (
     <div className="space-y-6">

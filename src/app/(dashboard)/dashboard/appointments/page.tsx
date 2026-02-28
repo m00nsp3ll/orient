@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, Clock } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
 import { AppointmentForm } from "@/components/forms/appointment-form"
 import {
@@ -14,16 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Button as Btn } from "@/components/ui/button"
-import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useSession } from "next-auth/react"
@@ -38,6 +30,8 @@ interface Appointment {
   pax?: number
   customerName?: string
   customerPhone?: string
+  restAmount?: number | null
+  restCurrency?: string | null
   customer: { id: string; name: string; email: string; phone?: string } | null
   service: { name: string; duration: number; price: number }
   staff: { user: { name: string } } | null
@@ -54,10 +48,9 @@ interface Appointment {
 export default function AppointmentsPage() {
   const { data: session } = useSession()
   const isAgency = session?.user?.role === "AGENCY"
-  const queryClient = useQueryClient()
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
-  const [currentWeek, setCurrentWeek] = useState(new Date())
+  const [currentWeek] = useState(new Date())
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null)
   const [currentDay, setCurrentDay] = useState(new Date())
   const [viewMode, setViewMode] = useState<"weekly" | "daily">("weekly")
@@ -81,26 +74,6 @@ export default function AppointmentsPage() {
       )
       if (!res.ok) throw new Error("Failed to fetch appointments")
       return res.json()
-    },
-  })
-
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await fetch(`/api/appointments/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      })
-      if (!res.ok) throw new Error("Failed to update appointment")
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["appointments"] })
-      toast.success("Randevu durumu güncellendi")
-      setSelectedAppointment(null)
-    },
-    onError: () => {
-      toast.error("Randevu güncellenemedi")
     },
   })
 
@@ -220,7 +193,12 @@ export default function AppointmentsPage() {
                   .map((appointment) => (
                     <div
                       key={appointment.id}
-                      className="p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      className={cn(
+                        "p-4 border rounded-lg cursor-pointer transition-colors",
+                        appointment.notes === "REST"
+                          ? "border-red-200 bg-red-50/40 hover:bg-red-50"
+                          : "hover:bg-gray-50"
+                      )}
                       onClick={() => handleAppointmentClick(appointment)}
                     >
                       <div className="flex items-start justify-between">
@@ -234,7 +212,12 @@ export default function AppointmentsPage() {
                             {appointment.notes === "REST" && (
                               <Badge className="bg-red-500 text-white flex items-center gap-1">
                                 <Banknote className="h-3 w-3" />
-                                ÖDEME KAPIDA
+                                REST
+                                {appointment.restAmount && appointment.restCurrency && (
+                                  <span className="font-bold ml-1">
+                                    {appointment.restAmount} {appointment.restCurrency}
+                                  </span>
+                                )}
                               </Badge>
                             )}
                           </div>
@@ -392,60 +375,28 @@ export default function AppointmentsPage() {
                 </div>
               </div>
 
-              {selectedAppointment.notes && (
-                <div>
-                  <span className="text-sm text-gray-500">Notlar</span>
-                  <p>{selectedAppointment.notes}</p>
+              {selectedAppointment.notes === "REST" && (
+                <div className="flex items-center gap-3 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3">
+                  <Banknote className="h-6 w-6 text-red-600 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">REST - Ödeme Kapıda</p>
+                    {selectedAppointment.restAmount && selectedAppointment.restCurrency ? (
+                      <p className="text-xl font-bold text-red-700">
+                        {selectedAppointment.restAmount} {selectedAppointment.restCurrency}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-red-600">Tutar belirtilmemiş</p>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="pt-4 border-t">
-                <span className="text-sm text-gray-500 block mb-2">Durumu Güncelle</span>
-                <div className="flex gap-2 flex-wrap">
-                  {selectedAppointment.status !== "CONFIRMED" && (
-                    <Btn
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        updateStatus.mutate({
-                          id: selectedAppointment.id,
-                          status: "CONFIRMED",
-                        })
-                      }
-                    >
-                      Onayla
-                    </Btn>
-                  )}
-                  {selectedAppointment.status !== "COMPLETED" && (
-                    <Btn
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        updateStatus.mutate({
-                          id: selectedAppointment.id,
-                          status: "COMPLETED",
-                        })
-                      }
-                    >
-                      Tamamlandı
-                    </Btn>
-                  )}
-                  {selectedAppointment.status !== "CANCELLED" && (
-                    <Btn
-                      size="sm"
-                      variant="destructive"
-                      onClick={() =>
-                        updateStatus.mutate({
-                          id: selectedAppointment.id,
-                          status: "CANCELLED",
-                        })
-                      }
-                    >
-                      İptal Et
-                    </Btn>
-                  )}
+              {selectedAppointment.notes && selectedAppointment.notes !== "REST" && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-gray-500 font-medium mb-1">Not</p>
+                  <p className="text-sm text-gray-700">{selectedAppointment.notes}</p>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </DialogContent>

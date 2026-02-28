@@ -150,6 +150,8 @@ model Appointment {
   endTime        DateTime
   status         AppointmentStatus    @default(PENDING)
   notes          String?
+  restAmount     Float?
+  restCurrency   String?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   approvalStatus ApprovalStatus       @default(APPROVED)
@@ -243,12 +245,36 @@ model Hotel {
 }
 
 model Region {
+  id                 String              @id @default(cuid())
+  name               String              @unique
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  pickupTimeRegionId String?
+  pickupTimeRegion   Region?             @relation("RegionTimeMapping", fields: [pickupTimeRegionId], references: [id])
+  dependentRegions   Region[]            @relation("RegionTimeMapping")
+  hotels             Hotel[]
+  sessionTimes       RegionSessionTime[]
+}
+
+model RegionSessionTime {
   id        String   @id @default(cuid())
-  name      String   @unique
+  regionId  String
+  time      String
   isActive  Boolean  @default(true)
+  maxQuota  Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  hotels    Hotel[]
+  region    Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@unique([regionId, time])
+  @@index([regionId])
+}
+
+model SystemSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
 }
 
 model Driver {
