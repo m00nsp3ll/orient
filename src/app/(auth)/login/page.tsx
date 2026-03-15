@@ -116,12 +116,6 @@ export default function LoginPage() {
             </form>
           </Form>
 
-          <div className="mt-6 text-center text-sm text-gray-600">
-            Hesabınız yok mu?{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              Kayıt olun
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>

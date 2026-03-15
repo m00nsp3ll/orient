@@ -35,6 +35,7 @@ interface PendingAppointment {
   startTime: string
   endTime: string
   pax: number | null
+  childCount?: number | null
   customerName: string | null
   roomNumber: string | null
   notes: string | null
@@ -52,6 +53,7 @@ interface PendingAppointment {
     price: number
     currency?: string
   }
+  services?: { service: { id: string; name: string; price: number; currency?: string }; price: number }[]
   hotel: {
     id: string
     name: string
@@ -191,7 +193,7 @@ export function PendingApprovals() {
                           {format(new Date(appointment.startTime), "d MMM yyyy", { locale: tr })}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {format(new Date(appointment.startTime), "HH:mm")} - {format(new Date(appointment.endTime), "HH:mm")}
+                          {format(new Date(appointment.startTime), "HH:mm")}
                         </div>
                       </div>
                     </div>
@@ -219,16 +221,29 @@ export function PendingApprovals() {
                   </TableCell>
                   <TableCell>
                     <div>
-                      <div className="font-medium text-sm">{appointment.service.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {getCurrencySymbol(appointment.service.currency || "EUR")} {appointment.service.price}
-                      </div>
+                      {appointment.services && appointment.services.length > 0 ? (
+                        appointment.services.map((s, idx) => (
+                          <div key={idx}>
+                            <div className="font-medium text-sm">{s.service.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {getCurrencySymbol(s.service.currency || "EUR")} {s.price}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <>
+                          <div className="font-medium text-sm">{appointment.service.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {getCurrencySymbol(appointment.service.currency || "EUR")} {appointment.service.price}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="flex items-center gap-1 w-fit">
                       <Users className="h-3 w-3" />
-                      {appointment.pax || 1}
+                      {appointment.pax || 1}{appointment.childCount ? `+${appointment.childCount}` : ""}
                     </Badge>
                   </TableCell>
                   {isAdmin && (
@@ -269,48 +284,53 @@ export function PendingApprovals() {
             <AlertDialogTitle>
               {actionType === "approve" ? "Rezervasyonu Onayla" : "Rezervasyonu Reddet"}
             </AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription asChild>
               {selectedAppointment && (
-                <div className="space-y-2 text-foreground">
-                  <p className="font-medium">
+                <div className="space-y-2 text-foreground text-sm">
+                  <div className="font-medium">
                     <strong>Acenta:</strong> {selectedAppointment.agency?.companyName || selectedAppointment.agency?.name}
-                  </p>
-                  <p>
+                  </div>
+                  <div>
                     <strong>Misafir:</strong> {selectedAppointment.customerName}
-                  </p>
-                  <p>
+                  </div>
+                  <div>
                     <strong>Otel:</strong> {selectedAppointment.hotel?.name}
-                  </p>
-                  <p>
-                    <strong>Program:</strong> {selectedAppointment.service.name}
-                  </p>
-                  <p>
+                  </div>
+                  <div>
+                    <strong>Paketler:</strong>
+                    {selectedAppointment.services && selectedAppointment.services.length > 0 ? (
+                      <span> {selectedAppointment.services.map(s => s.service.name).join(", ")}</span>
+                    ) : (
+                      <span> {selectedAppointment.service.name}</span>
+                    )}
+                  </div>
+                  <div>
                     <strong>Tarih:</strong> {format(new Date(selectedAppointment.startTime), "d MMMM yyyy, HH:mm", { locale: tr })}
-                  </p>
-                  <p>
-                    <strong>PAX:</strong> {selectedAppointment.pax || 1} kişi
-                  </p>
-                  {selectedAppointment.notes && !selectedAppointment.notes.startsWith("[DEMO]") && (
-                    <p className="text-sm bg-muted p-2 rounded mt-2">
+                  </div>
+                  <div>
+                    <strong>PAX:</strong> {selectedAppointment.pax || 1}{selectedAppointment.childCount ? `+${selectedAppointment.childCount}` : ""} kişi
+                  </div>
+                  {selectedAppointment.notes && selectedAppointment.notes !== "REST" && !selectedAppointment.notes.startsWith("[DEMO]") && (
+                    <div className="text-sm bg-muted p-2 rounded mt-2">
                       <strong>Not:</strong> {selectedAppointment.notes}
-                    </p>
+                    </div>
                   )}
                   {selectedAppointment.restAmount && selectedAppointment.restCurrency && (
                     <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
                       <Banknote className="h-5 w-5 text-red-600 shrink-0" />
                       <div>
-                        <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">REST - Ödeme Kapıda</p>
-                        <p className="text-lg font-bold text-red-700">
+                        <div className="text-xs font-semibold text-red-500 uppercase tracking-wide">REST - Ödeme Kapıda</div>
+                        <div className="text-lg font-bold text-red-700">
                           {selectedAppointment.restAmount} {selectedAppointment.restCurrency}
-                        </p>
+                        </div>
                       </div>
                     </div>
                   )}
-                  <p className="text-sm mt-4 text-muted-foreground">
+                  <div className="text-sm mt-4 text-muted-foreground">
                     {actionType === "approve"
                       ? "Bu rezervasyonu onaylamak istediğinizden emin misiniz?"
                       : "Bu rezervasyonu reddetmek istediğinizden emin misiniz?"}
-                  </p>
+                  </div>
                 </div>
               )}
             </AlertDialogDescription>

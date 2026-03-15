@@ -119,6 +119,11 @@ export async function GET(req: NextRequest) {
           region: { select: { name: true } },
         },
       },
+      services: {
+        include: {
+          service: { select: { id: true, name: true, price: true, currency: true } },
+        },
+      },
     },
     orderBy: { startTime: "asc" },
   })

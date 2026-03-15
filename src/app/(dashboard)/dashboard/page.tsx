@@ -54,8 +54,11 @@ interface Appointment {
   customerName?: string
   roomNumber?: string
   voucherNo?: string | null
+  restAmount?: number | null
+  restCurrency?: string | null
   customer?: { name: string; email?: string; phone?: string } | null
   service: { name: string; price: number; currency?: string }
+  services?: { service: { id: string; name: string; price: number; currency?: string }; price: number }[]
   staff?: { user: { name: string } } | null
   agency?: {
     id: string
@@ -148,7 +151,7 @@ export default function DashboardPage() {
     }
   }
 
-  const isRest = (appointment: Appointment) => appointment.notes === "REST"
+  const isRest = (appointment: Appointment) => !!(appointment.restAmount && appointment.restAmount > 0)
 
   return (
     <div className="space-y-6">
@@ -247,16 +250,13 @@ export default function DashboardPage() {
                       <div className="text-lg font-bold">
                         {format(new Date(appointment.startTime), "HH:mm")}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {format(new Date(appointment.endTime), "HH:mm")}
-                      </div>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">
                           {appointment.customerName || appointment.customer?.name || "-"}
                         </span>
-                        {appointment.pax && appointment.pax > 1 && (
+                        {appointment.pax && appointment.pax > 0 && (
                           <Badge variant="outline" className="text-xs">
                             {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} kişi
                           </Badge>
@@ -269,7 +269,9 @@ export default function DashboardPage() {
                         )}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {appointment.service.name}
+                        {appointment.services && appointment.services.length > 0
+                          ? appointment.services.map(s => s.service.name).join(", ")
+                          : appointment.service.name}
                       </div>
                       {appointment.agency && (
                         <button
@@ -394,11 +396,26 @@ export default function DashboardPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-sm text-gray-500">Hizmet</span>
-                  <p className="font-medium">{selectedAppointment.service.name}</p>
-                  <p className="text-sm text-gray-500">
-                    {getCurrencySymbol(selectedAppointment.service.currency || "EUR")} {selectedAppointment.service.price}
-                  </p>
+                  <span className="text-sm text-gray-500">Paketler</span>
+                  {selectedAppointment.services && selectedAppointment.services.length > 0 ? (
+                    <div className="space-y-1 mt-1">
+                      {selectedAppointment.services.map((s, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{s.service.name}</span>
+                          <span className="text-gray-500">
+                            {getCurrencySymbol(s.service.currency || "EUR")} {s.price}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-medium">{selectedAppointment.service.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {getCurrencySymbol(selectedAppointment.service.currency || "EUR")} {selectedAppointment.service.price}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <span className="text-sm text-gray-500">Tarih & Saat</span>
@@ -406,8 +423,7 @@ export default function DashboardPage() {
                     {format(new Date(selectedAppointment.startTime), "dd.MM.yyyy")}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {format(new Date(selectedAppointment.startTime), "HH:mm")} -{" "}
-                    {format(new Date(selectedAppointment.endTime), "HH:mm")}
+                    {format(new Date(selectedAppointment.startTime), "HH:mm")}
                   </p>
                 </div>
               </div>

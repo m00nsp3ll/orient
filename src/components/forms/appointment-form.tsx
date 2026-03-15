@@ -368,7 +368,7 @@ export function AppointmentForm({
       const payload: Record<string, unknown> = {
         serviceId: cart[0].id,
         startTime: startTime.toISOString(),
-        notes: isRest ? "REST" : (data.notes || null),
+        notes: data.notes || null,
         isRest,
         restAmount: isRest ? data.restAmount : undefined,
         restCurrency: isRest ? data.restCurrency : undefined,

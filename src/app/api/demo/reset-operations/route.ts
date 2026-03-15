@@ -124,33 +124,40 @@ export async function POST(request: Request) {
       include: { user: true },
     })
 
-    // 8. Demo müşteriler
-    const demoCustomers = [
-      { name: "Ahmet Yılmaz",  phone: "+90 532 111 1111", status: "PENDING",      time: "09:00", pax: 2, service: 0, agency: 0 },
-      { name: "Mehmet Demir",  phone: "+90 532 222 2222", status: "PENDING",      time: "09:30", pax: 1, service: 1, agency: 1, rest: true,  restAmount: 150, restCurrency: "EUR" },
-      { name: "Ayşe Kaya",    phone: "+90 532 333 3333", status: "PENDING",      time: "10:00", pax: 3, service: 2, agency: 0 },
-      { name: "Fatma Şahin",  phone: "+90 532 444 4444", status: "PENDING",      time: "10:30", pax: 2, service: 0, agency: 2 },
-      { name: "Ali Çelik",    phone: "+90 532 555 5555", status: "PENDING",      time: "11:00", pax: 4, service: 1, agency: 1 },
+    // 8. Demo müşteriler — childCount, REST (restAmount bazlı), çoklu paket
+    const demoCustomers: {
+      name: string; status: string; time: string; pax: number; childCount: number
+      serviceIndices: number[]; agency: number; restAmount?: number; restCurrency?: string
+      notes?: string; voucherNo?: string
+    }[] = [
+      // PENDING — alınmayı bekleyenler
+      { name: "Hans Müller",    status: "PENDING",    time: "09:00", pax: 2, childCount: 1, serviceIndices: [0],    agency: 0, voucherNo: "SWT-1001" },
+      { name: "Anna Schmidt",   status: "PENDING",    time: "09:30", pax: 1, childCount: 0, serviceIndices: [1],    agency: 1, restAmount: 150, restCurrency: "EUR" },
+      { name: "Pierre Dubois",  status: "PENDING",    time: "10:00", pax: 3, childCount: 2, serviceIndices: [0, 1], agency: 0, notes: "Çocuklar 3 ve 5 yaşında" },
+      { name: "Elena Petrov",   status: "PENDING",    time: "10:30", pax: 2, childCount: 0, serviceIndices: [0],    agency: 2, voucherNo: "GLT-4422" },
+      { name: "John Smith",     status: "PENDING",    time: "11:00", pax: 4, childCount: 1, serviceIndices: [1, 0], agency: 1, notes: "VIP müşteri" },
 
-      { name: "Zeynep Arslan", phone: "+90 532 666 6666", status: "IN_SERVICE",  time: "08:00", pax: 2, service: 2, agency: 3 },
-      { name: "Hasan Yıldız",  phone: "+90 532 777 7777", status: "IN_SERVICE",  time: "08:30", pax: 1, service: 0, agency: 0, rest: true, restAmount: 80, restCurrency: "USD" },
+      // IN_SERVICE — turda olanlar
+      { name: "Sophie Johnson", status: "IN_SERVICE", time: "08:00", pax: 2, childCount: 0, serviceIndices: [0],    agency: 3 },
+      { name: "Maria Fischer",  status: "IN_SERVICE", time: "08:30", pax: 1, childCount: 0, serviceIndices: [0],    agency: 0, restAmount: 80, restCurrency: "USD", voucherNo: "SWT-1055" },
+      { name: "Ahmet Yılmaz",   status: "IN_SERVICE", time: "07:30", pax: 2, childCount: 1, serviceIndices: [1],    agency: 1, notes: "Bebek arabası var" },
+      { name: "Lars Johansson", status: "IN_SERVICE", time: "07:00", pax: 3, childCount: 0, serviceIndices: [0, 1], agency: 2 },
 
-      { name: "Elif Öztürk",   phone: "+90 532 888 8888", status: "IN_SERVICE",  time: "07:30", pax: 2, service: 1, agency: 1 },
-      { name: "Mustafa Aydın", phone: "+90 532 999 9999", status: "IN_SERVICE",  time: "07:00", pax: 3, service: 2, agency: 2 },
+      // DROPPING_OFF — bırakılıyor
+      { name: "Fatma Kaya",     status: "DROPPING_OFF", time: "06:00", pax: 2, childCount: 1, serviceIndices: [0],  agency: 3, voucherNo: "PRH-7712" },
+      { name: "Erik Lindgren",  status: "DROPPING_OFF", time: "06:30", pax: 1, childCount: 0, serviceIndices: [1],  agency: 0, restAmount: 200, restCurrency: "GBP" },
+      { name: "Olga Smirnova", status: "DROPPING_OFF", time: "07:00", pax: 4, childCount: 2, serviceIndices: [0, 1], agency: 1, notes: "İkiz çocuklar" },
 
-      { name: "Selin Kara",    phone: "+90 533 111 1111", status: "DROPPING_OFF", time: "06:00", pax: 2, service: 0, agency: 3 },
-      { name: "Burak Şen",     phone: "+90 533 222 2222", status: "DROPPING_OFF", time: "06:30", pax: 1, service: 1, agency: 0, rest: true, restAmount: 200, restCurrency: "GBP" },
-      { name: "Deniz Taş",     phone: "+90 533 333 3333", status: "DROPPING_OFF", time: "07:00", pax: 4, service: 2, agency: 1 },
-
-      { name: "Cem Yalçın",    phone: "+90 533 444 4444", status: "COMPLETED",   time: "05:00", pax: 2, service: 0, agency: 2 },
-      { name: "Özge Polat",    phone: "+90 533 555 5555", status: "COMPLETED",   time: "05:30", pax: 3, service: 1, agency: 3, rest: true, restAmount: 2500, restCurrency: "TRY" },
+      // COMPLETED — tamamlanan
+      { name: "Thomas Braun",   status: "COMPLETED",  time: "05:00", pax: 2, childCount: 0, serviceIndices: [0],    agency: 2 },
+      { name: "Mehmet Demir",   status: "COMPLETED",  time: "05:30", pax: 3, childCount: 1, serviceIndices: [1, 0], agency: 3, restAmount: 2500, restCurrency: "TRY", voucherNo: "PRH-9901" },
     ]
 
     // 9. Randevular ve transferler oluştur
     let count = 0
     for (const customer of demoCustomers) {
       const hotel = hotels[Math.floor(Math.random() * hotels.length)]
-      const service = services[customer.service % services.length]
+      const primaryService = services[customer.serviceIndices[0] % services.length]
       const agency = createdAgencies[customer.agency % createdAgencies.length]
 
       const [hours, minutes] = customer.time.split(":").map(Number)
@@ -161,36 +168,41 @@ export async function POST(request: Request) {
       endTime.setMinutes(endTime.getMinutes() + 60)
 
       count++
-      const voucherNo = `V-${String(count).padStart(4, "0")}`
+      const voucherNo = customer.voucherNo || `V-${String(count).padStart(4, "0")}`
+
+      // Seçilen paketleri hazırla
+      const selectedServices = customer.serviceIndices.map(idx => services[idx % services.length])
 
       const appointment = await prisma.appointment.create({
         data: {
           customerName: customer.name,
           roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
-          serviceId: service.id,
+          serviceId: primaryService.id,
           hotelId: hotel.id,
           agencyId: agency.id,
           startTime,
           endTime,
           pax: customer.pax,
+          childCount: customer.childCount,
           status: "CONFIRMED",
           approvalStatus: "APPROVED",
-          notes: customer.rest ? "REST" : null,
-          restAmount: customer.rest ? (customer as any).restAmount : null,
-          restCurrency: customer.rest ? (customer as any).restCurrency : null,
+          notes: customer.notes || null,
+          restAmount: customer.restAmount || null,
+          restCurrency: customer.restCurrency || null,
           voucherNo,
         },
       })
 
-      // AppointmentService tablosunu doldur
-      await prisma.appointmentService.createMany({
-        data: Array.from({ length: customer.pax }).map(() => ({
-          appointmentId: appointment.id,
-          serviceId: service.id,
-          price: service.price,
-        })),
-        skipDuplicates: true,
-      })
+      // AppointmentService — her seçilen paket için tek kayıt (unique constraint: appointmentId+serviceId)
+      for (const svc of selectedServices) {
+        await prisma.appointmentService.create({
+          data: {
+            appointmentId: appointment.id,
+            serviceId: svc.id,
+            price: svc.price,
+          },
+        })
+      }
 
       await prisma.transfer.create({
         data: {
@@ -202,60 +214,63 @@ export async function POST(request: Request) {
       })
     }
 
-    // 10. Sunway Travel'dan 5 adet onay bekleyen rezervasyon ekle
+    // 10. Sunway Travel'dan onay bekleyen rezervasyonlar (farklı paket kombinasyonları)
     const sunwayAgency = createdAgencies.find(a => a.code === "SWT001")
 
     if (sunwayAgency) {
       const pendingCustomers = [
-        { name: "Emre Kılıç",   phone: "+90 541 111 2233", time: "12:00", pax: 2, service: 0 },
-        { name: "Derya Aydın",  phone: "+90 542 222 3344", time: "13:00", pax: 3, service: 1 },
-        { name: "Gökhan Şen",   phone: "+90 543 333 4455", time: "14:00", pax: 4, service: 0 },
-        { name: "Hülya Koç",    phone: "+90 544 444 5566", time: "15:00", pax: 2, service: 1, rest: true, restAmount: 120, restCurrency: "EUR" },
-        { name: "İsmail Yurt",  phone: "+90 545 555 6677", time: "16:00", pax: 5, service: 0 },
+        { name: "Emre Kılıç",   time: "12:00", pax: 2, childCount: 1, serviceIndices: [0],    restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: "Bebek koltuğu gerekli", voucherNo: "SWT-2001" },
+        { name: "Derya Aydın",  time: "13:00", pax: 3, childCount: 0, serviceIndices: [1, 0], restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: undefined as string | undefined, voucherNo: "SWT-2002" },
+        { name: "Gökhan Şen",   time: "14:00", pax: 4, childCount: 2, serviceIndices: [0],    restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: "Çocuklar 2 ve 7 yaşında", voucherNo: "SWT-2003" },
+        { name: "Hülya Koç",    time: "15:00", pax: 2, childCount: 0, serviceIndices: [1],    restAmount: 120, restCurrency: "EUR", notes: undefined as string | undefined, voucherNo: "SWT-2004" },
+        { name: "İsmail Yurt",  time: "16:00", pax: 5, childCount: 1, serviceIndices: [0, 1], restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: "Grubun 1 üyesi engelli", voucherNo: "SWT-2005" },
       ]
 
       for (const customer of pendingCustomers) {
         const hotel = hotels[Math.floor(Math.random() * hotels.length)]
-        const service = services[customer.service % services.length]
+        const primaryService = services[customer.serviceIndices[0] % services.length]
 
-        const [hours, minutes] = customer.time.split(":").map(Number)
+        const [hours, mins] = customer.time.split(":").map(Number)
         const startTime = new Date(targetDate)
-        startTime.setHours(hours, minutes, 0, 0)
+        startTime.setHours(hours, mins, 0, 0)
 
         const endTime = new Date(startTime)
         endTime.setMinutes(endTime.getMinutes() + 60)
 
         count++
-        const voucherNo = `V-${String(count).padStart(4, "0")}`
+
+        const selectedServices = customer.serviceIndices.map(idx => services[idx % services.length])
 
         const appointment = await prisma.appointment.create({
           data: {
             customerName: customer.name,
             roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
-            serviceId: service.id,
+            serviceId: primaryService.id,
             hotelId: hotel.id,
             agencyId: sunwayAgency.id,
             startTime,
             endTime,
             pax: customer.pax,
+            childCount: customer.childCount,
             status: "CONFIRMED",
             approvalStatus: "PENDING_APPROVAL",
-            notes: (customer as any).rest ? "REST" : null,
-            restAmount: (customer as any).rest ? (customer as any).restAmount : null,
-            restCurrency: (customer as any).rest ? (customer as any).restCurrency : null,
-            voucherNo,
+            notes: customer.notes || null,
+            restAmount: customer.restAmount || null,
+            restCurrency: customer.restCurrency || null,
+            voucherNo: customer.voucherNo,
           },
         })
 
-        // AppointmentService tablosunu doldur
-        await prisma.appointmentService.createMany({
-          data: Array.from({ length: customer.pax }).map(() => ({
-            appointmentId: appointment.id,
-            serviceId: service.id,
-            price: service.price,
-          })),
-          skipDuplicates: true,
-        })
+        // AppointmentService — her seçilen paket için tek kayıt
+        for (const svc of selectedServices) {
+          await prisma.appointmentService.create({
+            data: {
+              appointmentId: appointment.id,
+              serviceId: svc.id,
+              price: svc.price,
+            },
+          })
+        }
       }
     }
 

@@ -41,6 +41,7 @@ interface Appointment {
   restCurrency?: string | null
   customer: { id: string; name: string; email: string; phone?: string } | null
   service: { name: string; price: number; currency?: string }
+  services?: { service: { id: string; name: string; price: number; currency?: string }; price: number }[]
   staff: { user: { name: string } } | null
   agency?: { id: string; name: string; companyName: string | null } | null
   hotel?: {
@@ -229,7 +230,7 @@ export default function AppointmentsPage() {
                       key={appointment.id}
                       className={cn(
                         "p-4 border rounded-lg cursor-pointer transition-colors",
-                        appointment.notes === "REST"
+                        appointment.restAmount
                           ? "border-red-200 bg-red-50/40 hover:bg-red-50"
                           : "hover:bg-gray-50"
                       )}
@@ -248,7 +249,7 @@ export default function AppointmentsPage() {
                               </Badge>
                             )}
                             {isAgency && getApprovalBadge(appointment.approvalStatus)}
-                            {appointment.notes === "REST" && (
+                            {appointment.restAmount && appointment.restAmount > 0 && (
                               <Badge className="bg-red-500 text-white flex items-center gap-1">
                                 <Banknote className="h-3 w-3" />
                                 REST
@@ -398,11 +399,26 @@ export default function AppointmentsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <span className="text-sm text-gray-500">Hizmet</span>
-                  <p className="font-medium">{selectedAppointment.service.name}</p>
-                  <p className="text-sm text-gray-500">
-                    {selectedAppointment.service.currency === "TRY" ? "₺" : selectedAppointment.service.currency === "USD" ? "$" : selectedAppointment.service.currency === "GBP" ? "£" : "€"}{selectedAppointment.service.price}
-                  </p>
+                  <span className="text-sm text-gray-500">Paketler</span>
+                  {selectedAppointment.services && selectedAppointment.services.length > 0 ? (
+                    <div className="space-y-1 mt-1">
+                      {selectedAppointment.services.map((s: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{s.service.name}</span>
+                          <span className="text-gray-500">
+                            {s.service.currency === "TRY" ? "₺" : s.service.currency === "USD" ? "$" : s.service.currency === "GBP" ? "£" : "€"}{s.price}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-medium">{selectedAppointment.service.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {selectedAppointment.service.currency === "TRY" ? "₺" : selectedAppointment.service.currency === "USD" ? "$" : selectedAppointment.service.currency === "GBP" ? "£" : "€"}{selectedAppointment.service.price}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <span className="text-sm text-gray-500">Tarih & Saat</span>
@@ -410,18 +426,17 @@ export default function AppointmentsPage() {
                     {format(new Date(selectedAppointment.startTime), "dd.MM.yyyy")}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {format(new Date(selectedAppointment.startTime), "HH:mm")} -{" "}
-                    {format(new Date(selectedAppointment.endTime), "HH:mm")}
+                    {format(new Date(selectedAppointment.startTime), "HH:mm")}
                   </p>
                 </div>
               </div>
 
-              {selectedAppointment.notes === "REST" && (
+              {selectedAppointment.restAmount && selectedAppointment.restAmount > 0 && (
                 <div className="flex items-center gap-3 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3">
                   <Banknote className="h-6 w-6 text-red-600 shrink-0" />
                   <div>
                     <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">REST - Ödeme Kapıda</p>
-                    {selectedAppointment.restAmount && selectedAppointment.restCurrency ? (
+                    {selectedAppointment.restCurrency ? (
                       <p className="text-xl font-bold text-red-700">
                         {selectedAppointment.restAmount} {selectedAppointment.restCurrency}
                       </p>
