@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { Sidebar } from "@/components/layout/sidebar"
+import { CurrencyTicker } from "@/components/layout/currency-ticker"
 
 export default async function DashboardLayout({
   children,
@@ -18,6 +19,9 @@ export default async function DashboardLayout({
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
       <div className="lg:pl-64">
+        <header className="sticky top-0 z-30 h-10 bg-white/80 backdrop-blur border-b px-6 flex items-center justify-end">
+          <CurrencyTicker />
+        </header>
         <main className="p-6 lg:p-8">{children}</main>
       </div>
     </div>

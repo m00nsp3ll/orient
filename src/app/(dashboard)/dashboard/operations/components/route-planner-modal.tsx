@@ -61,12 +61,12 @@ interface Transfer {
     startTime: string
     endTime: string
     pax: number | null
+    childCount: number | null
     customerName: string | null
     notes: string | null
     service: {
       id: string
       name: string
-      duration: number
     }
     hotel: {
       id: string
@@ -386,7 +386,7 @@ export function RoutePlannerModal({
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="text-xs">
                           <Users className="h-3 w-3 mr-1" />
-                          {transfer.appointment.pax || 1}
+                          {transfer.appointment.pax || 1}{transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""}
                         </Badge>
                         <Button
                           size="sm"
@@ -513,7 +513,7 @@ export function RoutePlannerModal({
                                 )}
                                 <Badge variant="secondary" className="text-[10px] h-5 ml-auto">
                                   <Users className="h-3 w-3 mr-0.5" />
-                                  {transfer.appointment.pax || 1}
+                                  {transfer.appointment.pax || 1}{transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""}
                                 </Badge>
                               </div>
                               <div className="flex items-center gap-2">

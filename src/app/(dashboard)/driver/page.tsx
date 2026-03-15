@@ -13,7 +13,7 @@ import {
   MapPin,
   Clock,
   Users,
-  Phone,
+  FileText,
   RefreshCw,
   Navigation,
   CheckCircle,
@@ -31,13 +31,13 @@ interface Transfer {
     startTime: string
     endTime: string
     pax: number | null
+    childCount: number | null
     customerName: string | null
-    customerPhone: string | null
+    roomNumber: string | null
     notes: string | null
     service: {
       id: string
       name: string
-      duration: number
     }
     hotel: {
       id: string
@@ -55,7 +55,6 @@ interface Transfer {
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   PENDING: { label: "Bekliyor", color: "text-gray-700", bg: "bg-gray-100" },
   PICKING_UP: { label: "Alınıyor", color: "text-blue-700", bg: "bg-blue-100" },
-  AT_SPA: { label: "SPA'da", color: "text-yellow-700", bg: "bg-yellow-100" },
   IN_SERVICE: { label: "Hizmette", color: "text-green-700", bg: "bg-green-100" },
   DROPPING_OFF: { label: "Bırakılıyor", color: "text-orange-700", bg: "bg-orange-100" },
   COMPLETED: { label: "Tamamlandı", color: "text-emerald-700", bg: "bg-emerald-100" },
@@ -63,16 +62,14 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 
 const nextStatus: Record<string, string> = {
   PENDING: "PICKING_UP",
-  PICKING_UP: "AT_SPA",
-  AT_SPA: "IN_SERVICE",
+  PICKING_UP: "IN_SERVICE",
   IN_SERVICE: "DROPPING_OFF",
   DROPPING_OFF: "COMPLETED",
 }
 
 const nextStatusLabel: Record<string, { label: string; icon: string; color: string }> = {
   PENDING: { label: "Almaya Git", icon: "🚗", color: "bg-blue-500 hover:bg-blue-600" },
-  PICKING_UP: { label: "SPA'ya Vardım", icon: "🏢", color: "bg-yellow-500 hover:bg-yellow-600" },
-  AT_SPA: { label: "Hizmet Başladı", icon: "💆", color: "bg-green-500 hover:bg-green-600" },
+  PICKING_UP: { label: "Geldi - Hizmet Başladı", icon: "💆", color: "bg-green-500 hover:bg-green-600" },
   IN_SERVICE: { label: "Bırakmaya Git", icon: "🚗", color: "bg-orange-500 hover:bg-orange-600" },
   DROPPING_OFF: { label: "Tamamla", icon: "✅", color: "bg-emerald-500 hover:bg-emerald-600" },
 }
@@ -156,10 +153,6 @@ export default function DriverPanelPage() {
     window.open(url, "_blank")
   }
 
-  const callCustomer = (phone: string) => {
-    window.open(`tel:${phone}`, "_self")
-  }
-
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -226,7 +219,7 @@ export default function DriverPanelPage() {
                       {transfer.appointment.pax && (
                         <Badge variant="secondary" className="bg-slate-700 text-slate-200">
                           <Users className="h-3 w-3 mr-1" />
-                          {transfer.appointment.pax}
+                          {transfer.appointment.pax}{transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""}
                         </Badge>
                       )}
                     </div>
@@ -271,21 +264,20 @@ export default function DriverPanelPage() {
                   <div className="flex items-center gap-2 text-slate-400 text-sm mb-3">
                     <span>💆</span>
                     <span>
-                      {transfer.appointment.service.name} ({transfer.appointment.service.duration} dk)
+                      {transfer.appointment.service.name}
                     </span>
                   </div>
 
-                  {/* Phone */}
-                  {transfer.appointment.customerPhone && (
-                    <button
-                      onClick={() => callCustomer(transfer.appointment.customerPhone!)}
-                      className="w-full flex items-center gap-3 bg-green-500/20 p-3 rounded-lg mb-3 hover:bg-green-500/30 transition-colors"
+                  {/* Room Number */}
+                  {transfer.appointment.roomNumber && (
+                    <div
+                      className="w-full flex items-center gap-3 bg-slate-700/50 p-3 rounded-lg mb-3"
                     >
-                      <Phone className="h-5 w-5 text-green-400" />
-                      <span className="text-green-400 font-medium">
-                        {transfer.appointment.customerPhone}
+                      <FileText className="h-5 w-5 text-slate-400" />
+                      <span className="text-slate-300 font-medium">
+                        Oda: {transfer.appointment.roomNumber}
                       </span>
-                    </button>
+                    </div>
                   )}
 
                   {/* Action Button */}

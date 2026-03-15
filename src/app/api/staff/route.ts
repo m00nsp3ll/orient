@@ -8,6 +8,8 @@ const staffSchema = z.object({
   userId: z.string(),
   specializations: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
+  position: z.string().optional().nullable(),
+  commissionRate: z.number().optional().nullable(),
 })
 
 export async function GET() {
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
         userId: validatedData.userId,
         specializations: validatedData.specializations || [],
         isActive: validatedData.isActive ?? true,
+        position: validatedData.position || null,
+        commissionRate: validatedData.commissionRate ?? null,
       },
       include: {
         user: {
@@ -62,8 +66,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
+    console.error("Staff create error:", error)
+    const message = error instanceof Error ? error.message : "Personel oluşturulamadı"
     return NextResponse.json(
-      { error: "Personel oluşturulamadı" },
+      { error: message },
       { status: 500 }
     )
   }

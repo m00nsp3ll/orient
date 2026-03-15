@@ -25,6 +25,7 @@ export async function GET() {
   if (session.user.role === "AGENCY") {
     const agency = await prisma.agency.findUnique({
       where: { userId: session.user.id },
+      select: { id: true, currency: true },
     })
 
     if (!agency) {
@@ -48,7 +49,7 @@ export async function GET() {
         include: { category: true },
         orderBy: { name: "asc" },
       })
-      return NextResponse.json(services)
+      return NextResponse.json({ services, agencyCurrency: agency.currency })
     }
 
     // Sadece atanan hizmetleri döndür - Pass fiyatlarını kullan
@@ -60,7 +61,7 @@ export async function GET() {
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
-    return NextResponse.json(services)
+    return NextResponse.json({ services, agencyCurrency: agency.currency })
   }
 
   // Diğer roller için tüm hizmetler

@@ -22,17 +22,21 @@ interface Transfer {
   driverId: string | null
   arrivalTime: string | null
   dropoffTime: string | null
+  pickupTime: string | null
+  departureTime: string | null
   appointment: {
     id: string
     startTime: string
     endTime: string
     pax: number | null
+    childCount: number | null
     customerName: string | null
     notes: string | null
+    restAmount: number | null
+    restCurrency: string | null
     service: {
       id: string
       name: string
-      duration: number
     }
     hotel: {
       id: string
@@ -75,12 +79,12 @@ interface TransferBoardProps {
   onStatusChange: (transferId: string, newStatus: string) => void
   onDriverChange: (transferId: string, driverId: string | null) => void
   onStartDropoff: (transferId: string) => void
+  onCancelAppointment?: (appointmentId: string) => void
 }
 
 const columns = [
   { key: "PENDING", label: "Bekliyor", color: "bg-gray-100", emptyText: "Transfer yok", groupBy: "region", hasRoute: true },
   { key: "PICKING_UP", label: "Alınıyor", color: "bg-blue-50", emptyText: "Transfer yok", groupBy: "driver", hasRoute: false },
-  { key: "AT_SPA", label: "Müşteri Bekliyor", color: "bg-yellow-50", emptyText: "Müşteri yok", groupBy: "none", hasRoute: false },
   { key: "IN_SERVICE", label: "Hizmette", color: "bg-green-50", emptyText: "Müşteri yok", groupBy: "none", hasRoute: false },
   { key: "DROPPING_OFF", label: "Transfer Bekliyor", color: "bg-orange-50", emptyText: "Transfer yok", groupBy: "region", hasRoute: true },
 ]
@@ -134,6 +138,7 @@ export function TransferBoard({
   onStatusChange,
   onDriverChange,
   onStartDropoff,
+  onCancelAppointment,
 }: TransferBoardProps) {
   const [sortMode, setSortMode] = useState<Record<string, "region" | "time">>({
     PENDING: "region",
@@ -204,7 +209,7 @@ export function TransferBoard({
         </Button>
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-4 gap-2">
       {columns.map((column) => {
         const columnTransfers = getTransfersByStatus(column.key)
         const currentSortMode = sortMode[column.key] || column.groupBy
@@ -305,6 +310,7 @@ export function TransferBoard({
                             onStatusChange={onStatusChange}
                             onDriverChange={onDriverChange}
                             onStartDropoff={onStartDropoff}
+                            onCancelAppointment={onCancelAppointment}
                           />
                         ))}
                       </div>
@@ -331,6 +337,7 @@ export function TransferBoard({
                         onStatusChange={onStatusChange}
                         onDriverChange={onDriverChange}
                         onStartDropoff={onStartDropoff}
+                        onCancelAppointment={onCancelAppointment}
                       />
                     </div>
                   ))
@@ -355,6 +362,7 @@ export function TransferBoard({
                               onStatusChange={onStatusChange}
                               onDriverChange={onDriverChange}
                               onStartDropoff={onStartDropoff}
+                              onCancelAppointment={onCancelAppointment}
                             />
                           </div>
                         ))}
@@ -372,6 +380,7 @@ export function TransferBoard({
                       onStatusChange={onStatusChange}
                       onDriverChange={onDriverChange}
                       onStartDropoff={onStartDropoff}
+                      onCancelAppointment={onCancelAppointment}
                     />
                   ))
                 )}
@@ -418,8 +427,15 @@ export function TransferBoard({
                       {/* Sol Kolon */}
                       <div className="space-y-2">
                         <div>
-                          <div className="text-xs text-gray-500 mb-1">Müşteri</div>
+                          <div className="text-xs text-gray-500 mb-1">Acenta</div>
                           <div className="font-semibold text-base">
+                            {transfer.appointment.agency?.name || "Direkt Rezervasyon"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">Müşteri</div>
+                          <div className="font-medium text-sm">
                             {transfer.appointment.customerName || "Misafir"}
                           </div>
                         </div>
@@ -439,7 +455,7 @@ export function TransferBoard({
                         <div>
                           <div className="text-xs text-gray-500 mb-1">Paket</div>
                           <Badge variant="outline" className="text-sm">
-                            {transfer.appointment.service.name} ({transfer.appointment.service.duration} dk)
+                            {transfer.appointment.service.name}
                           </Badge>
                         </div>
                       </div>
@@ -478,7 +494,7 @@ export function TransferBoard({
                           <div>
                             <div className="text-xs text-gray-500 mb-1">Kişi Sayısı</div>
                             <Badge variant="secondary">
-                              {transfer.appointment.pax} kişi
+                              {transfer.appointment.pax}{transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""} kişi
                             </Badge>
                           </div>
                         )}

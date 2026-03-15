@@ -6,7 +6,7 @@ async function main() {
   console.log('📝 5 Adet Onay Bekleyen Demo Rezervasyon Ekleniyor...\n')
 
   // Veritabanından veri çek
-  const services = await prisma.service.findMany()
+  const services = await prisma.service.findMany({ where: { isActive: true } })
   const hotels = await prisma.hotel.findMany({
     where: {
       address: { not: null }
@@ -41,7 +41,7 @@ async function main() {
       hotelId: hotels[12]?.id || hotels[0].id,
       serviceId: services[0].id,
       customerName: 'Emre Kılıç',
-      customerPhone: '0541 111 2233',
+      roomNumber: '101',
       pax: 2,
       startTime: new Date(today.getTime() + 9 * 60 * 60 * 1000), // 09:00
       approvalStatus: 'PENDING_APPROVAL' as const,
@@ -52,7 +52,7 @@ async function main() {
       hotelId: hotels[13]?.id || hotels[1].id,
       serviceId: services[1]?.id || services[0].id,
       customerName: 'Derya Aydın',
-      customerPhone: '0542 222 3344',
+      roomNumber: '205',
       pax: 3,
       startTime: new Date(today.getTime() + 12 * 60 * 60 * 1000), // 12:00
       approvalStatus: 'PENDING_APPROVAL' as const,
@@ -63,7 +63,7 @@ async function main() {
       hotelId: hotels[14]?.id || hotels[2].id,
       serviceId: services[0].id,
       customerName: 'Gökhan Şen',
-      customerPhone: '0543 333 4455',
+      roomNumber: '312',
       pax: 4,
       startTime: new Date(tomorrow.getTime() + 11 * 60 * 60 * 1000), // Yarın 11:00
       approvalStatus: 'PENDING_APPROVAL' as const,
@@ -74,7 +74,7 @@ async function main() {
       hotelId: hotels[15]?.id || hotels[3].id,
       serviceId: services[0].id,
       customerName: 'Hülya Koç',
-      customerPhone: '0544 444 5566',
+      roomNumber: '118',
       pax: 2,
       notes: 'REST',
       startTime: new Date(tomorrow.getTime() + 14 * 60 * 60 * 1000), // Yarın 14:00
@@ -86,7 +86,7 @@ async function main() {
       hotelId: hotels[16]?.id || hotels[4].id,
       serviceId: services[1]?.id || services[0].id,
       customerName: 'İsmail Yurt',
-      customerPhone: '0545 555 6677',
+      roomNumber: '420',
       pax: 5,
       startTime: new Date(tomorrow.getTime() + 16 * 60 * 60 * 1000), // Yarın 16:00
       approvalStatus: 'PENDING_APPROVAL' as const,
@@ -103,7 +103,7 @@ async function main() {
 
     if (!service) continue
 
-    const endTime = new Date(data.startTime.getTime() + service.duration * 60 * 1000)
+    const endTime = new Date(data.startTime.getTime() + 60 * 60 * 1000)
 
     const appointment = await prisma.appointment.create({
       data: {
@@ -111,7 +111,7 @@ async function main() {
         hotelId: data.hotelId,
         serviceId: data.serviceId,
         customerName: data.customerName,
-        customerPhone: data.customerPhone,
+        roomNumber: data.roomNumber,
         pax: data.pax,
         notes: data.notes,
         startTime: data.startTime,

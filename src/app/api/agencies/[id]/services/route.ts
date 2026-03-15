@@ -10,7 +10,7 @@ export async function GET(
 ) {
   const session = await getServerSession(authOptions)
 
-  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
+  if (!session || !["ADMIN", "STAFF", "AGENCY"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
@@ -25,7 +25,6 @@ export async function GET(
       },
     })
 
-    // Pass fiyatlarını da dahil et
     return NextResponse.json(
       allowedServices.map(as => ({
         ...as.service,

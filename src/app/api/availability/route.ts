@@ -17,14 +17,7 @@ export async function GET(req: NextRequest) {
   const selectedDate = new Date(year, month - 1, day)
   const dayOfWeek = selectedDate.getDay()
 
-  let serviceDuration = 60
-  if (serviceId) {
-    const service = await prisma.service.findUnique({ where: { id: serviceId } })
-    if (!service) {
-      return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
-    }
-    serviceDuration = service.duration
-  }
+  const serviceDuration = 60
 
   // Check if quota system is enabled
   const quotaSetting = await prisma.systemSetting.findUnique({ where: { key: "quotaEnabled" } })

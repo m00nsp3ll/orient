@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -30,12 +29,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { useEffect } from "react"
 
 const serviceSchema = z.object({
   name: z.string().min(1, "Hizmet adı gerekli"),
   description: z.string().optional(),
-  duration: z.string().min(1, "Süre gerekli"),
   price: z.string().min(1, "Fiyat gerekli"),
+  currency: z.string().min(1, "Para birimi gerekli"),
   categoryId: z.string().optional(),
 })
 
@@ -48,8 +49,8 @@ interface ServiceFormProps {
     id?: string
     name?: string
     description?: string
-    duration?: number
     price?: number
+    currency?: string
     categoryId?: string
   }
   categories?: { id: string; name: string }[]
@@ -69,11 +70,24 @@ export function ServiceForm({
     defaultValues: {
       name: initialData?.name || "",
       description: initialData?.description || "",
-      duration: initialData?.duration?.toString() || "60",
       price: initialData?.price?.toString() || "",
+      currency: initialData?.currency || "EUR",
       categoryId: initialData?.categoryId || "",
     },
   })
+
+  // Reset form when initialData changes (edit mode)
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: initialData?.name || "",
+        description: initialData?.description || "",
+        price: initialData?.price?.toString() || "",
+        currency: initialData?.currency || "EUR",
+        categoryId: initialData?.categoryId || "",
+      })
+    }
+  }, [open, initialData, form])
 
   const mutation = useMutation({
     mutationFn: async (data: ServiceFormData) => {
@@ -88,8 +102,8 @@ export function ServiceForm({
         body: JSON.stringify({
           name: data.name,
           description: data.description,
-          duration: parseInt(data.duration),
           price: parseFloat(data.price),
+          currency: data.currency,
           categoryId: data.categoryId || null,
         }),
       })
@@ -116,6 +130,13 @@ export function ServiceForm({
     mutation.mutate(data)
   }
 
+  const currencies = [
+    { value: "EUR", symbol: "€", label: "Euro", bg: "bg-blue-600", ring: "ring-blue-300" },
+    { value: "USD", symbol: "$", label: "Dolar", bg: "bg-emerald-600", ring: "ring-emerald-300" },
+    { value: "GBP", symbol: "£", label: "Sterlin", bg: "bg-purple-600", ring: "ring-purple-300" },
+    { value: "TRY", symbol: "₺", label: "TL", bg: "bg-orange-500", ring: "ring-orange-300" },
+  ]
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -134,7 +155,7 @@ export function ServiceForm({
                 <FormItem>
                   <FormLabel>Hizmet Adı</FormLabel>
                   <FormControl>
-                    <Input placeholder="Örn: Klasik Masaj" {...field} />
+                    <Input placeholder="Örn: Klasik Paket" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -158,51 +179,53 @@ export function ServiceForm({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="duration"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Süre (dakika)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Süre seçin" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="30">30 dakika</SelectItem>
-                        <SelectItem value="45">45 dakika</SelectItem>
-                        <SelectItem value="60">60 dakika</SelectItem>
-                        <SelectItem value="90">90 dakika</SelectItem>
-                        <SelectItem value="120">120 dakika</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="price"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fiyat</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fiyat (₺)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            {/* Para Birimi */}
+            <FormField
+              control={form.control}
+              name="currency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Para Birimi</FormLabel>
+                  <div className="flex gap-2">
+                    {currencies.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        className={cn(
+                          "flex-1 h-10 text-sm font-bold rounded-md transition-all border",
+                          field.value === c.value
+                            ? `${c.bg} text-white shadow-lg ring-2 ${c.ring}`
+                            : "bg-white text-gray-600 border-gray-200 shadow-sm hover:bg-gray-50"
+                        )}
+                        onClick={() => field.onChange(c.value)}
+                      >
+                        {c.symbol} {c.value}
+                      </button>
+                    ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {categories && categories.length > 0 && (
               <FormField

@@ -27,6 +27,7 @@ import {
   BarChart3,
   Car,
   Timer,
+  Wallet,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -41,6 +42,7 @@ const navigation = [
   { name: "Personel", href: "/dashboard/staff", icon: Users, roles: ["ADMIN", "STAFF"] },
   { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN"] },
   { name: "Alınış Saatleri", href: "/dashboard/session-times", icon: Timer, roles: ["ADMIN"] },
+  { name: "Günlük Kasa", href: "/dashboard/kasa", icon: Wallet, roles: ["ADMIN"] },
   { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN"] },
   { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
 ]

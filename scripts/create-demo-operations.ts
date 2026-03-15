@@ -80,7 +80,8 @@ async function main() {
 
   // Hizmetleri al
   const services = await prisma.service.findMany({
-    orderBy: { duration: "asc" },
+    where: { isActive: true },
+    orderBy: { name: "asc" },
   })
 
   if (services.length === 0) {
@@ -113,23 +114,23 @@ async function main() {
 
   const demoCustomers = [
     { name: "Ahmet Yılmaz", phone: "+90 532 111 1111", status: "PENDING", time: "09:00", pax: 2, service: 0, agency: 0 },
-    { name: "Mehmet Demir", phone: "+90 532 222 2222", status: "PENDING", time: "09:30", pax: 1, service: 1, agency: 1, rest: true },
+    { name: "Mehmet Demir", phone: "+90 532 222 2222", status: "PENDING", time: "09:30", pax: 1, service: 1, agency: 1, rest: true, restAmount: 50, restCurrency: "EUR" },
     { name: "Ayşe Kaya", phone: "+90 532 333 3333", status: "PENDING", time: "10:00", pax: 3, service: 2, agency: 0 },
     { name: "Fatma Şahin", phone: "+90 532 444 4444", status: "PENDING", time: "10:30", pax: 2, service: 0, agency: 2 },
     { name: "Ali Çelik", phone: "+90 532 555 5555", status: "PENDING", time: "11:00", pax: 4, service: 1, agency: 1 },
 
-    { name: "Zeynep Arslan", phone: "+90 532 666 6666", status: "AT_SPA", time: "08:00", pax: 2, service: 2, agency: 3 },
-    { name: "Hasan Yıldız", phone: "+90 532 777 7777", status: "AT_SPA", time: "08:30", pax: 1, service: 0, agency: 0, rest: true },
+    { name: "Zeynep Arslan", phone: "+90 532 666 6666", status: "IN_SERVICE", time: "08:00", pax: 2, service: 2, agency: 3 },
+    { name: "Hasan Yıldız", phone: "+90 532 777 7777", status: "IN_SERVICE", time: "08:30", pax: 1, service: 0, agency: 0, rest: true, restAmount: 30, restCurrency: "USD" },
 
     { name: "Elif Öztürk", phone: "+90 532 888 8888", status: "IN_SERVICE", time: "07:30", pax: 2, service: 1, agency: 1 },
     { name: "Mustafa Aydın", phone: "+90 532 999 9999", status: "IN_SERVICE", time: "07:00", pax: 3, service: 2, agency: 2 },
 
     { name: "Selin Kara", phone: "+90 533 111 1111", status: "DROPPING_OFF", time: "06:00", pax: 2, service: 0, agency: 3 },
-    { name: "Burak Şen", phone: "+90 533 222 2222", status: "DROPPING_OFF", time: "06:30", pax: 1, service: 1, agency: 0, rest: true },
+    { name: "Burak Şen", phone: "+90 533 222 2222", status: "DROPPING_OFF", time: "06:30", pax: 1, service: 1, agency: 0, rest: true, restAmount: 40, restCurrency: "GBP" },
     { name: "Deniz Taş", phone: "+90 533 333 3333", status: "DROPPING_OFF", time: "07:00", pax: 4, service: 2, agency: 1 },
 
     { name: "Cem Yalçın", phone: "+90 533 444 4444", status: "COMPLETED", time: "05:00", pax: 2, service: 0, agency: 2 },
-    { name: "Özge Polat", phone: "+90 533 555 5555", status: "COMPLETED", time: "05:30", pax: 3, service: 1, agency: 3, rest: true },
+    { name: "Özge Polat", phone: "+90 533 555 5555", status: "COMPLETED", time: "05:30", pax: 3, service: 1, agency: 3, rest: true, restAmount: 100, restCurrency: "EUR" },
   ]
 
   let count = 0
@@ -146,13 +147,13 @@ async function main() {
     startTime.setHours(hours, minutes, 0, 0)
 
     const endTime = new Date(startTime)
-    endTime.setMinutes(endTime.getMinutes() + service.duration)
+    endTime.setMinutes(endTime.getMinutes() + 60)
 
     // Randevu oluştur
     const appointment = await prisma.appointment.create({
       data: {
         customerName: customer.name,
-        customerPhone: customer.phone,
+        roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
         serviceId: service.id,
         hotelId: hotel.id,
         agencyId: agency.id,
@@ -161,6 +162,8 @@ async function main() {
         pax: customer.pax,
         status: "CONFIRMED",
         notes: customer.rest ? "REST - Ödeme Kapıda" : null,
+        restAmount: (customer as any).restAmount || null,
+        restCurrency: (customer as any).restCurrency || null,
       },
     })
 

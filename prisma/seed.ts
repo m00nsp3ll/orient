@@ -124,35 +124,30 @@ async function main() {
     {
       name: "Klasik Masaj",
       description: "Geleneksel rahatlama masajı",
-      duration: 60,
       price: 500,
       categoryId: massageCategory.id,
     },
     {
       name: "Aromaterapi Masajı",
       description: "Aromatik yağlarla yapılan rahatlatıcı masaj",
-      duration: 75,
       price: 650,
       categoryId: massageCategory.id,
     },
     {
       name: "Taş Masajı",
       description: "Sıcak taşlarla yapılan terapi masajı",
-      duration: 90,
       price: 800,
       categoryId: massageCategory.id,
     },
     {
       name: "Yüz Bakımı",
       description: "Profesyonel yüz temizleme ve bakım",
-      duration: 45,
       price: 400,
       categoryId: skinCareCategory.id,
     },
     {
       name: "Anti-Aging Bakım",
       description: "Yaşlanma karşıtı özel bakım",
-      duration: 60,
       price: 700,
       categoryId: skinCareCategory.id,
     },
@@ -458,7 +453,7 @@ async function main() {
       const hotel = testHotels[apt.hotelIdx % testHotels.length]
 
       const endTime = new Date(startTime)
-      endTime.setMinutes(endTime.getMinutes() + service.duration)
+      endTime.setMinutes(endTime.getMinutes() + 60)
 
       const appointment = await prisma.appointment.create({
         data: {

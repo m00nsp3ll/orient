@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
@@ -15,10 +15,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useSession } from "next-auth/react"
+import { toast } from "sonner"
 
 interface Appointment {
   id: string
@@ -28,14 +33,16 @@ interface Appointment {
   approvalStatus: string
   notes?: string
   pax?: number
+  childCount?: number
   customerName?: string
-  customerPhone?: string
+  roomNumber?: string
+  voucherNo?: string | null
   restAmount?: number | null
   restCurrency?: string | null
   customer: { id: string; name: string; email: string; phone?: string } | null
-  service: { name: string; duration: number; price: number }
+  service: { name: string; price: number; currency?: string }
   staff: { user: { name: string } } | null
-  agency?: { id: string; companyName: string } | null
+  agency?: { id: string; name: string; companyName: string | null } | null
   hotel?: {
     id: string
     name: string
@@ -46,10 +53,12 @@ interface Appointment {
 }
 
 export default function AppointmentsPage() {
+  const queryClient = useQueryClient()
   const { data: session } = useSession()
   const isAgency = session?.user?.role === "AGENCY"
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [currentWeek] = useState(new Date())
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null)
   const [currentDay, setCurrentDay] = useState(new Date())
@@ -80,6 +89,31 @@ export default function AppointmentsPage() {
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment)
   }
+
+  const cancelMutation = useMutation({
+    mutationFn: async (appointmentId: string) => {
+      const res = await fetch(`/api/appointments/${appointmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "İptal edilemedi")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] })
+      toast.success("Randevu iptal edildi. Acenta carisi güncellendi.")
+      setSelectedAppointment(null)
+      setCancellingId(null)
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+      setCancellingId(null)
+    },
+  })
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -205,9 +239,14 @@ export default function AppointmentsPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <span className="text-lg font-semibold">
-                              {format(new Date(appointment.startTime), "HH:mm")} - {format(new Date(appointment.endTime), "HH:mm")}
+                              {format(new Date(appointment.startTime), "HH:mm")}
                             </span>
                             {getStatusBadge(appointment.status)}
+                            {appointment.voucherNo && (
+                              <Badge variant="outline" className="text-xs font-mono">
+                                Voucher No: {appointment.voucherNo}
+                              </Badge>
+                            )}
                             {isAgency && getApprovalBadge(appointment.approvalStatus)}
                             {appointment.notes === "REST" && (
                               <Badge className="bg-red-500 text-white flex items-center gap-1">
@@ -229,7 +268,7 @@ export default function AppointmentsPage() {
                                 <div className="flex items-center gap-1 mt-1">
                                   <Badge variant="secondary" className="text-xs">
                                     <Users className="h-3 w-3 mr-1" />
-                                    {appointment.pax} PAX
+                                    {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} PAX
                                   </Badge>
                                 </div>
                               )}
@@ -240,8 +279,10 @@ export default function AppointmentsPage() {
                             </div>
                             {!isAgency && (
                               <div>
-                                <span className="text-gray-500">Personel:</span>
-                                <p className="font-medium">{appointment.staff?.user?.name || "-"}</p>
+                                <span className="text-gray-500">Acenta:</span>
+                                <p className="font-medium">
+                                  {appointment.agency?.companyName || appointment.agency?.name || "-"}
+                                </p>
                               </div>
                             )}
                             {appointment.hotel && (
@@ -270,7 +311,7 @@ export default function AppointmentsPage() {
                           )}
                           {appointment.pax && appointment.pax > 1 && (
                             <div className="mt-1 text-sm text-gray-500">
-                              PAX: {appointment.pax} kişi
+                              PAX: {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} kişi
                             </div>
                           )}
                         </div>
@@ -330,7 +371,7 @@ export default function AppointmentsPage() {
               {selectedAppointment.pax && selectedAppointment.pax > 0 && (
                 <div className="flex items-center justify-between bg-gray-50 p-2 rounded">
                   <span className="text-gray-500">Kişi Sayısı (PAX)</span>
-                  <span className="font-medium">{selectedAppointment.pax}</span>
+                  <span className="font-medium">{selectedAppointment.pax}{selectedAppointment.childCount ? `+${selectedAppointment.childCount}` : ""}</span>
                 </div>
               )}
 
@@ -343,15 +384,15 @@ export default function AppointmentsPage() {
                   {selectedAppointment.customer?.email && (
                     <p className="text-sm text-gray-500">{selectedAppointment.customer.email}</p>
                   )}
-                  {(selectedAppointment.customerPhone || selectedAppointment.customer?.phone) && (
+                  {(selectedAppointment.roomNumber) && (
                     <p className="text-sm text-gray-500">
-                      {selectedAppointment.customerPhone || selectedAppointment.customer?.phone}
+                      Oda: {selectedAppointment.roomNumber}
                     </p>
                   )}
                 </div>
                 <div>
-                  <span className="text-sm text-gray-500">Personel</span>
-                  <p className="font-medium">{selectedAppointment.staff?.user?.name || "-"}</p>
+                  <span className="text-sm text-gray-500">Voucher No</span>
+                  <p className="font-medium">{selectedAppointment.voucherNo ? `#${selectedAppointment.voucherNo}` : "-"}</p>
                 </div>
               </div>
 
@@ -360,7 +401,7 @@ export default function AppointmentsPage() {
                   <span className="text-sm text-gray-500">Hizmet</span>
                   <p className="font-medium">{selectedAppointment.service.name}</p>
                   <p className="text-sm text-gray-500">
-                    {selectedAppointment.service.duration} dk - {selectedAppointment.service.price}₺
+                    {selectedAppointment.service.currency === "TRY" ? "₺" : selectedAppointment.service.currency === "USD" ? "$" : selectedAppointment.service.currency === "GBP" ? "£" : "€"}{selectedAppointment.service.price}
                   </p>
                 </div>
                 <div>
@@ -397,10 +438,48 @@ export default function AppointmentsPage() {
                   <p className="text-sm text-gray-700">{selectedAppointment.notes}</p>
                 </div>
               )}
+
+              {/* İptal Butonu — sadece CONFIRMED veya PENDING durumundayken */}
+              {!isAgency && (selectedAppointment.status === "CONFIRMED" || selectedAppointment.status === "PENDING") && (
+                <Button
+                  variant="destructive"
+                  className="w-full gap-2"
+                  onClick={() => setCancellingId(selectedAppointment.id)}
+                >
+                  <XCircle className="h-4 w-4" />
+                  Randevuyu İptal Et
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Confirm Dialog */}
+      <AlertDialog open={!!cancellingId} onOpenChange={() => setCancellingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Randevuyu İptal Et</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu randevuyu iptal etmek istediğinizden emin misiniz?
+              {selectedAppointment?.agency && (
+                <span className="block mt-2 text-amber-700 font-medium">
+                  Acenta carisi otomatik olarak güncellenecektir.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600"
+              onClick={() => cancellingId && cancelMutation.mutate(cancellingId)}
+            >
+              {cancelMutation.isPending ? "İptal ediliyor..." : "Evet, İptal Et"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import {
@@ -14,6 +14,7 @@ import {
   Phone,
   Mail,
   Navigation,
+  XCircle,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,8 +27,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { PendingApprovals } from "@/components/admin/pending-approvals"
 import { useSession } from "next-auth/react"
+import { getCurrencySymbol } from "@/lib/currency-utils"
+import { toast } from "sonner"
 
 interface DashboardStats {
   todayAppointments: number
@@ -43,10 +50,12 @@ interface Appointment {
   status: string
   notes?: string
   pax?: number
+  childCount?: number
   customerName?: string
-  customerPhone?: string
+  roomNumber?: string
+  voucherNo?: string | null
   customer?: { name: string; email?: string; phone?: string } | null
-  service: { name: string; duration: number; price: number }
+  service: { name: string; price: number; currency?: string }
   staff?: { user: { name: string } } | null
   agency?: {
     id: string
@@ -66,12 +75,14 @@ interface Appointment {
 }
 
 export default function DashboardPage() {
+  const queryClient = useQueryClient()
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "STAFF"
   const isAgency = session?.user?.role === "AGENCY"
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [selectedAgency, setSelectedAgency] = useState<Appointment["agency"] | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats"],
@@ -93,6 +104,32 @@ export default function DashboardPage() {
       )
       if (!res.ok) throw new Error("Failed to fetch appointments")
       return res.json()
+    },
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: async (appointmentId: string) => {
+      const res = await fetch(`/api/appointments/${appointmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "İptal edilemedi")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] })
+      toast.success("Randevu iptal edildi. Acenta carisi güncellendi.")
+      setSelectedAppointment(null)
+      setCancellingId(null)
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+      setCancellingId(null)
     },
   })
 
@@ -221,7 +258,7 @@ export default function DashboardPage() {
                         </span>
                         {appointment.pax && appointment.pax > 1 && (
                           <Badge variant="outline" className="text-xs">
-                            {appointment.pax} kişi
+                            {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} kişi
                           </Badge>
                         )}
                         {isRest(appointment) && (
@@ -335,7 +372,7 @@ export default function DashboardPage() {
               {selectedAppointment.pax && selectedAppointment.pax > 0 && (
                 <div className="flex items-center justify-between bg-gray-50 p-2 rounded">
                   <span className="text-gray-500">Kişi Sayısı (PAX)</span>
-                  <span className="font-medium">{selectedAppointment.pax}</span>
+                  <span className="font-medium">{selectedAppointment.pax}{selectedAppointment.childCount ? `+${selectedAppointment.childCount}` : ""}</span>
                 </div>
               )}
 
@@ -345,13 +382,13 @@ export default function DashboardPage() {
                   <p className="font-medium">
                     {selectedAppointment.customerName || selectedAppointment.customer?.name || "-"}
                   </p>
-                  {selectedAppointment.customerPhone && (
-                    <p className="text-sm text-gray-500">{selectedAppointment.customerPhone}</p>
+                  {selectedAppointment.roomNumber && (
+                    <p className="text-sm text-gray-500">Oda: {selectedAppointment.roomNumber}</p>
                   )}
                 </div>
                 <div>
-                  <span className="text-sm text-gray-500">Personel</span>
-                  <p className="font-medium">{selectedAppointment.staff?.user?.name || "-"}</p>
+                  <span className="text-sm text-gray-500">Voucher No</span>
+                  <p className="font-medium">{selectedAppointment.voucherNo ? `#${selectedAppointment.voucherNo}` : "-"}</p>
                 </div>
               </div>
 
@@ -360,7 +397,7 @@ export default function DashboardPage() {
                   <span className="text-sm text-gray-500">Hizmet</span>
                   <p className="font-medium">{selectedAppointment.service.name}</p>
                   <p className="text-sm text-gray-500">
-                    {selectedAppointment.service.duration} dk - {selectedAppointment.service.price}₺
+                    {getCurrencySymbol(selectedAppointment.service.currency || "EUR")} {selectedAppointment.service.price}
                   </p>
                 </div>
                 <div>
@@ -381,10 +418,48 @@ export default function DashboardPage() {
                   <p>{selectedAppointment.notes}</p>
                 </div>
               )}
+
+              {/* İptal Butonu */}
+              {(selectedAppointment.status === "CONFIRMED" || selectedAppointment.status === "PENDING") && (
+                <Button
+                  variant="destructive"
+                  className="w-full gap-2"
+                  onClick={() => setCancellingId(selectedAppointment.id)}
+                >
+                  <XCircle className="h-4 w-4" />
+                  Randevuyu İptal Et
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Confirm Dialog */}
+      <AlertDialog open={!!cancellingId} onOpenChange={() => setCancellingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Randevuyu İptal Et</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu randevuyu iptal etmek istediğinizden emin misiniz?
+              {selectedAppointment?.agency && (
+                <span className="block mt-2 text-amber-700 font-medium">
+                  Acenta carisi otomatik olarak güncellenecektir.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600"
+              onClick={() => cancellingId && cancelMutation.mutate(cancellingId)}
+            >
+              {cancelMutation.isPending ? "İptal ediliyor..." : "Evet, İptal Et"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Agency Detail Dialog */}
       <Dialog

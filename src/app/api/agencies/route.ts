@@ -12,6 +12,7 @@ const agencySchema = z.object({
   phone: z.string().optional(),
   companyName: z.string().min(2, "Şirket adı gerekli"),
   address: z.string().optional(),
+  currency: z.enum(["EUR", "USD", "GBP"]).optional().default("EUR"),
 })
 
 export async function GET() {
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
         code: `AGN${Date.now()}`, // Benzersiz kod oluştur
         companyName: validatedData.companyName,
         address: validatedData.address,
+        currency: validatedData.currency,
       },
       include: {
         user: {

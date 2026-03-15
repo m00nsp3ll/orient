@@ -13,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { CheckCircle, XCircle, Building2, Hotel, Users, Clock, MapPin } from "lucide-react"
+import { CheckCircle, XCircle, Building2, Hotel, Users, Clock, MapPin, Banknote } from "lucide-react"
+import { getCurrencySymbol } from "@/lib/currency-utils"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { toast } from "sonner"
@@ -35,8 +36,10 @@ interface PendingAppointment {
   endTime: string
   pax: number | null
   customerName: string | null
-  customerPhone: string | null
+  roomNumber: string | null
   notes: string | null
+  restAmount: number | null
+  restCurrency: string | null
   approvalStatus: string
   agency: {
     id: string
@@ -46,8 +49,8 @@ interface PendingAppointment {
   service: {
     id: string
     name: string
-    duration: number
     price: number
+    currency?: string
   }
   hotel: {
     id: string
@@ -196,8 +199,8 @@ export function PendingApprovals() {
                   <TableCell>
                     <div>
                       <div className="font-medium">{appointment.customerName || "-"}</div>
-                      {appointment.customerPhone && (
-                        <div className="text-xs text-gray-500">{appointment.customerPhone}</div>
+                      {appointment.roomNumber && (
+                        <div className="text-xs text-gray-500">Oda: {appointment.roomNumber}</div>
                       )}
                     </div>
                   </TableCell>
@@ -218,7 +221,7 @@ export function PendingApprovals() {
                     <div>
                       <div className="font-medium text-sm">{appointment.service.name}</div>
                       <div className="text-xs text-gray-500">
-                        {appointment.service.duration} dk • {appointment.service.price}₺
+                        {getCurrencySymbol(appointment.service.currency || "EUR")} {appointment.service.price}
                       </div>
                     </div>
                   </TableCell>
@@ -287,10 +290,21 @@ export function PendingApprovals() {
                   <p>
                     <strong>PAX:</strong> {selectedAppointment.pax || 1} kişi
                   </p>
-                  {selectedAppointment.notes && (
+                  {selectedAppointment.notes && !selectedAppointment.notes.startsWith("[DEMO]") && (
                     <p className="text-sm bg-muted p-2 rounded mt-2">
                       <strong>Not:</strong> {selectedAppointment.notes}
                     </p>
+                  )}
+                  {selectedAppointment.restAmount && selectedAppointment.restCurrency && (
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
+                      <Banknote className="h-5 w-5 text-red-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">REST - Ödeme Kapıda</p>
+                        <p className="text-lg font-bold text-red-700">
+                          {selectedAppointment.restAmount} {selectedAppointment.restCurrency}
+                        </p>
+                      </div>
+                    </div>
                   )}
                   <p className="text-sm mt-4 text-muted-foreground">
                     {actionType === "approve"

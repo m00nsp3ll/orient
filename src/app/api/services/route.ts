@@ -7,7 +7,6 @@ import { z } from "zod"
 const serviceSchema = z.object({
   name: z.string().min(1, "Hizmet adı gerekli"),
   description: z.string().optional(),
-  duration: z.number().min(15, "Süre en az 15 dakika olmalı"),
   price: z.number().min(0, "Fiyat 0'dan küçük olamaz"),
   categoryId: z.string().optional(),
   isActive: z.boolean().optional(),

@@ -23,12 +23,15 @@ interface Appointment {
   status: string
   approvalStatus: string
   customerName?: string
+  pax?: number
+  childCount?: number
   notes?: string
   restAmount?: number | null
   restCurrency?: string | null
   customer: { id: string; name: string; email: string; phone?: string } | null
-  service: { name: string; duration: number; price: number }
+  service: { name: string; price: number }
   staff: { user: { name: string } } | null
+  agency?: { id: string; name: string; companyName: string | null } | null
 }
 
 interface WeeklyCalendarProps {
@@ -186,15 +189,14 @@ export function WeeklyCalendar({
                           >
                             <div className="font-medium truncate flex items-center gap-1">
                               {isRest && <Banknote className="h-2.5 w-2.5 shrink-0 text-red-500" />}
-                              {apt.customerName || apt.customer?.name || "-"}
+                              {apt.agency?.companyName || apt.agency?.name || apt.customerName || apt.customer?.name || "-"}
                             </div>
                             <div className="truncate opacity-75">
-                              {apt.service.name}
+                              {apt.service.name}{apt.pax && apt.pax > 0 ? ` • ${apt.pax}${apt.childCount ? `+${apt.childCount}` : ""} PAX` : ""}
                             </div>
                             <div className="text-[10px] flex items-center justify-between">
                               <span>
-                                {format(new Date(apt.startTime), "HH:mm")} -{" "}
-                                {format(new Date(apt.endTime), "HH:mm")}
+                                {format(new Date(apt.startTime), "HH:mm")}
                               </span>
                               {isRest && apt.restAmount && apt.restCurrency && (
                                 <span className="font-bold text-red-600">

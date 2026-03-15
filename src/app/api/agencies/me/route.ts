@@ -22,6 +22,7 @@ export async function GET() {
         companyName: true,
         email: true,
         phone: true,
+        currency: true,
       },
     })
 

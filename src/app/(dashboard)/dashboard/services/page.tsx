@@ -31,8 +31,8 @@ interface Service {
   id: string
   name: string
   description?: string
-  duration: number
   price: number
+  currency?: string
   isActive: boolean
   category?: { id: string; name: string }
 }
@@ -122,7 +122,6 @@ export default function ServicesPage() {
                 <TableRow>
                   <TableHead>Hizmet Adı</TableHead>
                   <TableHead>Kategori</TableHead>
-                  <TableHead>Süre</TableHead>
                   <TableHead>Fiyat</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead className="text-right">İşlemler</TableHead>
@@ -144,8 +143,7 @@ export default function ServicesPage() {
                     <TableCell>
                       {service.category?.name || "-"}
                     </TableCell>
-                    <TableCell>{service.duration} dk</TableCell>
-                    <TableCell>{service.price}₺</TableCell>
+                    <TableCell>{service.currency === "TRY" ? "₺" : service.currency === "USD" ? "$" : service.currency === "GBP" ? "£" : "€"}{service.price}</TableCell>
                     <TableCell>
                       <Badge
                         variant={service.isActive ? "default" : "secondary"}

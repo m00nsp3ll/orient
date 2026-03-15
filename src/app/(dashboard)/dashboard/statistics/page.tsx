@@ -20,7 +20,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, Users, Calendar as CalendarIcon, DollarSign, Building2, Package, BarChart3, X } from "lucide-react"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { TrendingUp, Users, Calendar as CalendarIcon, DollarSign, Building2, Package, BarChart3, X, Wallet, ClipboardList } from "lucide-react"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -86,8 +94,14 @@ export default function StatisticsPage() {
     },
   })
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(amount)
+  const formatCurrency = (amount: number, currency: string = "EUR") =>
+    new Intl.NumberFormat("tr-TR", { style: "currency", currency }).format(amount)
+
+  const getCurrencySymbol = (cur: string) =>
+    cur === "TRY" ? "₺" : cur === "EUR" ? "€" : cur === "USD" ? "$" : "£"
+
+  const formatRevenueByCurrency = (revByCur: Record<string, number>) =>
+    Object.entries(revByCur).map(([cur, amount]) => `${getCurrencySymbol(cur)}${amount.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}`).join(" • ")
 
   const periodLabels: Record<string, string> = {
     day: "Bugün",
@@ -99,7 +113,7 @@ export default function StatisticsPage() {
 
   // Günlük trend bar chart için max değer
   const trendDays = stats?.dailyTrend?.slice(-7) || []
-  const maxRevenue = Math.max(...trendDays.map((d: any) => d.revenue), 1)
+  const maxPax = Math.max(...trendDays.map((d: any) => d.pax), 1)
 
   // Acenta tablosu için max gelir
   const maxAgencyRevenue = Math.max(...(stats?.byAgency?.map((a: any) => a.revenue) || [1]), 1)
@@ -259,7 +273,16 @@ export default function StatisticsPage() {
                   </div>
                   <p className="text-xs font-medium text-emerald-700 uppercase tracking-wide">Toplam Gelir</p>
                 </div>
-                <div className="text-2xl font-bold text-emerald-800">{formatCurrency(stats.summary.totalRevenue)}</div>
+                <div className="space-y-1">
+                  {stats.summary.revenueByCurrency && Object.entries(stats.summary.revenueByCurrency as Record<string, number>).map(([cur, amount]) => (
+                    <div key={cur} className="text-lg font-bold text-emerald-800">
+                      {formatCurrency(amount, cur)}
+                    </div>
+                  ))}
+                  {(!stats.summary.revenueByCurrency || Object.keys(stats.summary.revenueByCurrency).length === 0) && (
+                    <div className="text-2xl font-bold text-emerald-800">-</div>
+                  )}
+                </div>
                 <p className="text-emerald-600 text-xs mt-1">{stats.summary.totalAppointments} randevu</p>
               </CardContent>
             </Card>
@@ -274,7 +297,7 @@ export default function StatisticsPage() {
                   <p className="text-xs font-medium text-blue-700 uppercase tracking-wide">Toplam Randevu</p>
                 </div>
                 <div className="text-2xl font-bold text-blue-800">{stats.summary.totalAppointments}</div>
-                <p className="text-blue-600 text-xs mt-1">Ort: {formatCurrency(stats.summary.averagePerAppointment)}</p>
+                <p className="text-blue-600 text-xs mt-1">{stats.summary.totalPax} toplam PAX</p>
               </CardContent>
             </Card>
 
@@ -342,7 +365,7 @@ export default function StatisticsPage() {
                             </div>
                             <div className="flex items-center gap-3 text-right shrink-0">
                               <span className="text-xs text-gray-500">{agency.count} rdv • {agency.pax} pax</span>
-                              <span className="font-bold text-gray-800 w-24 text-right">{formatCurrency(agency.revenue)}</span>
+                              <span className="font-bold text-gray-800 w-28 text-right">{formatCurrency(agency.revenue, agency.currency || "EUR")}</span>
                             </div>
                           </div>
                           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -386,7 +409,7 @@ export default function StatisticsPage() {
                         "bg-sky-200", "bg-indigo-200", "bg-purple-200",
                       ]
                       return (
-                        <div key={service.id || idx} className="space-y-1.5">
+                        <div key={`svc-${idx}`} className="space-y-1.5">
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <span className={cn("text-xs font-bold px-1.5 py-0.5 rounded", badgeColors[idx % badgeColors.length])}>
@@ -396,8 +419,8 @@ export default function StatisticsPage() {
                             </div>
                             <div className="flex items-center gap-3 shrink-0 text-right">
                               <div className="text-right">
-                                <div className="font-bold text-gray-800">{formatCurrency(service.revenue)}</div>
-                                <div className="text-[10px] text-gray-400">{service.count} adet • ort {formatCurrency(service.revenue / service.count)}</div>
+                                <div className="font-bold text-gray-800">{formatCurrency(service.revenue, service.currency || "EUR")}</div>
+                                <div className="text-[10px] text-gray-400">{service.count} adet • ort {formatCurrency(service.revenue / service.count, service.currency || "EUR")}</div>
                               </div>
                             </div>
                           </div>
@@ -416,6 +439,69 @@ export default function StatisticsPage() {
             </Card>
           </div>
 
+          {/* Müşteri Listesi */}
+          {stats.customers?.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded bg-indigo-100 flex items-center justify-center">
+                    <ClipboardList className="h-3.5 w-3.5 text-indigo-600" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold text-slate-700">Müşteri Listesi</CardTitle>
+                  <Badge variant="secondary" className="text-xs">{stats.customers.length} kayıt</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Acenta</TableHead>
+                        <TableHead className="text-xs">Müşteri Adı</TableHead>
+                        <TableHead className="text-xs">PAX</TableHead>
+                        <TableHead className="text-xs">Saat</TableHead>
+                        <TableHead className="text-xs">Voucher No</TableHead>
+                        <TableHead className="text-xs">Otel</TableHead>
+                        <TableHead className="text-xs">Program</TableHead>
+                        <TableHead className="text-xs">Tutar</TableHead>
+                        <TableHead className="text-xs">Ödeme</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stats.customers.map((c: any) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="text-sm font-medium">{c.agencyName}</TableCell>
+                          <TableCell className="text-sm">{c.customerName}</TableCell>
+                          <TableCell className="text-sm">
+                            {c.pax}{c.childCount > 0 ? `+${c.childCount}` : ""}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(c.time).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                          </TableCell>
+                          <TableCell className="text-sm">{c.voucherNo}</TableCell>
+                          <TableCell className="text-sm">{c.hotelName}</TableCell>
+                          <TableCell className="text-sm">{c.serviceName}</TableCell>
+                          <TableCell className="text-sm font-medium">{formatCurrency(c.price, c.currency || "EUR")}</TableCell>
+                          <TableCell>
+                            {c.restAmount ? (
+                              <Badge className="bg-red-100 text-red-700 border-red-200 text-xs">
+                                REST {c.restAmount} {c.restCurrency}
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">
+                                Acenta
+                              </Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Günlük Trend - en altta */}
           {trendDays.length > 0 && (
             <Card className="border-0 shadow-sm">
@@ -430,9 +516,10 @@ export default function StatisticsPage() {
               <CardContent>
                 <div className="space-y-3">
                   {trendDays.map((day: any, idx: number) => {
-                    const barWidth = Math.max((day.revenue / maxRevenue) * 100, 2)
+                    const barWidth = Math.max((day.pax / maxPax) * 100, 2)
                     const isToday = format(new Date(day.date), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd")
                     const barColors = ["bg-blue-200", "bg-emerald-200", "bg-violet-200", "bg-orange-200"]
+                    const revenueStr = day.revenueByCurrency ? formatRevenueByCurrency(day.revenueByCurrency) : "-"
                     return (
                       <div key={day.date} className="flex items-center gap-3">
                         <div className="w-28 shrink-0 text-right">
@@ -450,8 +537,164 @@ export default function StatisticsPage() {
                             {day.count} randevu • {day.pax} pax
                           </span>
                         </div>
-                        <div className="w-28 shrink-0 text-right font-semibold text-sm text-gray-700">
-                          {formatCurrency(day.revenue)}
+                        <div className="w-auto shrink-0 text-right font-semibold text-xs text-gray-700">
+                          {revenueStr}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Dünkü Kasa / Bugünkü Kasa */}
+          {stats.kasa?.dailyTrend?.length > 0 && (() => {
+            const todayKey = format(new Date(), "yyyy-MM-dd")
+            const yesterdayKey = format(new Date(Date.now() - 86400000), "yyyy-MM-dd")
+            const todayKasa = stats.kasa.dailyTrend.find((d: any) => d.date === todayKey)
+            const yesterdayKasa = stats.kasa.dailyTrend.find((d: any) => d.date === yesterdayKey)
+
+            const renderKasaCard = (title: string, data: any, colorClass: string) => {
+              if (!data) return (
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("h-6 w-6 rounded flex items-center justify-center", colorClass === "orange" ? "bg-orange-100" : "bg-blue-100")}>
+                        <Wallet className={cn("h-3.5 w-3.5", colorClass === "orange" ? "text-orange-600" : "text-blue-600")} />
+                      </div>
+                      <CardTitle className="text-sm font-semibold text-slate-700">{title}</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-4 text-gray-400 text-sm">Veri yok</div>
+                  </CardContent>
+                </Card>
+              )
+
+              const net = (data.income || 0) + (data.creditCard || 0) - (data.expense || 0)
+              return (
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={cn("h-6 w-6 rounded flex items-center justify-center", colorClass === "orange" ? "bg-orange-100" : "bg-blue-100")}>
+                          <Wallet className={cn("h-3.5 w-3.5", colorClass === "orange" ? "text-orange-600" : "text-blue-600")} />
+                        </div>
+                        <CardTitle className="text-sm font-semibold text-slate-700">{title}</CardTitle>
+                      </div>
+                      <span className={cn("text-lg font-bold", net >= 0 ? "text-emerald-700" : "text-red-600")}>
+                        Net: ₺{Math.abs(net).toLocaleString("tr-TR")}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-wide mb-1">Nakit Girdi</p>
+                        <p className="text-lg font-bold text-emerald-800">₺{(data.income || 0).toLocaleString("tr-TR")}</p>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] font-medium text-blue-600 uppercase tracking-wide mb-1">Kredi Kartı</p>
+                        <p className="text-lg font-bold text-blue-800">₺{(data.creditCard || 0).toLocaleString("tr-TR")}</p>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] font-medium text-red-600 uppercase tracking-wide mb-1">Çıktı</p>
+                        <p className="text-lg font-bold text-red-800">₺{(data.expense || 0).toLocaleString("tr-TR")}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-center">
+                      <Badge variant="secondary" className="text-xs">{data.count || 0} işlem</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            }
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {renderKasaCard("Dünkü Kasa", yesterdayKasa, "orange")}
+                {renderKasaCard("Bugünkü Kasa", todayKasa, "blue")}
+              </div>
+            )
+          })()}
+
+          {/* Kasa Özeti */}
+          {stats.kasa && Object.keys(stats.kasa.byCurrency).length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded bg-orange-100 flex items-center justify-center">
+                    <Wallet className="h-3.5 w-3.5 text-orange-600" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold text-slate-700">Kasa Özeti (Para Birimi Bazlı)</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(stats.kasa.byCurrency as Record<string, { income: number; expense: number; creditCard?: number }>).map(([cur, data]) => {
+                    const cc = data.creditCard || 0
+                    const net = data.income + cc - data.expense
+                    const symbol = cur === "TRY" ? "₺" : cur === "EUR" ? "€" : cur === "USD" ? "$" : "£"
+                    return (
+                      <div key={cur} className="border rounded-lg p-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-xs font-bold">{symbol} {cur}</Badge>
+                          <span className={cn("text-sm font-bold", net >= 0 ? "text-emerald-700" : "text-red-600")}>
+                            {net < 0 ? "-" : ""}{symbol}{Math.abs(net).toLocaleString("tr-TR")}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap justify-between text-[10px] text-gray-500 gap-x-2">
+                          <span className="text-emerald-600">Nakit: {symbol}{data.income.toLocaleString("tr-TR")}</span>
+                          {cc > 0 && <span className="text-blue-600">K.Kartı: {symbol}{cc.toLocaleString("tr-TR")}</span>}
+                          <span className="text-red-500">Gider: {symbol}{data.expense.toLocaleString("tr-TR")}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Günlük Kasa Trendi */}
+          {stats.kasa?.dailyTrend?.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded bg-orange-100 flex items-center justify-center">
+                    <Wallet className="h-3.5 w-3.5 text-orange-600" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold text-slate-700">Günlük Kasa Gelir/Gider</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {stats.kasa.dailyTrend.slice(-14).map((day: any) => {
+                    const maxVal = Math.max(...stats.kasa.dailyTrend.map((d: any) => Math.max(d.income, d.expense)), 1)
+                    const incomeWidth = Math.max((day.income / maxVal) * 100, 1)
+                    const expenseWidth = Math.max((day.expense / maxVal) * 100, 1)
+                    const isToday = day.date === format(new Date(), "yyyy-MM-dd")
+                    return (
+                      <div key={day.date} className="flex items-center gap-3">
+                        <div className="w-20 shrink-0 text-right">
+                          <span className={cn("text-xs font-medium", isToday ? "text-blue-600" : "text-gray-600")}>
+                            {format(new Date(day.date), "dd MMM", { locale: tr })}
+                          </span>
+                          {isToday && <span className="ml-1 text-[10px] bg-blue-100 text-blue-600 px-1 rounded">bugün</span>}
+                        </div>
+                        <div className="flex-1 space-y-0.5">
+                          <div className="h-3 bg-gray-100 rounded overflow-hidden">
+                            <div className="h-full bg-emerald-300 rounded" style={{ width: `${incomeWidth}%` }} />
+                          </div>
+                          <div className="h-3 bg-gray-100 rounded overflow-hidden">
+                            <div className="h-full bg-red-300 rounded" style={{ width: `${expenseWidth}%` }} />
+                          </div>
+                        </div>
+                        <div className="w-32 shrink-0 text-right text-xs">
+                          <span className="text-emerald-700 font-medium">+{day.income.toLocaleString("tr-TR")}</span>
+                          <span className="text-gray-400 mx-1">/</span>
+                          <span className="text-red-600 font-medium">-{day.expense.toLocaleString("tr-TR")}</span>
                         </div>
                       </div>
                     )

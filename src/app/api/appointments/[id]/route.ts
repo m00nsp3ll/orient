@@ -10,6 +10,7 @@ const updateAppointmentSchema = z.object({
   serviceId: z.string().optional(),
   status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"]).optional(),
   notes: z.string().optional(),
+  childCount: z.number().optional().nullable(),
 })
 
 export async function GET(
@@ -93,19 +94,12 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = { ...validatedData }
 
-    // Recalculate end time if start time or service changes
-    if (validatedData.startTime || validatedData.serviceId) {
-      const serviceId = validatedData.serviceId || existingAppointment.serviceId
-      const service = await prisma.service.findUnique({
-        where: { id: serviceId },
-      })
-
-      if (service) {
-        const startTime = validatedData.startTime || existingAppointment.startTime
-        const endTime = new Date(startTime)
-        endTime.setMinutes(endTime.getMinutes() + service.duration)
-        updateData.endTime = endTime
-      }
+    // Recalculate end time if start time changes
+    if (validatedData.startTime) {
+      const startTime = validatedData.startTime
+      const endTime = new Date(startTime)
+      endTime.setMinutes(endTime.getMinutes() + 60)
+      updateData.endTime = endTime
     }
 
     const appointment = await prisma.appointment.update({
@@ -123,8 +117,56 @@ export async function PATCH(
           },
         },
         service: true,
+        agency: { select: { id: true, name: true, companyName: true, currency: true } },
       },
     })
+
+    // İptal edildiğinde acenta cari bakiyesini düşür
+    if (validatedData.status === "CANCELLED" && existingAppointment.agencyId && existingAppointment.status !== "CANCELLED") {
+      // Bu randevuya ait DEBIT transaction'ları bul
+      const debitTransactions = await prisma.agencyTransaction.findMany({
+        where: {
+          appointmentId: id,
+          type: "DEBIT",
+        },
+      })
+
+      // Her DEBIT için ters CREDIT oluştur
+      for (const debit of debitTransactions) {
+        await prisma.agencyTransaction.create({
+          data: {
+            agencyId: debit.agencyId,
+            appointmentId: id,
+            type: "CREDIT",
+            amount: debit.amount,
+            currency: debit.currency,
+            description: `İptal iadesi: ${debit.description || "Randevu iptal edildi"}`,
+          },
+        })
+      }
+
+      // REST CREDIT transaction'ları da tersine çevir (DEBIT olarak geri al)
+      const creditTransactions = await prisma.agencyTransaction.findMany({
+        where: {
+          appointmentId: id,
+          type: "CREDIT",
+          description: { contains: "REST" },
+        },
+      })
+
+      for (const credit of creditTransactions) {
+        await prisma.agencyTransaction.create({
+          data: {
+            agencyId: credit.agencyId,
+            appointmentId: id,
+            type: "DEBIT",
+            amount: credit.amount,
+            currency: credit.currency,
+            description: `İptal: REST iadesi geri alındı`,
+          },
+        })
+      }
+    }
 
     return NextResponse.json(appointment)
   } catch (error) {

@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
       include: {
         service: true,
         agency: true,
+        hotel: { select: { name: true, region: { select: { name: true } } } },
         services: {
           include: {
             service: true,
@@ -80,20 +81,23 @@ export async function GET(req: NextRequest) {
 
     // Toplam istatistikler
     const totalAppointments = appointments.length
-    const totalRevenue = appointments.reduce((sum, apt) => {
-      // Sepetteki hizmetlerin toplam fiyatı
-      const servicesTotal = apt.services.reduce((s: number, item: any) => s + item.price, 0)
-      return sum + servicesTotal
-    }, 0)
-
     const totalPax = appointments.reduce((sum, apt) => sum + (apt.pax || 1), 0)
+
+    // Para birimi bazlı toplam gelir
+    const revenueByCurrency: Record<string, number> = {}
+    appointments.forEach(apt => {
+      const currency = apt.agency?.currency || "EUR"
+      const servicesTotal = apt.services.reduce((s: number, item: any) => s + item.price, 0)
+      revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + servicesTotal
+    })
 
     // Acenta bazlı istatistikler
     const agencyStats = appointments.reduce((acc: any[], apt) => {
       if (!apt.agency) {
-        // Manuel giriş
+        // Manuel giriş — base service currency
         const manualIndex = acc.findIndex(a => a.id === "manual")
         const revenue = apt.services.reduce((s: number, item: any) => s + item.price, 0)
+        const currency = apt.service?.currency || "EUR"
 
         if (manualIndex >= 0) {
           acc[manualIndex].count += 1
@@ -106,6 +110,7 @@ export async function GET(req: NextRequest) {
             count: 1,
             revenue: revenue,
             pax: apt.pax || 1,
+            currency,
           })
         }
       } else {
@@ -123,34 +128,38 @@ export async function GET(req: NextRequest) {
             count: 1,
             revenue: revenue,
             pax: apt.pax || 1,
+            currency: apt.agency.currency || "EUR",
           })
         }
       }
       return acc
     }, [])
 
-    // Program bazlı istatistikler
+    // Program bazlı istatistikler (currency bazlı)
     const serviceStats = appointments.reduce((acc: any[], apt) => {
+      const currency = apt.agency?.currency || apt.service?.currency || "EUR"
       apt.services.forEach((item: any) => {
-        const index = acc.findIndex(s => s.id === item.serviceId)
+        const key = `${item.serviceId}_${currency}`
+        const index = acc.findIndex(s => s.key === key)
 
         if (index >= 0) {
           acc[index].count += 1
           acc[index].revenue += item.price
         } else {
           acc.push({
+            key,
             id: item.serviceId,
             name: item.service.name,
             count: 1,
             revenue: item.price,
-            duration: item.duration,
+            currency,
           })
         }
       })
       return acc
     }, [])
 
-    // Günlük trend (son 30 gün veya seçilen aralık)
+    // Günlük trend (para birimi bazlı)
     const dailyStats: any[] = []
     const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
 
@@ -164,16 +173,74 @@ export async function GET(req: NextRequest) {
         return aptDate >= dayStart && aptDate <= dayEnd
       })
 
-      const dayRevenue = dayAppointments.reduce((sum, apt) => {
-        return sum + apt.services.reduce((s: number, item: any) => s + item.price, 0)
-      }, 0)
+      const dayRevenueByCurrency: Record<string, number> = {}
+      dayAppointments.forEach(apt => {
+        const currency = apt.agency?.currency || "EUR"
+        const total = apt.services.reduce((s: number, item: any) => s + item.price, 0)
+        dayRevenueByCurrency[currency] = (dayRevenueByCurrency[currency] || 0) + total
+      })
 
       dailyStats.unshift({
         date: day.toISOString().split('T')[0],
         count: dayAppointments.length,
-        revenue: dayRevenue,
+        revenueByCurrency: dayRevenueByCurrency,
         pax: dayAppointments.reduce((sum, apt) => sum + (apt.pax || 1), 0),
       })
+    }
+
+    // Kasa verileri (günlük gelir/gider)
+    const cashEntries = await prisma.cashEntry.findMany({
+      where: {
+        date: { gte: start, lte: end },
+      },
+    })
+
+    const kasaByCurrency: Record<string, { income: number; expense: number; creditCard: number }> = {}
+    for (const entry of cashEntries) {
+      if (entry.agencyIncomeAmount && entry.agencyIncomeCurrency) {
+        const cur = entry.agencyIncomeCurrency
+        if (!kasaByCurrency[cur]) kasaByCurrency[cur] = { income: 0, expense: 0, creditCard: 0 }
+        kasaByCurrency[cur].income += entry.agencyIncomeAmount
+      }
+      if (entry.receptionIncomeAmount && entry.receptionIncomeCurrency) {
+        const cur = entry.receptionIncomeCurrency
+        if (!kasaByCurrency[cur]) kasaByCurrency[cur] = { income: 0, expense: 0, creditCard: 0 }
+        kasaByCurrency[cur].income += entry.receptionIncomeAmount
+      }
+      if (entry.expenseAmount && entry.expenseCurrency) {
+        const cur = entry.expenseCurrency
+        if (!kasaByCurrency[cur]) kasaByCurrency[cur] = { income: 0, expense: 0, creditCard: 0 }
+        kasaByCurrency[cur].expense += entry.expenseAmount
+      }
+      if (entry.creditAmount && entry.creditCurrency) {
+        const cur = entry.creditCurrency
+        if (!kasaByCurrency[cur]) kasaByCurrency[cur] = { income: 0, expense: 0, creditCard: 0 }
+        kasaByCurrency[cur].expense += entry.creditAmount
+      }
+      if (entry.creditCardAmount && entry.creditCardCurrency) {
+        const cur = entry.creditCardCurrency
+        if (!kasaByCurrency[cur]) kasaByCurrency[cur] = { income: 0, expense: 0, creditCard: 0 }
+        kasaByCurrency[cur].creditCard += entry.creditCardAmount
+      }
+    }
+
+    // Günlük kasa trendi
+    const kasaDailyTrend: any[] = []
+    for (let i = 0; i <= Math.min(daysDiff, 90); i++) {
+      const day = subDays(end, i)
+      const dayKey = day.toISOString().split("T")[0]
+      const dayEntries = cashEntries.filter(e => e.date.toISOString().split("T")[0] === dayKey)
+      if (dayEntries.length === 0) continue
+
+      let income = 0, expense = 0, creditCard = 0
+      for (const e of dayEntries) {
+        if (e.agencyIncomeAmount) income += e.agencyIncomeAmount
+        if (e.receptionIncomeAmount) income += e.receptionIncomeAmount
+        if (e.expenseAmount) expense += e.expenseAmount
+        if (e.creditAmount) expense += e.creditAmount
+        if (e.creditCardAmount) creditCard += e.creditCardAmount
+      }
+      kasaDailyTrend.unshift({ date: dayKey, income, expense, creditCard, net: income + creditCard - expense, count: dayEntries.length })
     }
 
     return NextResponse.json({
@@ -182,13 +249,33 @@ export async function GET(req: NextRequest) {
       endDate: end.toISOString(),
       summary: {
         totalAppointments,
-        totalRevenue,
+        revenueByCurrency,
         totalPax,
-        averagePerAppointment: totalAppointments > 0 ? totalRevenue / totalAppointments : 0,
       },
       byAgency: agencyStats.sort((a, b) => b.revenue - a.revenue),
       byService: serviceStats.sort((a, b) => b.count - a.count),
       dailyTrend: dailyStats,
+      customers: appointments.map(a => ({
+        id: a.id,
+        agencyName: a.agency?.companyName || a.agency?.name || "-",
+        customerName: a.customerName || "-",
+        pax: a.pax || 0,
+        childCount: a.childCount || 0,
+        time: a.startTime,
+        voucherNo: a.voucherNo || "-",
+        hotelName: a.hotel?.name || "-",
+        serviceName: a.service?.name || "-",
+        status: a.status,
+        notes: a.notes,
+        restAmount: a.restAmount,
+        restCurrency: a.restCurrency,
+        price: a.services.reduce((s: number, item: any) => s + item.price, 0),
+        currency: a.service?.currency || "EUR",
+      })),
+      kasa: {
+        byCurrency: kasaByCurrency,
+        dailyTrend: kasaDailyTrend,
+      },
     })
   } catch (error) {
     console.error("Statistics fetch error:", error)

@@ -29,12 +29,14 @@ interface Transfer {
     startTime: string
     endTime: string
     pax: number | null
+    childCount: number | null
     customerName: string | null
     notes: string | null
+    restAmount: number | null
+    restCurrency: string | null
     service: {
       id: string
       name: string
-      duration: number
     }
     hotel: {
       id: string
@@ -233,6 +235,25 @@ export default function OperationsPage() {
     }
   }
 
+  const handleCancelAppointment = async (appointmentId: string) => {
+    try {
+      const res = await fetch(`/api/appointments/${appointmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "İptal edilemedi")
+      }
+      toast.success("Randevu iptal edildi. Acenta carisi güncellendi.")
+      await fetchData()
+    } catch (error) {
+      console.error("İptal hatası:", error)
+      toast.error(error instanceof Error ? error.message : "İptal edilemedi")
+    }
+  }
+
   const handleLoadDemoData = async () => {
     if (!confirm("Bu günün tüm operasyonları silinip demo data yüklenecek. Emin misiniz?")) {
       return
@@ -336,6 +357,7 @@ export default function OperationsPage() {
           onStatusChange={handleStatusChange}
           onDriverChange={handleDriverChange}
           onStartDropoff={handleStartDropoff}
+          onCancelAppointment={handleCancelAppointment}
         />
       )}
     </div>

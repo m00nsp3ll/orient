@@ -7,8 +7,8 @@ import { z } from "zod"
 const updateServiceSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
-  duration: z.number().min(15).optional(),
   price: z.number().min(0).optional(),
+  currency: z.string().optional(),
   categoryId: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
 })
@@ -79,9 +79,22 @@ export async function DELETE(
   }
 
   try {
+    // İlişkili kayıtları temizle
+    await prisma.agencyService.deleteMany({ where: { serviceId: id } })
+    await prisma.appointmentService.deleteMany({ where: { serviceId: id } })
+    await prisma.staffService.deleteMany({ where: { serviceId: id } })
+
+    // Randevularda bu hizmete referans varsa silme, deaktif et
+    const appointmentCount = await prisma.appointment.count({ where: { serviceId: id } })
+    if (appointmentCount > 0) {
+      await prisma.service.update({ where: { id }, data: { isActive: false } })
+      return NextResponse.json({ success: true, deactivated: true })
+    }
+
     await prisma.service.delete({ where: { id } })
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (error) {
+    console.error("Service delete error:", error)
     return NextResponse.json({ error: "Hizmet silinemedi" }, { status: 500 })
   }
 }

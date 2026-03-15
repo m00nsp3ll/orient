@@ -34,6 +34,7 @@ interface Agency {
   phone: string | null
   address?: string
   isActive: boolean
+  currency: string
   user: { id: string; name: string; email: string; phone?: string } | null
   _count: { appointments: number }
 }
@@ -42,8 +43,8 @@ interface Service {
   id: string
   name: string
   description: string | null
-  duration: number
   price: number
+  currency?: string
   category: { name: string } | null
 }
 
@@ -67,6 +68,7 @@ export default function AgenciesPage() {
     phone: "",
     companyName: "",
     address: "",
+    currency: "EUR" as "EUR" | "USD" | "GBP" | "TRY",
   })
 
   const { data: agencies = [], isLoading, error } = useQuery<Agency[]>({
@@ -108,7 +110,7 @@ export default function AgenciesPage() {
       queryClient.invalidateQueries({ queryKey: ["agencies"] })
       toast.success("Acenta oluşturuldu")
       setShowForm(false)
-      setFormData({ name: "", email: "", password: "", phone: "", companyName: "", address: "" })
+      setFormData({ name: "", email: "", password: "", phone: "", companyName: "", address: "", currency: "EUR" })
     },
     onError: (error: Error) => {
       toast.error(error.message)
@@ -127,6 +129,21 @@ export default function AgenciesPage() {
     },
     onError: () => {
       toast.error("Acenta silinemedi")
+    },
+  })
+
+  const updateAgencyCurrency = useMutation({
+    mutationFn: async ({ agencyId, currency }: { agencyId: string; currency: string }) => {
+      const res = await fetch(`/api/agencies/${agencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currency }),
+      })
+      if (!res.ok) throw new Error("Para birimi güncellenemedi")
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agencies"] })
     },
   })
 
@@ -221,7 +238,6 @@ export default function AgenciesPage() {
 
     const services = selectedServices.map(serviceId => {
       const price = servicePrices[serviceId]
-      // Eğer fiyat undefined ise, service'in default fiyatını bul
       const defaultPrice = allServices.find(s => s.id === serviceId)?.price ?? null
 
       return {
@@ -229,8 +245,6 @@ export default function AgenciesPage() {
         passPrice: price !== undefined && price !== null ? price : defaultPrice,
       }
     })
-
-    console.log("Saving services:", services)
 
     updateAgencyServices.mutate({
       agencyId: selectedAgency.id,
@@ -279,6 +293,7 @@ export default function AgenciesPage() {
                   <TableHead>Yetkili</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefon</TableHead>
+                  <TableHead>Para Birimi</TableHead>
                   <TableHead>Randevu Sayısı</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead className="text-right">İşlemler</TableHead>
@@ -293,6 +308,11 @@ export default function AgenciesPage() {
                     <TableCell>{agency.user?.name || agency.contactName || "-"}</TableCell>
                     <TableCell>{agency.user?.email || agency.email || "-"}</TableCell>
                     <TableCell>{agency.user?.phone || agency.phone || "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {agency.currency === "EUR" ? "€ EUR" : agency.currency === "USD" ? "$ USD" : agency.currency === "GBP" ? "£ GBP" : "₺ TRY"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>{agency._count.appointments}</TableCell>
                     <TableCell>
                       <Badge variant={agency.isActive ? "default" : "secondary"}>
@@ -381,6 +401,22 @@ export default function AgenciesPage() {
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               />
             </div>
+            <div>
+              <Label>Para Birimi</Label>
+              <div className="flex gap-2 mt-1">
+                {(["EUR", "USD", "GBP", "TRY"] as const).map((cur) => (
+                  <Button
+                    key={cur}
+                    type="button"
+                    variant={formData.currency === cur ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFormData({ ...formData, currency: cur })}
+                  >
+                    {cur === "EUR" ? "€ EUR" : cur === "USD" ? "$ USD" : cur === "GBP" ? "£ GBP" : "₺ TRY"}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
                 İptal
@@ -409,9 +445,31 @@ export default function AgenciesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Bu acentanın satış yapabileceği hizmetleri ve Pass fiyatlarını yönetin. Kapalı olan hizmetler acenta panelinde görünmez.
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Bu acentanın satış yapabileceği hizmetleri ve Pass fiyatlarını yönetin.
+              </p>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground mr-1">Para Birimi:</span>
+                {(["EUR", "USD", "GBP", "TRY"] as const).map((cur) => (
+                  <Button
+                    key={cur}
+                    type="button"
+                    variant={selectedAgency?.currency === cur ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      if (selectedAgency && selectedAgency.currency !== cur) {
+                        setSelectedAgency({ ...selectedAgency, currency: cur })
+                        updateAgencyCurrency.mutate({ agencyId: selectedAgency.id, currency: cur })
+                      }
+                    }}
+                  >
+                    {cur === "EUR" ? "€ EUR" : cur === "USD" ? "$ USD" : cur === "GBP" ? "£ GBP" : "₺ TRY"}
+                  </Button>
+                ))}
+              </div>
+            </div>
 
             <div className="space-y-3">
               {allServices.map((service) => (
@@ -430,7 +488,7 @@ export default function AgenciesPage() {
                         </Badge>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {service.duration} dk • Varsayılan: {service.price}₺
+                        Varsayılan: {service.currency === "TRY" ? "₺" : service.currency === "USD" ? "$" : service.currency === "GBP" ? "£" : "€"}{service.price}
                       </span>
                     </div>
                     {service.description && (
@@ -440,19 +498,20 @@ export default function AgenciesPage() {
                     )}
                   </div>
 
-                  {/* Pass Fiyatı Input */}
+                  {/* Pass Fiyatı */}
                   {selectedServices.includes(service.id) && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor={`price-${service.id}`} className="text-xs text-muted-foreground">
-                          Pass Fiyatı
-                        </Label>
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <Label className="text-xs text-muted-foreground">Pass Fiyatı</Label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold text-blue-600">
+                          {selectedAgency?.currency === "EUR" ? "€" : selectedAgency?.currency === "USD" ? "$" : selectedAgency?.currency === "GBP" ? "£" : "₺"}
+                        </span>
                         <Input
-                          id={`price-${service.id}`}
                           type="number"
                           min="0"
                           step="0.01"
-                          value={servicePrices[service.id] ?? service.price}
+                          placeholder="-"
+                          value={servicePrices[service.id] ?? ""}
                           onChange={(e) => handlePriceChange(service.id, e.target.value)}
                           className="w-24 h-8 text-sm"
                         />

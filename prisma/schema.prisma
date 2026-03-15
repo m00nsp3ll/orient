@@ -74,8 +74,8 @@ model Service {
   id                  String               @id @default(cuid())
   name                String
   description         String?
-  duration            Int
   price               Float
+  currency            String               @default("EUR")
   isActive            Boolean              @default(true)
   categoryId          String?
   createdAt           DateTime             @default(now())
@@ -92,10 +92,13 @@ model Staff {
   userId          String         @unique
   specializations String[]
   isActive        Boolean        @default(true)
+  position        String?
+  commissionRate  Float?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   appointments    Appointment[]
   blockedTimes    BlockedTime[]
+  cashEntries     CashEntry[]
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   staffServices   StaffService[]
   workingHours    WorkingHours[]
@@ -144,14 +147,16 @@ model Appointment {
   agencyId       String?
   hotelId        String?
   pax            Int?
+  childCount     Int?
   customerName   String?
-  customerPhone  String?
+  roomNumber     String?
   startTime      DateTime
   endTime        DateTime
   status         AppointmentStatus    @default(PENDING)
   notes          String?
   restAmount     Float?
   restCurrency   String?
+  voucherNo      String?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
   approvalStatus ApprovalStatus       @default(APPROVED)
@@ -162,6 +167,7 @@ model Appointment {
   staff          Staff?               @relation(fields: [staffId], references: [id])
   services       AppointmentService[]
   transfers      Transfer[]
+  transactions   AgencyTransaction[]
 
   @@index([startTime])
   @@index([staffId, startTime])
@@ -174,7 +180,6 @@ model AppointmentService {
   appointmentId String
   serviceId     String
   price         Float
-  duration      Int
   createdAt     DateTime    @default(now())
   appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   service       Service     @relation(fields: [serviceId], references: [id])
@@ -194,12 +199,15 @@ model Agency {
   code            String          @unique
   commission      Float           @default(0)
   contactName     String?
+  currency        String          @default("EUR")
   email           String?
   name            String
   phone           String?
-  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   allowedServices AgencyService[]
   appointments    Appointment[]
+  transactions    AgencyTransaction[]
+  cashEntries     CashEntry[]
 }
 
 model AgencyService {
@@ -240,7 +248,8 @@ model Hotel {
   googleMapsUrl    String?
   lat              Float?
   lng              Float?
-  appointments     Appointment[]
+  appointments    Appointment[]
+  cashEntries     CashEntry[]
   region           Region        @relation(fields: [regionId], references: [id])
 }
 
@@ -337,4 +346,67 @@ enum TransferStatus {
   DROPPING_OFF
   COMPLETED
   CANCELLED
+}
+
+model AgencyTransaction {
+  id            String          @id @default(cuid())
+  agencyId      String
+  appointmentId String?
+  type          TransactionType
+  amount        Float
+  currency      String
+  description   String?
+  createdAt     DateTime        @default(now())
+  agency        Agency          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  appointment   Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([agencyId])
+  @@index([appointmentId])
+}
+
+enum TransactionType {
+  DEBIT
+  CREDIT
+  PAYMENT
+}
+
+model CashEntry {
+  id          String   @id @default(cuid())
+  date        DateTime
+  voucherNo   Int
+
+  agencyId    String?
+  hotelId     String?
+  roomNumber  String?
+  serviceName String?
+  pax         Int?
+
+  agencyIncomeAmount      Float?
+  agencyIncomeCurrency    String?
+  receptionIncomeAmount   Float?
+  receptionIncomeCurrency String?
+  creditAmount            Float?
+  creditCurrency          String?  @default("TRY")
+  expenseAmount           Float?
+  expenseCurrency         String?
+
+  staffId               String?
+  staffIncomeAmount     Float?
+  staffIncomeCurrency   String?
+
+  creditCardAmount      Float?
+  creditCardCurrency    String?
+
+  description String?
+  info        String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agency Agency? @relation(fields: [agencyId], references: [id])
+  hotel  Hotel?  @relation(fields: [hotelId], references: [id])
+  staff  Staff?  @relation(fields: [staffId], references: [id])
+
+  @@index([date])
+  @@index([date, voucherNo])
 }

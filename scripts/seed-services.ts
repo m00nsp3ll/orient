@@ -3,45 +3,26 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 const categories = [
-  { name: "Masaj", order: 1 },
-  { name: "Cilt Bakımı", order: 2 },
-  { name: "Hamam & Sauna", order: 3 },
-  { name: "Vücut Bakımı", order: 4 },
+  { name: "SPA Paketleri", order: 1 },
 ];
 
 const services = [
-  // Masaj
-  { name: "Klasik Masaj", description: "Gevşetici tam vücut masajı", duration: 60, price: 800, categoryName: "Masaj" },
-  { name: "Aromaterapi Masaj", description: "Aromatik yağlarla rahatlatıcı masaj", duration: 60, price: 900, categoryName: "Masaj" },
-  { name: "Thai Masaj", description: "Geleneksel Tayland masajı", duration: 90, price: 1200, categoryName: "Masaj" },
-  { name: "Hot Stone Masaj", description: "Sıcak taşlarla derin doku masajı", duration: 75, price: 1100, categoryName: "Masaj" },
-  { name: "Bali Masaj", description: "Bali tarzı rahatlatıcı masaj", duration: 60, price: 950, categoryName: "Masaj" },
-  { name: "Anti-Stres Masaj", description: "Stres giderici özel masaj", duration: 45, price: 700, categoryName: "Masaj" },
-  { name: "Spor Masajı", description: "Kas gevşetici spor masajı", duration: 60, price: 850, categoryName: "Masaj" },
-  { name: "Çift Masajı", description: "Çiftler için eş zamanlı masaj", duration: 60, price: 1600, categoryName: "Masaj" },
-
-  // Cilt Bakımı
-  { name: "Klasik Cilt Bakımı", description: "Temel yüz bakımı", duration: 45, price: 500, categoryName: "Cilt Bakımı" },
-  { name: "Anti-Aging Bakım", description: "Yaşlanma karşıtı yüz bakımı", duration: 60, price: 800, categoryName: "Cilt Bakımı" },
-  { name: "Hydrafacial", description: "Derin nemlendirme bakımı", duration: 60, price: 1000, categoryName: "Cilt Bakımı" },
-  { name: "Gold Cilt Bakımı", description: "24K altın maskeli lüks bakım", duration: 75, price: 1500, categoryName: "Cilt Bakımı" },
-
-  // Hamam & Sauna
-  { name: "Türk Hamamı", description: "Geleneksel köpük masajlı hamam", duration: 45, price: 600, categoryName: "Hamam & Sauna" },
-  { name: "VIP Hamam Paketi", description: "Hamam + Kese + Masaj", duration: 90, price: 1200, categoryName: "Hamam & Sauna" },
-  { name: "Kese & Köpük", description: "Kese ve köpük masajı", duration: 30, price: 400, categoryName: "Hamam & Sauna" },
-
-  // Vücut Bakımı
-  { name: "Detox Programı", description: "Vücut detoks ve arındırma", duration: 90, price: 1300, categoryName: "Vücut Bakımı" },
-  { name: "Çikolata Terapi", description: "Çikolata maskeli vücut bakımı", duration: 60, price: 900, categoryName: "Vücut Bakımı" },
-  { name: "Peeling & Nemlendirme", description: "Vücut peelingi ve nemlendirme", duration: 45, price: 650, categoryName: "Vücut Bakımı" },
-  { name: "Sultan Paketi", description: "Hamam + Masaj + Cilt Bakımı", duration: 150, price: 2500, categoryName: "Vücut Bakımı" },
+  { name: "Klasik Paket", description: "Hamam + Kese + Köpük + Klasik Masaj", price: 30, currency: "EUR", categoryName: "SPA Paketleri" },
+  { name: "Gold Paket", description: "Hamam + Kese + Köpük + Gold Masaj + Cilt Bakımı", price: 45, currency: "EUR", categoryName: "SPA Paketleri" },
+  { name: "Aloe Vera Paket", description: "Hamam + Kese + Köpük + Aloe Vera Masaj + Peeling", price: 40, currency: "EUR", categoryName: "SPA Paketleri" },
 ];
 
 async function main() {
-  console.log('🧖 Hizmetler ekleniyor...\n');
+  console.log('🧖 Hizmetler güncelleniyor...\n');
 
-  // Kategorileri oluştur
+  // Mevcut hizmetleri deaktif et
+  await prisma.service.updateMany({
+    where: { isActive: true },
+    data: { isActive: false },
+  });
+  console.log('  ⏸️  Mevcut hizmetler deaktif edildi\n');
+
+  // Kategoriyi oluştur
   for (const cat of categories) {
     const existing = await prisma.serviceCategory.findFirst({ where: { name: cat.name } });
     if (existing) {
@@ -66,18 +47,48 @@ async function main() {
     if (existing) {
       await prisma.service.update({
         where: { id: existing.id },
-        data: { ...data, categoryId },
+        data: { ...data, categoryId, isActive: true },
       });
     } else {
       await prisma.service.create({
-        data: { ...data, categoryId },
+        data: { ...data, categoryId, isActive: true },
       });
     }
     count++;
-    console.log(`  ✅ ${data.name} (${categoryName})`);
+    console.log(`  ✅ ${data.name} (${data.price}€)`);
   }
 
-  console.log(`\n✅ Toplam ${count} hizmet eklendi.`);
+  console.log(`\n✅ Toplam ${count} paket eklendi.`);
+
+  // Tüm acentaların eski hizmet atamalarını temizle ve yeni 3 paketi ata
+  const activeServices = await prisma.service.findMany({ where: { isActive: true } });
+  const allAgencies = await prisma.agency.findMany({ select: { id: true, name: true, currency: true } });
+
+  if (allAgencies.length > 0) {
+    // Eski atamaları temizle
+    await prisma.agencyService.deleteMany({});
+    console.log(`\n🗑️  Tüm eski hizmet atamaları temizlendi`);
+
+    // Yeni paketleri tüm acentalara ata
+    for (const agency of allAgencies) {
+      const defaultPassPrices: Record<string, number> = {
+        "Klasik Paket": 30,
+        "Gold Paket": 45,
+        "Aloe Vera Paket": 40,
+      };
+
+      await prisma.agencyService.createMany({
+        data: activeServices.map(s => ({
+          agencyId: agency.id,
+          serviceId: s.id,
+          passPrice: defaultPassPrices[s.name] ?? null,
+        })),
+        skipDuplicates: true,
+      });
+      console.log(`  ✅ ${agency.name} — ${activeServices.length} paket atandı (${agency.currency})`);
+    }
+    console.log(`\n✅ ${allAgencies.length} acentaya yeni paketler atandı.`);
+  }
 }
 
 main()

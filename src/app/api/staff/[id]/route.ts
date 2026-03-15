@@ -7,6 +7,11 @@ import { z } from "zod"
 const updateStaffSchema = z.object({
   specializations: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
+  position: z.string().optional().nullable(),
+  commissionRate: z.number().optional().nullable(),
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional().nullable(),
 })
 
 export async function GET(
@@ -48,9 +53,28 @@ export async function PATCH(
     const body = await req.json()
     const validatedData = updateStaffSchema.parse(body)
 
+    const { name, email, phone, ...staffData } = validatedData
+
+    // Update user fields if provided
+    if (name || email || phone !== undefined) {
+      const existingStaff = await prisma.staff.findUnique({ where: { id }, select: { userId: true } })
+      if (!existingStaff) {
+        return NextResponse.json({ error: "Personel bulunamadı" }, { status: 404 })
+      }
+
+      const userData: Record<string, unknown> = {}
+      if (name) userData.name = name
+      if (email) userData.email = email
+      if (phone !== undefined) userData.phone = phone
+
+      if (Object.keys(userData).length > 0) {
+        await prisma.user.update({ where: { id: existingStaff.userId }, data: userData })
+      }
+    }
+
     const staff = await prisma.staff.update({
       where: { id },
-      data: validatedData,
+      data: staffData,
       include: {
         user: {
           select: { id: true, name: true, email: true, phone: true },

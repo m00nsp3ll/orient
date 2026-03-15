@@ -80,7 +80,7 @@ async function main() {
 
     const startTime = new Date()
     startTime.setHours(data.hour, data.minute, 0, 0)
-    const endTime = new Date(startTime.getTime() + service.duration * 60000)
+    const endTime = new Date(startTime.getTime() + 60 * 60000)
 
     // Create appointment
     const appointment = await prisma.appointment.create({

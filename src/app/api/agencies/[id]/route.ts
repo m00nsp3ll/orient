@@ -8,6 +8,7 @@ const updateAgencySchema = z.object({
   companyName: z.string().min(2).optional(),
   address: z.string().optional(),
   isActive: z.boolean().optional(),
+  currency: z.enum(["EUR", "USD", "GBP"]).optional(),
 })
 
 export async function GET(

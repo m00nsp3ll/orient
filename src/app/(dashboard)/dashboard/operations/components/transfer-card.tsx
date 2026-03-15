@@ -46,6 +46,7 @@ interface Transfer {
     startTime: string
     endTime: string
     pax: number | null
+    childCount: number | null
     customerName: string | null
     notes: string | null
     restAmount: number | null
@@ -53,7 +54,6 @@ interface Transfer {
     service: {
       id: string
       name: string
-      duration: number
     }
     hotel: {
       id: string
@@ -61,6 +61,11 @@ interface Transfer {
       region: {
         name: string
       }
+    } | null
+    agency: {
+      id: string
+      name: string
+      code: string
     } | null
   }
   driver: {
@@ -89,12 +94,12 @@ interface TransferCardProps {
   onStatusChange: (transferId: string, newStatus: string) => void
   onDriverChange: (transferId: string, driverId: string | null) => void
   onStartDropoff?: (transferId: string) => void
+  onCancelAppointment?: (appointmentId: string) => void
 }
 
 const statusFlow: Record<string, string> = {
   PENDING: "PICKING_UP",
-  PICKING_UP: "AT_SPA",
-  AT_SPA: "IN_SERVICE",
+  PICKING_UP: "IN_SERVICE",
   IN_SERVICE: "DROPPING_OFF",
   DROPPING_OFF: "COMPLETED",
 }
@@ -102,15 +107,13 @@ const statusFlow: Record<string, string> = {
 const nextStatusLabels: Record<string, string> = {
   PENDING: "Almaya Git",
   PICKING_UP: "Geldi",
-  AT_SPA: "Hizmete Başladı",
   IN_SERVICE: "Hizmeti Bitir",
   DROPPING_OFF: "Bırakmaya Gönder",
 }
 
 const nextStatusColors: Record<string, string> = {
   PENDING: "bg-blue-500 hover:bg-blue-600 text-white",
-  PICKING_UP: "bg-yellow-500 hover:bg-yellow-600 text-white",
-  AT_SPA: "bg-green-500 hover:bg-green-600 text-white",
+  PICKING_UP: "bg-green-500 hover:bg-green-600 text-white",
   IN_SERVICE: "bg-orange-500 hover:bg-orange-600 text-white",
   DROPPING_OFF: "bg-emerald-500 hover:bg-emerald-600 text-white",
 }
@@ -122,9 +125,11 @@ export function TransferCard({
   onStatusChange,
   onDriverChange,
   onStartDropoff,
+  onCancelAppointment,
 }: TransferCardProps) {
   const [showDetails, setShowDetails] = useState(false)
   const [showRestWarning, setShowRestWarning] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [restWarningAction, setRestWarningAction] = useState<"complete" | "dropoff">("complete")
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(transfer.driverId)
 
@@ -200,7 +205,7 @@ export function TransferCard({
           {appointment.pax && (
             <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
               <Users className="h-2.5 w-2.5 mr-0.5" />
-              {appointment.pax}
+              {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""}
             </Badge>
           )}
         </div>
@@ -208,13 +213,18 @@ export function TransferCard({
 
       {/* Body */}
       <div className="p-2">
-        {/* Müşteri Adı */}
+        {/* Acenta / Müşteri Adı */}
         <Popover open={showDetails} onOpenChange={setShowDetails}>
           <PopoverTrigger asChild>
             <button className="w-full text-left group">
               <div className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
-                {appointment.customerName || "Misafir"}
+                {appointment.agency?.name || appointment.customerName || "Misafir"}
               </div>
+              {appointment.agency && appointment.customerName && (
+                <div className="text-[11px] text-slate-400 truncate">
+                  {appointment.customerName}
+                </div>
+              )}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-0" align="start">
@@ -236,12 +246,12 @@ export function TransferCard({
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>{appointment.service.name} ({appointment.service.duration} dk)</span>
+                <span>{appointment.service.name}</span>
               </div>
               {appointment.pax && (
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  <span>{appointment.pax} kişi</span>
+                  <span>{appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} kişi</span>
                 </div>
               )}
               {transfer.driver && (
@@ -254,6 +264,22 @@ export function TransferCard({
                 <div className="bg-muted/50 p-2 rounded text-xs mt-2">
                   {appointment.notes}
                 </div>
+              )}
+              {/* İptal Butonu */}
+              {onCancelAppointment && transfer.status !== "COMPLETED" && transfer.status !== "CANCELLED" && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full mt-2 gap-1"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowDetails(false)
+                    setShowCancelConfirm(true)
+                  }}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Randevuyu İptal Et
+                </Button>
               )}
             </div>
           </PopoverContent>
@@ -269,11 +295,11 @@ export function TransferCard({
           </div>
         )}
 
-        {/* Program Adı - Müşteri Bekliyor ve Hizmette durumlarında göster */}
-        {(transfer.status === "AT_SPA" || transfer.status === "IN_SERVICE") && (
+        {/* Program Adı - Hizmette durumunda göster */}
+        {transfer.status === "IN_SERVICE" && (
           <div className="mt-1.5">
             <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-white">
-              {appointment.service.name} ({appointment.service.duration} dk)
+              {appointment.service.name}
             </Badge>
           </div>
         )}
@@ -283,7 +309,7 @@ export function TransferCard({
           <div className="mt-2">
             <CountdownTimer
               startTime={new Date(transfer.arrivalTime)}
-              duration={appointment.service.duration}
+              duration={60}
             />
           </div>
         )}
@@ -373,6 +399,32 @@ export function TransferCard({
             >
               <Banknote className="h-4 w-4 mr-2" />
               Ödeme Alındı, Devam Et
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel Appointment Confirm */}
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Randevuyu İptal Et</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{appointment.customerName || "Misafir"}</strong> randevusunu iptal etmek istediğinizden emin misiniz?
+              {appointment.agency && (
+                <span className="block mt-2 text-amber-700 font-medium">
+                  Acenta carisi otomatik olarak güncellenecektir.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600"
+              onClick={() => onCancelAppointment?.(appointment.id)}
+            >
+              Evet, İptal Et
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

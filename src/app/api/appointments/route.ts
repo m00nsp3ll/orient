@@ -14,17 +14,18 @@ const appointmentSchema = z.object({
   isRest: z.boolean().optional(),
   restAmount: z.number().optional(),
   restCurrency: z.string().optional(),
+  voucherNo: z.string().optional().nullable(),
   // Agency specific fields
   agencyId: z.string().optional().nullable(),
   hotelId: z.string().optional().nullable(),
   pax: z.number().optional().nullable(),
+  childCount: z.number().optional().nullable(),
   customerName: z.string().optional().nullable(),
-  customerPhone: z.string().optional().nullable(),
+  roomNumber: z.string().optional().nullable(),
   // Sepet sistemi için
   services: z.array(z.object({
     id: z.string(),
     price: z.number(),
-    duration: z.number(),
   })).optional(),
 })
 
@@ -73,9 +74,10 @@ export async function GET(req: NextRequest) {
     const agency = await prisma.agency.findUnique({
       where: { userId: session.user.id },
     })
-    if (agency) {
-      where.agencyId = agency.id
+    if (!agency) {
+      return NextResponse.json([])
     }
+    where.agencyId = agency.id
     // Acentalar approvalStatus parametresi belirtilmediyse sadece onaylanmış rezervasyonları görür
     if (!approvalStatus) {
       where.approvalStatus = "APPROVED"
@@ -104,6 +106,7 @@ export async function GET(req: NextRequest) {
       agency: {
         select: {
           id: true,
+          name: true,
           companyName: true,
           address: true,
           user: {
@@ -150,16 +153,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get service duration - toplam süreyi sepetten hesapla
-    let totalDuration = 0
+    // Sepete eklenen hizmetleri hazırla
     let servicesToSave = []
 
     if (validatedData.services && validatedData.services.length > 0) {
-      // Sepet sistemi - birden fazla hizmet
-      totalDuration = validatedData.services.reduce((sum, s) => sum + s.duration, 0)
       servicesToSave = validatedData.services
     } else {
-      // Eski sistem - tek hizmet
       const service = await prisma.service.findUnique({
         where: { id: validatedData.serviceId },
       })
@@ -168,16 +167,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
       }
 
-      totalDuration = service.duration
       servicesToSave = [{
         id: service.id,
         price: service.price,
-        duration: service.duration,
       }]
     }
 
+    // endTime = startTime + 1 saat (sabit, süre artık takip edilmiyor)
     const endTime = new Date(validatedData.startTime)
-    endTime.setMinutes(endTime.getMinutes() + totalDuration)
+    endTime.setMinutes(endTime.getMinutes() + 60)
 
     // Validate session time against region's allowed times
     if (validatedData.hotelId) {
@@ -249,10 +247,12 @@ export async function POST(req: NextRequest) {
         agencyId: agencyId || undefined,
         hotelId: validatedData.hotelId || undefined,
         pax: validatedData.pax || undefined,
+        childCount: validatedData.childCount || undefined,
         customerName: validatedData.customerName || undefined,
-        customerPhone: validatedData.customerPhone || undefined,
+        roomNumber: validatedData.roomNumber || undefined,
         restAmount: validatedData.isRest ? validatedData.restAmount : undefined,
         restCurrency: validatedData.isRest ? validatedData.restCurrency : undefined,
+        voucherNo: validatedData.voucherNo || undefined,
         status: session.user.role === "CUSTOMER" ? "PENDING" : "CONFIRMED",
         approvalStatus,
       },
@@ -284,9 +284,71 @@ export async function POST(req: NextRequest) {
           appointmentId: appointment.id,
           serviceId: s.id,
           price: s.price,
-          duration: s.duration,
         })),
       })
+    }
+
+    // Acenta cari kaydı: sepet toplamını DEBIT, REST varsa CREDIT yaz
+    // Fiyatlar acentanın para birimi cinsinden (pass fiyatları)
+    if (agencyId && servicesToSave.length > 0) {
+      const agency = await prisma.agency.findUnique({
+        where: { id: agencyId },
+        select: { currency: true },
+      })
+      const agencyCurrency = agency?.currency || "EUR"
+      const totalPrice = servicesToSave.reduce((sum, s) => sum + s.price, 0)
+
+      // DEBIT: Sepet toplamı (acentanın para biriminde — pass fiyatları zaten bu birimde)
+      await prisma.agencyTransaction.create({
+        data: {
+          agencyId,
+          appointmentId: appointment.id,
+          type: "DEBIT",
+          amount: totalPrice,
+          currency: agencyCurrency,
+          description: `Rezervasyon - ${validatedData.customerName || "Müşteri"} (${servicesToSave.length} paket)`,
+        },
+      })
+
+      // CREDIT: REST tutarı — acentanın para birimine çevrilmiş şekilde kaydedilir
+      if (validatedData.isRest && validatedData.restAmount && validatedData.restAmount > 0 && validatedData.restCurrency) {
+        let creditAmount = validatedData.restAmount
+        const restCurrency = validatedData.restCurrency
+
+        // REST para birimi acentanınkinden farklıysa TCMB kuruyla çevir
+        if (restCurrency !== agencyCurrency) {
+          try {
+            const tcmbRes = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml")
+            if (tcmbRes.ok) {
+              const xml = await tcmbRes.text()
+              const getSellingRate = (code: string): number | null => {
+                if (code === "TRY") return 1
+                const regex = new RegExp(`<Currency[^>]*Kod="${code}"[^>]*>[\\s\\S]*?<ForexSelling>([\\d.]+)</ForexSelling>`)
+                const match = xml.match(regex)
+                return match ? parseFloat(match[1]) : null
+              }
+              const fromRate = getSellingRate(restCurrency)
+              const toRate = getSellingRate(agencyCurrency)
+              if (fromRate && toRate) {
+                creditAmount = (validatedData.restAmount * fromRate) / toRate
+              }
+            }
+          } catch {
+            // Kur çevrimi başarısız olursa orijinal tutarı kaydet
+          }
+        }
+
+        await prisma.agencyTransaction.create({
+          data: {
+            agencyId,
+            appointmentId: appointment.id,
+            type: "CREDIT",
+            amount: parseFloat(creditAmount.toFixed(2)),
+            currency: agencyCurrency,
+            description: `REST - ${validatedData.customerName || "Müşteri"} (${restCurrency !== agencyCurrency ? `${validatedData.restAmount} ${restCurrency} → ${agencyCurrency}` : "kapıda ödeme"})`,
+          },
+        })
+      }
     }
 
     // Auto-create transfer record for appointments with hotel

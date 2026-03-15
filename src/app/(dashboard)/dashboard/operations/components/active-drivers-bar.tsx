@@ -26,12 +26,14 @@ interface Transfer {
     startTime: string
     endTime: string
     pax: number | null
+    childCount: number | null
     customerName: string | null
     notes: string | null
+    restAmount: number | null
+    restCurrency: string | null
     service: {
       id: string
       name: string
-      duration: number
     }
     hotel: {
       id: string
@@ -407,7 +409,7 @@ export function ActiveDriversBar({
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     {transfer.appointment.hotel?.name}
-                                    {transfer.appointment.pax && ` • ${transfer.appointment.pax} kişi`}
+                                    {transfer.appointment.pax && ` • ${transfer.appointment.pax}${transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""} kişi`}
                                   </div>
                                 </div>
                               ))}
@@ -430,7 +432,7 @@ export function ActiveDriversBar({
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     {transfer.appointment.hotel?.name}
-                                    {transfer.appointment.pax && ` • ${transfer.appointment.pax} kişi`}
+                                    {transfer.appointment.pax && ` • ${transfer.appointment.pax}${transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""} kişi`}
                                   </div>
                                   <Button
                                     size="sm"

@@ -43,6 +43,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { convertCurrency, getCurrencySymbol, type ExchangeRates } from "@/lib/currency-utils"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const appointmentSchema = z.object({
@@ -57,11 +58,13 @@ const appointmentSchema = z.object({
   agencyId: z.string().optional(),
   hotelId: z.string().min(1, "Otel seçin"),
   pax: z.number().min(1, "En az 1 kişi seçin"),
+  childCount: z.number().optional(),
   customerName: z.string().min(1, "Müşteri adı girin"),
-  customerPhone: z.string().optional(),
+  roomNumber: z.string().optional(),
   isRest: z.boolean().optional(),
   restAmount: z.number().optional(),
   restCurrency: z.string().optional(),
+  voucherNo: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.isRest) {
     if (!data.restAmount || data.restAmount <= 0) {
@@ -87,9 +90,9 @@ interface CartItem {
   id: string
   name: string
   price: number
-  duration: number
   quantity: number
   category?: { name: string }
+  currency?: string
 }
 
 interface AppointmentFormProps {
@@ -113,7 +116,7 @@ export function AppointmentForm({
   const isAgency = session?.user?.role === "AGENCY"
   const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "STAFF"
 
-  const [entryMode, setEntryMode] = useState<"manual" | "agency">("manual")
+  const [entryMode, setEntryMode] = useState<"manual" | "agency">("agency")
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     initialData?.date
   )
@@ -183,7 +186,6 @@ export function AppointmentForm({
     toast.success("Hizmet sepetten çıkarıldı")
   }
 
-  const getTotalDuration = () => cart.reduce((sum, item) => sum + (item.duration * item.quantity), 0)
   const getTotalPrice = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
   const getTotalPackages = () => cart.reduce((sum, item) => sum + item.quantity, 0)
   const getPaxTotal = () => getTotalPrice()
@@ -198,11 +200,13 @@ export function AppointmentForm({
       agencyId: "",
       hotelId: "",
       pax: 0,
+      childCount: 0,
       customerName: "",
-      customerPhone: "",
+      roomNumber: "",
       isRest: false,
       restAmount: undefined,
       restCurrency: undefined,
+      voucherNo: "",
     },
   })
 
@@ -222,7 +226,7 @@ export function AppointmentForm({
       form.setValue("hotelId", "")
       form.setValue("pax", 0)
       form.setValue("customerName", "")
-      form.setValue("customerPhone", "")
+      form.setValue("roomNumber", "")
       setSelectedHotel(null)
       setHotelSearch("")
     } else {
@@ -256,6 +260,73 @@ export function AppointmentForm({
     enabled: isAdmin && entryMode === "agency",
   })
 
+  const { data: servicesData } = useQuery({
+    queryKey: ["services-allowed"],
+    queryFn: async () => {
+      const res = await fetch("/api/services/allowed")
+      if (!res.ok) throw new Error("Failed to fetch services")
+      const data = await res.json()
+      // AGENCY role returns {services, agencyCurrency}, others return array
+      if (Array.isArray(data)) {
+        return { services: data, agencyCurrency: null }
+      }
+      return { services: data.services, agencyCurrency: data.agencyCurrency as string | null }
+    },
+  })
+
+  const services = servicesData?.services
+  const agencyCurrencyFromApi = servicesData?.agencyCurrency
+
+  // Admin modunda acenta seçildiğinde o acentanın pass fiyatlarını çek
+  const watchedAgencyId = form.watch("agencyId")
+  const { data: agencyServicesData } = useQuery({
+    queryKey: ["agency-services-for-form", watchedAgencyId],
+    queryFn: async () => {
+      const res = await fetch(`/api/agencies/${watchedAgencyId}/services`)
+      if (!res.ok) throw new Error("Failed to fetch agency services")
+      return res.json()
+    },
+    enabled: isAdmin && entryMode === "agency" && !!watchedAgencyId,
+  })
+
+  // Aktif acenta para birimi
+  const activeAgencyCurrency: string | null = isAgency
+    ? (agencyCurrencyFromApi || userAgency?.currency || null)
+    : (isAdmin && entryMode === "agency" && watchedAgencyId)
+      ? agencies?.find((a: { id: string; currency?: string }) => a.id === watchedAgencyId)?.currency || null
+      : null
+
+  // Acenta modunda gösterilecek servisler (admin acenta seçtiğinde pass fiyatlarıyla)
+  const displayServices = (() => {
+    if (isAdmin && entryMode === "agency" && watchedAgencyId && agencyServicesData) {
+      // Admin acenta seçmiş, o acentanın pass fiyatlarını kullan
+      return agencyServicesData.map((s: any) => ({
+        ...s,
+        price: s.passPrice ?? s.price,
+      }))
+    }
+    return services
+  })()
+
+  // Admin acenta değiştirdiğinde sepeti sıfırla (farklı pass fiyatları)
+  useEffect(() => {
+    if (isAdmin && entryMode === "agency") {
+      setCart([])
+      setSelectedService(undefined)
+    }
+  }, [watchedAgencyId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data: exchangeRatesData } = useQuery<{ rates: ExchangeRates }>({
+    queryKey: ["exchange-rates"],
+    queryFn: async () => {
+      const res = await fetch("/api/exchange-rates")
+      if (!res.ok) throw new Error("Failed to fetch rates")
+      return res.json()
+    },
+    staleTime: 15 * 60 * 1000,
+    enabled: isRest || !!activeAgencyCurrency,
+  })
+
   const { data: hotels } = useQuery({
     queryKey: ["hotels"],
     queryFn: async () => {
@@ -268,15 +339,6 @@ export function AppointmentForm({
   const filteredHotels = hotels?.filter((hotel: { name: string }) =>
     hotel.name.toLowerCase().includes(hotelSearch.toLowerCase())
   ).slice(0, 10) || []
-
-  const { data: services } = useQuery({
-    queryKey: ["services-allowed"],
-    queryFn: async () => {
-      const res = await fetch("/api/services/allowed")
-      if (!res.ok) throw new Error("Failed to fetch services")
-      return res.json()
-    },
-  })
 
   const { data: availability } = useQuery({
     queryKey: ["availability", selectedDate, selectedHotel?.id],
@@ -312,12 +374,13 @@ export function AppointmentForm({
         restCurrency: isRest ? data.restCurrency : undefined,
         hotelId: data.hotelId || null,
         pax: data.pax || 1,
+        childCount: data.childCount || 0,
         customerName: data.customerName || null,
-        customerPhone: data.customerPhone || null,
+        roomNumber: data.roomNumber || null,
+        voucherNo: data.voucherNo || undefined,
         services: cart.map(item => ({
           id: item.id,
           price: item.price,
-          duration: item.duration,
         })),
       }
 
@@ -374,13 +437,13 @@ export function AppointmentForm({
           {isAdmin && (
             <Tabs value={entryMode} onValueChange={(v) => setEntryMode(v as "manual" | "agency")} className="w-full mt-3">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="manual" className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Manuel Giriş
-                </TabsTrigger>
                 <TabsTrigger value="agency" className="flex items-center gap-2">
                   <Building2 className="h-4 w-4" />
                   Acenta
+                </TabsTrigger>
+                <TabsTrigger value="manual" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Manuel Giriş
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -402,6 +465,7 @@ export function AppointmentForm({
                   </div>
 
                   {(isAgency || (isAdmin && entryMode === "agency")) && (
+                    <div className="grid grid-cols-2 gap-3">
                     <FormField
                       control={form.control}
                       name="agencyId"
@@ -423,14 +487,59 @@ export function AppointmentForm({
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {agencies?.map((agency: { id: string; companyName: string }) => (
+                                {agencies?.map((agency: { id: string; companyName: string | null; name: string; currency?: string }) => (
                                   <SelectItem key={agency.id} value={agency.id}>
-                                    {agency.companyName}
+                                    <div className="flex items-center gap-2">
+                                      <span>{agency.companyName || agency.name}</span>
+                                      {agency.currency && (
+                                        <span className="text-xs text-muted-foreground">
+                                          ({agency.currency === "EUR" ? "€" : agency.currency === "USD" ? "$" : "£"})
+                                        </span>
+                                      )}
+                                    </div>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="voucherNo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-gray-600">Voucher No</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Opsiyonel"
+                              className="h-10"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    </div>
+                  )}
+
+                  {isAdmin && entryMode === "manual" && (
+                    <FormField
+                      control={form.control}
+                      name="voucherNo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-gray-600">Voucher No</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Opsiyonel"
+                              className="h-10"
+                              {...field}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -519,13 +628,13 @@ export function AppointmentForm({
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <FormField
                       control={form.control}
                       name="pax"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium text-gray-600">PAX (Kişi)</FormLabel>
+                          <FormLabel className="text-xs font-medium text-gray-600">PAX (Yetişkin)</FormLabel>
                           <FormControl>
                             <div className="flex items-center gap-1 border rounded-lg h-10 bg-white">
                               <Button
@@ -564,14 +673,56 @@ export function AppointmentForm({
 
                     <FormField
                       control={form.control}
-                      name="customerPhone"
+                      name="childCount"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium text-gray-600">Telefon</FormLabel>
+                          <FormLabel className="text-xs font-medium text-gray-600">Çocuk</FormLabel>
+                          <FormControl>
+                            <div className="flex items-center gap-1 border rounded-lg h-10 bg-white">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={() => {
+                                  const current = field.value || 0
+                                  if (current > 0) field.onChange(current - 1)
+                                }}
+                                disabled={!field.value || field.value === 0}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <div className="flex-1 text-center">
+                                <span className="text-lg font-bold text-orange-500">
+                                  {field.value || 0}
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={() => field.onChange((field.value || 0) + 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="customerName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-gray-600">Müşteri Adı</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                              <Input placeholder="0532 123 4567" className="pl-9 h-10" {...field} />
+                              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                              <Input placeholder="Misafir adı soyadı" className="pl-9 h-10" {...field} />
                             </div>
                           </FormControl>
                           <FormMessage />
@@ -582,14 +733,14 @@ export function AppointmentForm({
 
                   <FormField
                     control={form.control}
-                    name="customerName"
+                    name="roomNumber"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-medium text-gray-600">Misafir Adı</FormLabel>
+                        <FormLabel className="text-xs font-medium text-gray-600">Oda Numarası</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                            <Input placeholder="Misafir adı soyadı" className="pl-9 h-10" {...field} />
+                            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                            <Input placeholder="Oda no" className="pl-9 h-10" {...field} value={field.value ?? ""} />
                           </div>
                         </FormControl>
                         <FormMessage />
@@ -815,6 +966,35 @@ export function AppointmentForm({
                               </div>
                             </FormControl>
                             <FormMessage />
+                            {/* Currency conversion info */}
+                            {(() => {
+                              const restCurr = form.watch("restCurrency")
+                              const restAmt = form.watch("restAmount")
+                              if (
+                                restCurr &&
+                                restAmt &&
+                                restAmt > 0 &&
+                                activeAgencyCurrency &&
+                                restCurr !== activeAgencyCurrency &&
+                                exchangeRatesData?.rates
+                              ) {
+                                const converted = convertCurrency(
+                                  restAmt,
+                                  restCurr,
+                                  activeAgencyCurrency,
+                                  exchangeRatesData.rates
+                                )
+                                if (converted !== null) {
+                                  return (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      ≈ {getCurrencySymbol(activeAgencyCurrency)} {converted.toFixed(2)}
+                                      <span className="text-gray-400 ml-1">(TCMB kuru)</span>
+                                    </p>
+                                  )
+                                }
+                              }
+                              return null
+                            })()}
                           </FormItem>
                         )}
                       />
@@ -856,7 +1036,7 @@ export function AppointmentForm({
                   </div>
                   {form.watch("pax") > 0 && (
                     <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">
-                      {getTotalPackages()}/{form.watch("pax")} pax
+                      {getTotalPackages()}/{form.watch("pax")}{form.watch("childCount") ? `+${form.watch("childCount")}` : ""} pax
                     </Badge>
                   )}
                 </div>
@@ -895,12 +1075,12 @@ export function AppointmentForm({
                       } />
                     </SelectTrigger>
                     <SelectContent>
-                      {services?.map((service: any) => (
+                      {displayServices?.map((service: any) => (
                         <SelectItem key={service.id} value={service.id}>
                           <div className="flex items-center justify-between w-full">
                             <span>{service.name}</span>
                             <span className="ml-4 text-xs text-gray-500">
-                              {service.duration} dk • {service.price}₺
+                              {!isAgency && `${activeAgencyCurrency ? `${getCurrencySymbol(activeAgencyCurrency)} ${service.price}` : `${getCurrencySymbol(service.currency || "EUR")} ${service.price}`}`}
                             </span>
                           </div>
                         </SelectItem>
@@ -915,14 +1095,14 @@ export function AppointmentForm({
                         toast.error("Lütfen bir program seçin")
                         return
                       }
-                      const service = services?.find((s: any) => s.id === selectedService)
+                      const service = displayServices?.find((s: any) => s.id === selectedService)
                       if (service) {
                         addToCart({
                           id: service.id,
                           name: service.name,
                           price: service.price,
-                          duration: service.duration,
                           category: service.category,
+                          currency: service.currency,
                         })
                       }
                     }}
@@ -951,7 +1131,7 @@ export function AppointmentForm({
                                 </Badge>
                               )}
                               <span className="text-xs text-gray-500">
-                                {item.duration} dk • {item.price}₺
+                                {!isAgency && `${activeAgencyCurrency ? `${getCurrencySymbol(activeAgencyCurrency)} ${item.price}` : `${getCurrencySymbol(item.currency || "EUR")} ${item.price}`}`}
                               </span>
                             </div>
                           </div>
@@ -996,16 +1176,69 @@ export function AppointmentForm({
                     </div>
 
                     <div className="bg-slate-50 border-t px-4 py-3 space-y-1.5">
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>Toplam Süre</span>
-                        <span className="font-medium text-gray-700">{getTotalDuration()} dakika</span>
-                      </div>
-                      <div className="flex justify-between items-center pt-1.5 border-t">
-                        <span className="font-semibold text-sm">Toplam Tutar</span>
-                        <span className="font-bold text-lg text-blue-600">
-                          {getPaxTotal()}₺
-                        </span>
-                      </div>
+                      {!isAgency && (
+                        <div className="flex justify-between items-center pt-1.5 border-t">
+                          <span className="font-semibold text-sm">Toplam Tutar</span>
+                          <span className="font-bold text-lg text-blue-600">
+                            {activeAgencyCurrency ? `${getCurrencySymbol(activeAgencyCurrency)} ${getPaxTotal().toFixed(2)}` : `${getCurrencySymbol(cart[0]?.currency || "EUR")} ${getPaxTotal().toFixed(2)}`}
+                          </span>
+                        </div>
+                      )}
+                      {/* Acenta cari özeti - sadece admin görür */}
+                      {!isAgency && (isAdmin && entryMode === "agency" && form.watch("agencyId")) && isRest && form.watch("restAmount") && form.watch("restCurrency") && (
+                        <div className="mt-2 pt-2 border-t border-dashed border-gray-300 space-y-1.5">
+                          {(() => {
+                            const total = getPaxTotal()
+                            const restAmt = form.watch("restAmount") || 0
+                            const restCurr = form.watch("restCurrency") || "TRY"
+                            const cur = activeAgencyCurrency || "TRY"
+                            const sym = getCurrencySymbol(cur)
+                            const restSym = getCurrencySymbol(restCurr)
+
+                            let restConverted: number | null = null
+                            let crossRate: number | null = null
+
+                            if (restCurr === cur) {
+                              restConverted = restAmt
+                            } else if (exchangeRatesData?.rates) {
+                              restConverted = convertCurrency(restAmt, restCurr, cur, exchangeRatesData.rates)
+                              if (restConverted !== null) {
+                                crossRate = restConverted / restAmt
+                              }
+                            }
+
+                            return (
+                              <>
+                                <div className="flex justify-between text-xs text-gray-500">
+                                  <span>REST (kapıda tahsil)</span>
+                                  <div className="text-right">
+                                    <span className="font-medium text-red-500">
+                                      −{restSym} {restAmt.toFixed(2)}
+                                    </span>
+                                    {restCurr !== cur && restConverted !== null && (
+                                      <div className="text-[10px] text-gray-400 mt-0.5">
+                                        ≈ {sym} {restConverted.toFixed(2)}
+                                        {crossRate !== null && (
+                                          <span className="ml-1">• 1{restSym} = {crossRate.toFixed(4)}{sym}</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="font-semibold text-xs text-amber-700">Acentaya Yansıyacak</span>
+                                  <span className="font-bold text-sm text-amber-600">
+                                    {restConverted !== null
+                                      ? `${sym} ${Math.max(0, total - restConverted).toFixed(2)}`
+                                      : `${sym} ${total.toFixed(2)} - ${restSym}${restAmt.toFixed(2)}`
+                                    }
+                                  </span>
+                                </div>
+                              </>
+                            )
+                          })()}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
