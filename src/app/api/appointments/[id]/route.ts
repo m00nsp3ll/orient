@@ -168,6 +168,13 @@ export async function PATCH(
       }
     }
 
+    // İptal edildiğinde Transfer kaydını sil (operasyondan kaldır)
+    if (validatedData.status === "CANCELLED" && existingAppointment.status !== "CANCELLED") {
+      await prisma.transfer.deleteMany({
+        where: { appointmentId: id },
+      })
+    }
+
     return NextResponse.json(appointment)
   } catch (error) {
     if (error instanceof z.ZodError) {

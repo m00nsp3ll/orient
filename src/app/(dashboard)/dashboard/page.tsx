@@ -88,6 +88,7 @@ export default function DashboardPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [selectedAgency, setSelectedAgency] = useState<Appointment["agency"] | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("pending")
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats"],
@@ -131,6 +132,7 @@ export default function DashboardPage() {
       toast.success("Randevu iptal edildi. Acenta carisi güncellendi.")
       setSelectedAppointment(null)
       setCancellingId(null)
+      setActiveTab("cancelled")
     },
     onError: (err: Error) => {
       toast.error(err.message)
@@ -229,7 +231,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Tabs: Onay Bekleyenler + Onaylananlar + İptal Edilenler */}
-      <Tabs defaultValue="pending">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto p-1">
           <TabsTrigger
             value="pending"
