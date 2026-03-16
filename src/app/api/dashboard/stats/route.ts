@@ -21,6 +21,7 @@ export async function GET() {
         where: {
           startTime: { gte: dayStart, lte: dayEnd },
           status: { not: "CANCELLED" },
+          approvalStatus: "APPROVED",
         },
       }),
       prisma.appointment.count({
@@ -36,9 +37,11 @@ export async function GET() {
         where: {
           startTime: { gte: dayStart, lte: dayEnd },
           status: { not: "CANCELLED" },
+          approvalStatus: "APPROVED",
         },
         _sum: {
           pax: true,
+          childCount: true,
         },
       }),
     ])
@@ -48,5 +51,6 @@ export async function GET() {
     pendingAppointments,
     completedToday,
     totalPax: totalPax._sum.pax || 0,
+    totalChildCount: totalPax._sum.childCount || 0,
   })
 }

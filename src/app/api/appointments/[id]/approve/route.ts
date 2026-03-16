@@ -43,6 +43,18 @@ export async function PATCH(
       },
     })
 
+    // Onaylanan randevu için otomatik Transfer kaydı oluştur
+    if (action === "approve") {
+      const existingTransfer = await prisma.transfer.findFirst({
+        where: { appointmentId: params.id },
+      })
+      if (!existingTransfer) {
+        await prisma.transfer.create({
+          data: { appointmentId: params.id },
+        })
+      }
+    }
+
     return NextResponse.json(appointment)
   } catch (error) {
     console.error("Approval error:", error)

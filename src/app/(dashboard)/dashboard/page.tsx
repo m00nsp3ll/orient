@@ -19,6 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useState } from "react"
 import { AppointmentForm } from "@/components/forms/appointment-form"
 import {
@@ -41,6 +42,7 @@ interface DashboardStats {
   pendingAppointments: number
   completedToday: number
   totalPax: number
+  totalChildCount: number
 }
 
 interface Appointment {
@@ -220,21 +222,54 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats?.totalPax || 0}
+              {stats?.totalPax || 0}{(stats?.totalChildCount ?? 0) > 0 ? `+${stats?.totalChildCount}` : ""}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Pending Approvals - Admin and Agency */}
-      {(isAdmin || isAgency) && <PendingApprovals />}
+      {/* Tabs: Onay Bekleyenler + Onaylananlar */}
+      <Tabs defaultValue="pending">
+        <TabsList className="h-auto p-1">
+          <TabsTrigger
+            value="pending"
+            className="gap-2 data-[state=active]:!bg-orange-100 data-[state=active]:!text-orange-700 data-[state=active]:!shadow-none"
+          >
+            <Clock className="h-4 w-4" />
+            Onay Bekleyenler
+            {(stats?.pendingAppointments ?? 0) > 0 && (
+              <Badge className="ml-1 h-5 min-w-[20px] px-1.5 text-xs bg-orange-500 text-white hover:bg-orange-500">
+                {stats?.pendingAppointments}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="approved"
+            className="gap-2 data-[state=active]:!bg-green-100 data-[state=active]:!text-green-700 data-[state=active]:!shadow-none"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Onaylananlar
+            {(todayAppointments?.length ?? 0) > 0 && (
+              <Badge className="ml-1 h-5 min-w-[20px] px-1.5 text-xs bg-green-500 text-white hover:bg-green-500">
+                {todayAppointments?.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Today's Appointments */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Bugünün Randevuları</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <TabsContent value="pending">
+          <PendingApprovals />
+        </TabsContent>
+
+        <TabsContent value="approved">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-700">
+                <CheckCircle className="h-5 w-5" />
+                Onaylanan Randevular
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
           {todayAppointments && todayAppointments.length > 0 ? (
             <div className="space-y-3">
               {todayAppointments
@@ -295,11 +330,13 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              Bugün için randevu bulunmuyor
+              Onaylanan randevu bulunmuyor
             </div>
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
 
       <AppointmentForm
         open={showAppointmentForm}
