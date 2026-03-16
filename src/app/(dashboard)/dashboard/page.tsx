@@ -228,12 +228,12 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Tabs: Onay Bekleyenler + Onaylananlar */}
+      {/* Tabs: Onay Bekleyenler + Onaylananlar + İptal Edilenler */}
       <Tabs defaultValue="pending">
         <TabsList className="h-auto p-1">
           <TabsTrigger
             value="pending"
-            className="gap-2 data-[state=active]:!bg-orange-100 data-[state=active]:!text-orange-700 data-[state=active]:!shadow-none"
+            className="gap-2 !text-orange-600 data-[state=active]:!bg-orange-100 data-[state=active]:!text-orange-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-orange-50/50"
           >
             <Clock className="h-4 w-4" />
             Onay Bekleyenler
@@ -245,13 +245,25 @@ export default function DashboardPage() {
           </TabsTrigger>
           <TabsTrigger
             value="approved"
-            className="gap-2 data-[state=active]:!bg-green-100 data-[state=active]:!text-green-700 data-[state=active]:!shadow-none"
+            className="gap-2 !text-green-600 data-[state=active]:!bg-green-100 data-[state=active]:!text-green-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-green-50/50"
           >
             <CheckCircle className="h-4 w-4" />
             Onaylananlar
-            {(todayAppointments?.length ?? 0) > 0 && (
+            {(todayAppointments?.filter(a => a.status !== "CANCELLED").length ?? 0) > 0 && (
               <Badge className="ml-1 h-5 min-w-[20px] px-1.5 text-xs bg-green-500 text-white hover:bg-green-500">
-                {todayAppointments?.length}
+                {todayAppointments?.filter(a => a.status !== "CANCELLED").length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger
+            value="cancelled"
+            className="gap-2 !text-red-600 data-[state=active]:!bg-red-100 data-[state=active]:!text-red-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-red-50/50"
+          >
+            <XCircle className="h-4 w-4" />
+            İptal Edilenler
+            {(todayAppointments?.filter(a => a.status === "CANCELLED").length ?? 0) > 0 && (
+              <Badge className="ml-1 h-5 min-w-[20px] px-1.5 text-xs bg-red-500 text-white hover:bg-red-500">
+                {todayAppointments?.filter(a => a.status === "CANCELLED").length}
               </Badge>
             )}
           </TabsTrigger>
@@ -270,9 +282,11 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-          {todayAppointments && todayAppointments.length > 0 ? (
+          {(() => {
+            const approved = todayAppointments?.filter(a => a.status !== "CANCELLED") ?? []
+            return approved.length > 0 ? (
             <div className="space-y-3">
-              {todayAppointments
+              {approved
                 .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
                 .map((appointment) => (
                 <div
@@ -332,7 +346,81 @@ export default function DashboardPage() {
             <div className="text-center py-8 text-gray-500">
               Onaylanan randevu bulunmuyor
             </div>
-          )}
+          )
+          })()}
+        </CardContent>
+      </Card>
+        </TabsContent>
+
+        <TabsContent value="cancelled">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-700">
+                <XCircle className="h-5 w-5" />
+                İptal Edilen Randevular
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+          {(() => {
+            const cancelled = todayAppointments?.filter(a => a.status === "CANCELLED") ?? []
+            return cancelled.length > 0 ? (
+            <div className="space-y-3">
+              {cancelled
+                .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                .map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className="flex items-center justify-between p-4 border border-red-100 rounded-lg hover:bg-red-50/50 cursor-pointer transition-colors opacity-75"
+                  onClick={() => setSelectedAppointment(appointment)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="text-center min-w-[60px]">
+                      <div className="text-lg font-bold text-gray-400 line-through">
+                        {format(new Date(appointment.startTime), "HH:mm")}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-500">
+                          {appointment.customerName || appointment.customer?.name || "-"}
+                        </span>
+                        {appointment.pax && appointment.pax > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} kişi
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        {appointment.services && appointment.services.length > 0
+                          ? appointment.services.map(s => s.service.name).join(", ")
+                          : appointment.service.name}
+                      </div>
+                      {appointment.agency && (
+                        <button
+                          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline mt-1"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedAgency(appointment.agency)
+                          }}
+                        >
+                          <Building2 className="h-3 w-3" />
+                          {appointment.agency.companyName}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(appointment.status)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              İptal edilen randevu bulunmuyor
+            </div>
+          )
+          })()}
         </CardContent>
       </Card>
         </TabsContent>
