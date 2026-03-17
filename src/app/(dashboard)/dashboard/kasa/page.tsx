@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { getCurrencySymbol } from "@/lib/currency-utils"
+import { getCurrencySymbol, convertCurrency, ExchangeRates } from "@/lib/currency-utils"
 
 interface CashEntry {
   id: string
@@ -181,6 +181,15 @@ export default function KasaPage() {
     },
   })
 
+  const { data: exchangeRates } = useQuery<{ rates: ExchangeRates }>({
+    queryKey: ["exchange-rates"],
+    queryFn: async () => {
+      const res = await fetch("/api/exchange-rates")
+      if (!res.ok) throw new Error("Failed")
+      return res.json()
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/kasa/${id}`, { method: "DELETE" })
@@ -213,6 +222,9 @@ export default function KasaPage() {
         for (const e of entries) {
           if (e.staffId === s.id && e.staffIncomeAmount && e.staffIncomeCurrency) {
             byCurrency[e.staffIncomeCurrency] = (byCurrency[e.staffIncomeCurrency] || 0) + e.staffIncomeAmount
+          }
+          if (e.staffId === s.id && e.creditCardAmount && e.creditCardCurrency) {
+            byCurrency[e.creditCardCurrency] = (byCurrency[e.creditCardCurrency] || 0) + e.creditCardAmount
           }
         }
         const commissions = Object.entries(byCurrency)
@@ -348,6 +360,30 @@ export default function KasaPage() {
                     ))}
                   </div>
                 )}
+                {/* Euro Karşılığı */}
+                {cashRows.length > 0 && exchangeRates?.rates && (() => {
+                  let totalEur = 0
+                  for (const { cur, cashIn, outgoing, net } of cashRows) {
+                    if (cur.value === "EUR") {
+                      totalEur += net
+                    } else {
+                      const converted = convertCurrency(Math.abs(net), cur.value, "EUR", exchangeRates.rates)
+                      if (converted !== null) {
+                        totalEur += net >= 0 ? converted : -converted
+                      }
+                    }
+                  }
+                  return (
+                    <div className="mt-4 pt-3 border-t border-dashed border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-blue-600">Euro Karşılığı</span>
+                        <span className={cn("text-lg font-bold", totalEur >= 0 ? "text-blue-700" : "text-red-600")}>
+                          {totalEur < 0 ? "-" : ""}€ {Math.abs(totalEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
               </CardContent>
             </Card>
 

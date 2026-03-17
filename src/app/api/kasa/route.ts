@@ -60,6 +60,11 @@ function computeSummary(entries: any[]) {
     }
     if (e.creditCardAmount && e.creditCardCurrency) {
       creditCardIncome[e.creditCardCurrency] += e.creditCardAmount
+      // Personel kredi kartı gelirinden de prim hesapla
+      if (e.staffId && e.staff?.commissionRate) {
+        const comm = e.creditCardAmount * e.staff.commissionRate / 100
+        commissionExpense[e.creditCardCurrency] = (commissionExpense[e.creditCardCurrency] || 0) + comm
+      }
     }
     if (e.creditAmount && e.creditCurrency) {
       credit[e.creditCurrency] += e.creditAmount

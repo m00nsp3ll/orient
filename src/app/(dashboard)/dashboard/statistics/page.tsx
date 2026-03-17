@@ -41,6 +41,7 @@ export default function StatisticsPage() {
   const [endDate, setEndDate] = useState("")
   const [selectedAgency, setSelectedAgency] = useState("all")
   const [selectedService, setSelectedService] = useState("all")
+  const [voucherSearch, setVoucherSearch] = useState("")
   const [datePickerOpen, setDatePickerOpen] = useState(false)
 
   useEffect(() => {
@@ -141,7 +142,7 @@ export default function StatisticsPage() {
           </div>
           <span className="text-sm font-semibold text-slate-700">Filtreler</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Dönem */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dönem</Label>
@@ -251,6 +252,17 @@ export default function StatisticsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Voucher No Arama */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Voucher No</Label>
+            <Input
+              placeholder="Voucher ara..."
+              value={voucherSearch}
+              onChange={(e) => setVoucherSearch(e.target.value)}
+              className="h-9 text-sm bg-white border-slate-200 shadow-sm"
+            />
           </div>
         </div>
       </div>
@@ -440,7 +452,11 @@ export default function StatisticsPage() {
           </div>
 
           {/* Müşteri Listesi */}
-          {stats.customers?.length > 0 && (
+          {stats.customers?.length > 0 && (() => {
+            const filteredCustomers = stats.customers.filter((c: any) =>
+              !voucherSearch || c.voucherNo?.toLowerCase().includes(voucherSearch.toLowerCase())
+            )
+            return (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
@@ -448,7 +464,7 @@ export default function StatisticsPage() {
                     <ClipboardList className="h-3.5 w-3.5 text-indigo-600" />
                   </div>
                   <CardTitle className="text-sm font-semibold text-slate-700">Müşteri Listesi</CardTitle>
-                  <Badge variant="secondary" className="text-xs">{stats.customers.length} kayıt</Badge>
+                  <Badge variant="secondary" className="text-xs">{filteredCustomers.length} kayıt</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -468,7 +484,7 @@ export default function StatisticsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {stats.customers.map((c: any) => (
+                      {filteredCustomers.map((c: any) => (
                         <TableRow key={c.id}>
                           <TableCell className="text-sm font-medium">{c.agencyName}</TableCell>
                           <TableCell className="text-sm">{c.customerName}</TableCell>
@@ -500,7 +516,8 @@ export default function StatisticsPage() {
                 </div>
               </CardContent>
             </Card>
-          )}
+            )
+          })()}
 
           {/* Günlük Trend - en altta */}
           {trendDays.length > 0 && (
