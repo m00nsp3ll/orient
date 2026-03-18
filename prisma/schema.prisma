@@ -203,6 +203,7 @@ model Agency {
   email           String?
   name            String
   phone           String?
+  plainPassword   String?
   user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   allowedServices AgencyService[]
   appointments    Appointment[]

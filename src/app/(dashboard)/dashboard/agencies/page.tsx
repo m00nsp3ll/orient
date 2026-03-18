@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Plus, Trash2, Settings } from "lucide-react"
+import { Plus, Trash2, Settings, KeyRound, Eye, EyeOff, Pencil, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +21,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
@@ -35,6 +45,7 @@ interface Agency {
   address?: string
   isActive: boolean
   currency: string
+  plainPassword: string | null
   user: { id: string; name: string; email: string; phone?: string } | null
   _count: { appointments: number }
 }
@@ -58,6 +69,15 @@ export default function AgenciesPage() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [showServiceModal, setShowServiceModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteAgencyTarget, setDeleteAgencyTarget] = useState<Agency | null>(null)
+  const [settingsAgency, setSettingsAgency] = useState<Agency | null>(null)
+  const [settingsPassword, setSettingsPassword] = useState("")
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [editingUsername, setEditingUsername] = useState(false)
+  const [editUsernameValue, setEditUsernameValue] = useState("")
   const [selectedAgency, setSelectedAgency] = useState<Agency | null>(null)
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [servicePrices, setServicePrices] = useState<Record<string, number | null>>({})
@@ -174,26 +194,123 @@ export default function AgenciesPage() {
     },
   })
 
+  const updateAgencyPassword = useMutation({
+    mutationFn: async ({ agencyId, password }: { agencyId: string; password: string }) => {
+      const res = await fetch(`/api/agencies/${agencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Şifre güncellenemedi")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agencies"] })
+      toast.success("Şifre güncellendi")
+      setSettingsPassword("")
+      setShowNewPassword(false)
+      // settingsAgency'yi güncellenmiş halinden al
+      const updated = agencies.find(a => a.id === settingsAgency?.id)
+      if (updated) {
+        setSettingsAgency({ ...updated, plainPassword: settingsPassword })
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const updateAgencyUsername = useMutation({
+    mutationFn: async ({ agencyId, username }: { agencyId: string; username: string }) => {
+      const res = await fetch(`/api/agencies/${agencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Kullanıcı adı güncellenemedi")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agencies"] })
+      toast.success("Kullanıcı adı güncellendi")
+      setEditingUsername(false)
+      if (settingsAgency) {
+        setSettingsAgency({
+          ...settingsAgency,
+          user: settingsAgency.user ? { ...settingsAgency.user, email: editUsernameValue } : null,
+        })
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const handleOpenSettingsModal = (agency: Agency) => {
+    setSettingsAgency(agency)
+    setSettingsPassword("")
+    setShowNewPassword(false)
+    setEditingUsername(false)
+    setShowSettingsModal(true)
+  }
+
+  const handleSaveSettings = () => {
+    if (!settingsAgency) return
+    if (!settingsPassword) {
+      toast.error("Yeni şifre giriniz")
+      return
+    }
+    if (settingsPassword.length < 6) {
+      toast.error("Şifre en az 6 karakter olmalıdır")
+      return
+    }
+    setShowPasswordConfirm(true)
+  }
+
+  const handleConfirmPasswordChange = () => {
+    if (!settingsAgency) return
+    setShowPasswordConfirm(false)
+    updateAgencyPassword.mutate({
+      agencyId: settingsAgency.id,
+      password: settingsPassword,
+    })
+  }
+
+  const handleStartEditUsername = () => {
+    setEditUsernameValue(settingsAgency?.user?.email || settingsAgency?.email || "")
+    setEditingUsername(true)
+  }
+
+  const handleSaveUsername = () => {
+    if (!settingsAgency || !editUsernameValue.trim()) return
+    updateAgencyUsername.mutate({
+      agencyId: settingsAgency.id,
+      username: editUsernameValue.trim(),
+    })
+  }
+
   const handleOpenServiceModal = async (agency: Agency) => {
     setSelectedAgency(agency)
     setShowServiceModal(true)
 
-    // Acentanın mevcut hizmetlerini yükle
     try {
       const res = await fetch(`/api/agencies/${agency.id}/services`)
       if (res.ok) {
         const agencyServices = await res.json()
         if (agencyServices.length > 0) {
           setSelectedServices(agencyServices.map((s: any) => s.id))
-
-          // Pass fiyatlarını yükle
           const prices: Record<string, number | null> = {}
           agencyServices.forEach((s: any) => {
             prices[s.id] = s.passPrice ?? s.price
           })
           setServicePrices(prices)
         } else {
-          // Default: Tüm hizmetler seçili ve default fiyatlar
           setSelectedServices(allServices.map(s => s.id))
           const prices: Record<string, number | null> = {}
           allServices.forEach(s => {
@@ -203,7 +320,6 @@ export default function AgenciesPage() {
         }
       }
     } catch (error) {
-      // Hata durumunda tüm hizmetleri seç ve default fiyatlar
       setSelectedServices(allServices.map(s => s.id))
       const prices: Record<string, number | null> = {}
       allServices.forEach(s => {
@@ -216,7 +332,6 @@ export default function AgenciesPage() {
   const handleServiceToggle = (serviceId: string, checked: boolean) => {
     if (checked) {
       setSelectedServices([...selectedServices, serviceId])
-      // Varsayılan fiyatı ayarla
       if (!servicePrices[serviceId]) {
         const service = allServices.find(s => s.id === serviceId)
         if (service) {
@@ -291,7 +406,6 @@ export default function AgenciesPage() {
                 <TableRow>
                   <TableHead>Şirket Adı</TableHead>
                   <TableHead>Yetkili</TableHead>
-                  <TableHead>Email</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>Para Birimi</TableHead>
                   <TableHead>Randevu Sayısı</TableHead>
@@ -306,7 +420,6 @@ export default function AgenciesPage() {
                       {agency.name || agency.companyName || "-"}
                     </TableCell>
                     <TableCell>{agency.user?.name || agency.contactName || "-"}</TableCell>
-                    <TableCell>{agency.user?.email || agency.email || "-"}</TableCell>
                     <TableCell>{agency.user?.phone || agency.phone || "-"}</TableCell>
                     <TableCell>
                       <Badge variant="outline">
@@ -332,7 +445,18 @@ export default function AgenciesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteAgency.mutate(agency.id)}
+                          title="Kullanıcı Bilgileri"
+                          onClick={() => handleOpenSettingsModal(agency)}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setDeleteAgencyTarget(agency)
+                            setShowDeleteConfirm(true)
+                          }}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -346,6 +470,7 @@ export default function AgenciesPage() {
         </CardContent>
       </Card>
 
+      {/* Yeni Acenta Ekle */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
           <DialogHeader>
@@ -369,12 +494,12 @@ export default function AgenciesPage() {
               />
             </div>
             <div>
-              <Label>Email</Label>
+              <Label>Kullanıcı Adı</Label>
               <Input
-                type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
+                placeholder="Giriş için kullanılacak kullanıcı adı"
               />
             </div>
             <div>
@@ -498,7 +623,6 @@ export default function AgenciesPage() {
                     )}
                   </div>
 
-                  {/* Pass Fiyatı */}
                   {selectedServices.includes(service.id) && (
                     <div className="flex flex-col gap-1 min-w-0">
                       <Label className="text-xs text-muted-foreground">Pass Fiyatı</Label>
@@ -557,6 +681,170 @@ export default function AgenciesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Kullanıcı Bilgileri Modal */}
+      <Dialog open={showSettingsModal} onOpenChange={(open) => {
+        setShowSettingsModal(open)
+        if (!open) {
+          setSettingsAgency(null)
+          setSettingsPassword("")
+          setShowNewPassword(false)
+          setEditingUsername(false)
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Kullanıcı Bilgileri - {settingsAgency?.companyName || settingsAgency?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Mevcut bilgiler */}
+            <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+              <div>
+                <Label className="text-xs text-muted-foreground">Kullanıcı Adı</Label>
+                {editingUsername ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      value={editUsernameValue}
+                      onChange={(e) => setEditUsernameValue(e.target.value)}
+                      className="h-8 text-sm"
+                      autoFocus
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={handleSaveUsername}
+                      disabled={updateAgencyUsername.isPending}
+                    >
+                      <Check className="h-4 w-4 text-green-600" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => setEditingUsername(false)}
+                    >
+                      <X className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-sm font-medium">
+                      {settingsAgency?.user?.email || settingsAgency?.email || "-"}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={handleStartEditUsername}
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Mevcut Şifre</Label>
+                <p className="text-sm font-medium mt-0.5">
+                  {settingsAgency?.plainPassword || "-"}
+                </p>
+              </div>
+            </div>
+
+            {/* Şifre değiştirme bölümü */}
+            <div className="border-t pt-4 space-y-3">
+              <Label className="text-sm font-semibold">Şifre Değiştir</Label>
+              <div>
+                <Label className="text-xs text-muted-foreground">Yeni Şifre</Label>
+                <div className="relative mt-1">
+                  <Input
+                    type={showNewPassword ? "text" : "password"}
+                    value={settingsPassword}
+                    onChange={(e) => setSettingsPassword(e.target.value)}
+                    placeholder="Yeni şifre giriniz"
+                    minLength={6}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">En az 6 karakter</p>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={updateAgencyPassword.isPending || !settingsPassword}
+                  size="sm"
+                >
+                  {updateAgencyPassword.isPending ? "Kaydediliyor..." : "Şifreyi Değiştir"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Şifre Değiştirme Onay */}
+      <AlertDialog open={showPasswordConfirm} onOpenChange={setShowPasswordConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Şifre Değişikliği</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <span className="font-semibold">{settingsAgency?.companyName || settingsAgency?.name}</span> acentasının şifresini{" "}
+                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">{settingsPassword}</span>{" "}
+                ile değiştirmek istiyor musunuz?
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmPasswordChange}>
+              Değiştir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Acenta Silme Onay */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Acenta Silme</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <span className="font-semibold">{deleteAgencyTarget?.companyName || deleteAgencyTarget?.name}</span> acentasını silmek istiyor musunuz?
+                <br />
+                <span className="text-red-500 font-medium">Bu işlem geri alınamaz! Acentaya ait cari bilgileri ve randevu geçmişi kaybolabilir.</span>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (deleteAgencyTarget) {
+                  deleteAgency.mutate(deleteAgencyTarget.id)
+                }
+                setShowDeleteConfirm(false)
+                setDeleteAgencyTarget(null)
+              }}
+            >
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

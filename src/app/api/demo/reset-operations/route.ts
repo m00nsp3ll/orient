@@ -124,113 +124,182 @@ export async function POST(request: Request) {
       include: { user: true },
     })
 
-    // 8. Demo müşteriler — childCount, REST (restAmount bazlı), çoklu paket
-    const demoCustomers: {
-      name: string; status: string; time: string; pax: number; childCount: number
-      serviceIndices: number[]; agency: number; restAmount?: number; restCurrency?: string
-      notes?: string; voucherNo?: string
-    }[] = [
-      // PENDING — alınmayı bekleyenler
-      { name: "Hans Müller",    status: "PENDING",    time: "09:00", pax: 2, childCount: 1, serviceIndices: [0],    agency: 0, voucherNo: "SWT-1001" },
-      { name: "Anna Schmidt",   status: "PENDING",    time: "09:30", pax: 1, childCount: 0, serviceIndices: [1],    agency: 1, restAmount: 150, restCurrency: "EUR" },
-      { name: "Pierre Dubois",  status: "PENDING",    time: "10:00", pax: 3, childCount: 2, serviceIndices: [0, 1], agency: 0, notes: "Çocuklar 3 ve 5 yaşında" },
-      { name: "Elena Petrov",   status: "PENDING",    time: "10:30", pax: 2, childCount: 0, serviceIndices: [0],    agency: 2, voucherNo: "GLT-4422" },
-      { name: "John Smith",     status: "PENDING",    time: "11:00", pax: 4, childCount: 1, serviceIndices: [1, 0], agency: 1, notes: "VIP müşteri" },
+    // Driver'ları al (transfer statüleri için)
+    const drivers = await prisma.driver.findMany({
+      where: { isActive: true },
+    })
 
-      // IN_SERVICE — turda olanlar
-      { name: "Sophie Johnson", status: "IN_SERVICE", time: "08:00", pax: 2, childCount: 0, serviceIndices: [0],    agency: 3 },
-      { name: "Maria Fischer",  status: "IN_SERVICE", time: "08:30", pax: 1, childCount: 0, serviceIndices: [0],    agency: 0, restAmount: 80, restCurrency: "USD", voucherNo: "SWT-1055" },
-      { name: "Ahmet Yılmaz",   status: "IN_SERVICE", time: "07:30", pax: 2, childCount: 1, serviceIndices: [1],    agency: 1, notes: "Bebek arabası var" },
-      { name: "Lars Johansson", status: "IN_SERVICE", time: "07:00", pax: 3, childCount: 0, serviceIndices: [0, 1], agency: 2 },
+    // 8. Session-times'dan tüm seans saatlerini çek
+    const regionSessionTimes = await prisma.regionSessionTime.findMany({
+      where: { isActive: true },
+      select: { time: true },
+    })
+    const sessionTimeSet = new Set(regionSessionTimes.map(st => st.time))
+    const sessionSlots = Array.from(sessionTimeSet).sort()
 
-      // DROPPING_OFF — bırakılıyor
-      { name: "Fatma Kaya",     status: "DROPPING_OFF", time: "06:00", pax: 2, childCount: 1, serviceIndices: [0],  agency: 3, voucherNo: "PRH-7712" },
-      { name: "Erik Lindgren",  status: "DROPPING_OFF", time: "06:30", pax: 1, childCount: 0, serviceIndices: [1],  agency: 0, restAmount: 200, restCurrency: "GBP" },
-      { name: "Olga Smirnova", status: "DROPPING_OFF", time: "07:00", pax: 4, childCount: 2, serviceIndices: [0, 1], agency: 1, notes: "İkiz çocuklar" },
+    // Fallback: session-time yoksa sabit saatler
+    const timeSlots = sessionSlots.length > 0
+      ? sessionSlots
+      : ["08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "13:00", "14:00", "15:00"]
 
-      // COMPLETED — tamamlanan
-      { name: "Thomas Braun",   status: "COMPLETED",  time: "05:00", pax: 2, childCount: 0, serviceIndices: [0],    agency: 2 },
-      { name: "Mehmet Demir",   status: "COMPLETED",  time: "05:30", pax: 3, childCount: 1, serviceIndices: [1, 0], agency: 3, restAmount: 2500, restCurrency: "TRY", voucherNo: "PRH-9901" },
+    // Müşteri isimleri havuzu
+    const customerNames = [
+      "Hans Müller", "Anna Schmidt", "Peter Weber", "Maria Fischer", "Thomas Braun",
+      "Elena Petrov", "Alexander Ivanov", "Olga Smirnova", "Dmitry Volkov", "Natasha Kozlova",
+      "John Smith", "Emma Wilson", "Michael Brown", "Sophie Johnson", "David Taylor",
+      "Ahmet Yılmaz", "Fatma Kaya", "Mehmet Demir", "Ayşe Çelik", "Mustafa Öztürk",
+      "Pierre Dubois", "Marie Laurent", "Jean Bernard", "Isabelle Martin", "François Petit",
+      "Lars Johansson", "Ingrid Andersson", "Erik Lindgren", "Astrid Eriksson", "Olaf Svensson",
+      "Giuseppe Rossi", "Chiara Bianchi", "Luca Ferrari", "Sakura Tanaka", "Yuki Nakamura",
+      "Carlos Garcia", "Isabella Martinez", "Roberto Silva", "Chen Wei", "Li Mei",
     ]
 
-    // 9. Randevular ve transferler oluştur
+    const notesPool = [
+      "VIP müşteri", "Bebek arabası var", "Çocuklar 3 ve 5 yaşında", "İkiz çocuklar",
+      "Bebek koltuğu gerekli", "Grubun 1 üyesi engelli", "Çocuklar 2 ve 7 yaşında",
+      "Yaşlı misafir var", "Alerjisi var", "Geç alınış isteniyor", null, null, null, null, null,
+    ]
+
+    const voucherPrefixes = ["SWT", "BST", "GLT", "PRH", "VIP", "RES"]
+
+    // 9. Her saat dilimi için 3-6 randevu oluştur (200+ kişilik yoğun operasyon)
     let count = 0
-    for (const customer of demoCustomers) {
-      const hotel = hotels[Math.floor(Math.random() * hotels.length)]
-      const primaryService = services[customer.serviceIndices[0] % services.length]
-      const agency = createdAgencies[customer.agency % createdAgencies.length]
+    let nameIdx = 0
+    const now = new Date()
+    const currentHour = now.getHours()
 
-      const [hours, minutes] = customer.time.split(":").map(Number)
-      const startTime = new Date(targetDate)
-      startTime.setHours(hours, minutes, 0, 0)
+    for (const timeSlot of timeSlots) {
+      const appointmentsPerSlot = Math.floor(Math.random() * 4) + 3 // 3-6 randevu
 
-      const endTime = new Date(startTime)
-      endTime.setMinutes(endTime.getMinutes() + 60)
+      for (let i = 0; i < appointmentsPerSlot; i++) {
+        const hotel = hotels[Math.floor(Math.random() * hotels.length)]
+        const agency = createdAgencies[Math.floor(Math.random() * createdAgencies.length)]
+        const serviceCount = Math.random() < 0.3 && services.length > 1 ? 2 : 1
+        const firstIdx = Math.floor(Math.random() * services.length)
+        const selectedServiceIndices = serviceCount === 2
+          ? [firstIdx, (firstIdx + 1 + Math.floor(Math.random() * (services.length - 1))) % services.length]
+          : [firstIdx]
+        const primaryService = services[selectedServiceIndices[0]]
 
-      count++
-      const voucherNo = customer.voucherNo || `V-${String(count).padStart(4, "0")}`
+        const [hours, minutes] = timeSlot.split(":").map(Number)
+        const startTime = new Date(targetDate)
+        startTime.setHours(hours, minutes, 0, 0)
 
-      // Seçilen paketleri hazırla
-      const selectedServices = customer.serviceIndices.map(idx => services[idx % services.length])
+        const endTime = new Date(startTime)
+        endTime.setMinutes(endTime.getMinutes() + 60)
 
-      const appointment = await prisma.appointment.create({
-        data: {
-          customerName: customer.name,
-          roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
-          serviceId: primaryService.id,
-          hotelId: hotel.id,
-          agencyId: agency.id,
-          startTime,
-          endTime,
-          pax: customer.pax,
-          childCount: customer.childCount,
-          status: "CONFIRMED",
-          approvalStatus: "APPROVED",
-          notes: customer.notes || null,
-          restAmount: customer.restAmount || null,
-          restCurrency: customer.restCurrency || null,
-          voucherNo,
-        },
-      })
+        count++
+        const customerName = customerNames[nameIdx % customerNames.length]
+        nameIdx++
 
-      // AppointmentService — her seçilen paket için tek kayıt (unique constraint: appointmentId+serviceId)
-      for (const svc of selectedServices) {
-        await prisma.appointmentService.create({
+        // Daha fazla 3-5 kişilik gruplar
+        const pax = Math.random() < 0.15 ? 1 : Math.random() < 0.35 ? 2 : Math.floor(Math.random() * 3) + 3
+        const childCount = Math.random() < 0.35 ? Math.floor(Math.random() * 3) + 1 : 0
+
+        // ~%20 iptal edilmiş randevu
+        const isCancelled = Math.random() < 0.2
+
+        // %20 REST (iptal edilmeyenler için)
+        const isRest = !isCancelled && Math.random() < 0.2
+        const restCurrencies = ["TRY", "EUR", "USD", "GBP"]
+        const restCurrency = isRest ? restCurrencies[Math.floor(Math.random() * restCurrencies.length)] : null
+        const restAmount = isRest
+          ? (restCurrency === "TRY" ? Math.floor(Math.random() * 3000) + 500 : Math.floor(Math.random() * 150) + 30)
+          : null
+
+        const prefix = voucherPrefixes[Math.floor(Math.random() * voucherPrefixes.length)]
+        const voucherNo = `${prefix}-${String(1000 + count)}`
+
+        const note = notesPool[Math.floor(Math.random() * notesPool.length)]
+
+        const selectedServices = selectedServiceIndices.map(idx => services[idx])
+
+        const appointment = await prisma.appointment.create({
           data: {
-            appointmentId: appointment.id,
-            serviceId: svc.id,
-            price: svc.price,
+            customerName,
+            roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
+            serviceId: primaryService.id,
+            hotelId: hotel.id,
+            agencyId: agency.id,
+            startTime,
+            endTime,
+            pax,
+            childCount,
+            status: isCancelled ? "CANCELLED" : "CONFIRMED",
+            approvalStatus: isCancelled ? "APPROVED" : "APPROVED",
+            notes: note,
+            restAmount,
+            restCurrency,
+            voucherNo,
           },
         })
-      }
 
-      await prisma.transfer.create({
-        data: {
-          appointmentId: appointment.id,
-          status: customer.status as TransferStatus,
-          arrivalTime: ["IN_SERVICE", "COMPLETED"].includes(customer.status) ? startTime : null,
-          dropoffTime: customer.status === "COMPLETED" ? new Date(endTime.getTime() + 30 * 60000) : null,
-        },
-      })
+        for (const svc of selectedServices) {
+          await prisma.appointmentService.create({
+            data: {
+              appointmentId: appointment.id,
+              serviceId: svc.id,
+              price: svc.price,
+            },
+          })
+        }
+
+        // İptal edilmiş randevulara transfer oluşturma
+        if (!isCancelled) {
+          // Saate göre transfer statüsü belirle
+          let transferStatus: TransferStatus
+          let transferDriverId: string | undefined = undefined
+          let transferDropoffTime: Date | undefined = undefined
+
+          if (hours < currentHour - 2) {
+            transferStatus = "COMPLETED"
+            transferDropoffTime = new Date(startTime)
+            transferDropoffTime.setMinutes(transferDropoffTime.getMinutes() + 90)
+          } else if (hours < currentHour - 1) {
+            transferStatus = "DROPPING_OFF"
+            if (drivers.length > 0) {
+              transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+            }
+          } else if (hours < currentHour) {
+            transferStatus = "IN_SERVICE"
+            if (drivers.length > 0) {
+              transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+            }
+          } else if (hours === currentHour) {
+            transferStatus = "PICKING_UP"
+            if (drivers.length > 0) {
+              transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+            }
+          } else {
+            transferStatus = "PENDING"
+          }
+
+          await prisma.transfer.create({
+            data: {
+              appointmentId: appointment.id,
+              status: transferStatus,
+              driverId: transferDriverId || null,
+              dropoffTime: transferDropoffTime || null,
+            },
+          })
+        }
+      }
     }
 
-    // 10. Sunway Travel'dan onay bekleyen rezervasyonlar (farklı paket kombinasyonları)
+    // 10. Sunway Travel'dan onay bekleyen (her 3. saat dilimine 1 adet)
     const sunwayAgency = createdAgencies.find(a => a.code === "SWT001")
 
     if (sunwayAgency) {
-      const pendingCustomers = [
-        { name: "Emre Kılıç",   time: "12:00", pax: 2, childCount: 1, serviceIndices: [0],    restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: "Bebek koltuğu gerekli", voucherNo: "SWT-2001" },
-        { name: "Derya Aydın",  time: "13:00", pax: 3, childCount: 0, serviceIndices: [1, 0], restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: undefined as string | undefined, voucherNo: "SWT-2002" },
-        { name: "Gökhan Şen",   time: "14:00", pax: 4, childCount: 2, serviceIndices: [0],    restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: "Çocuklar 2 ve 7 yaşında", voucherNo: "SWT-2003" },
-        { name: "Hülya Koç",    time: "15:00", pax: 2, childCount: 0, serviceIndices: [1],    restAmount: 120, restCurrency: "EUR", notes: undefined as string | undefined, voucherNo: "SWT-2004" },
-        { name: "İsmail Yurt",  time: "16:00", pax: 5, childCount: 1, serviceIndices: [0, 1], restAmount: undefined as number | undefined, restCurrency: undefined as string | undefined, notes: "Grubun 1 üyesi engelli", voucherNo: "SWT-2005" },
-      ]
+      const pendingNames = ["Emre Kılıç", "Derya Aydın", "Gökhan Şen", "Hülya Koç", "İsmail Yurt"]
+      const pendingSlots = timeSlots.filter((_, idx) => idx % 3 === 0).slice(0, 5)
 
-      for (const customer of pendingCustomers) {
+      for (let pi = 0; pi < pendingSlots.length; pi++) {
+        const slot = pendingSlots[pi]
         const hotel = hotels[Math.floor(Math.random() * hotels.length)]
-        const primaryService = services[customer.serviceIndices[0] % services.length]
+        const serviceIdx = pi % services.length
+        const primaryService = services[serviceIdx]
 
-        const [hours, mins] = customer.time.split(":").map(Number)
+        const [hours, mins] = slot.split(":").map(Number)
         const startTime = new Date(targetDate)
         startTime.setHours(hours, mins, 0, 0)
 
@@ -238,30 +307,33 @@ export async function POST(request: Request) {
         endTime.setMinutes(endTime.getMinutes() + 60)
 
         count++
-
-        const selectedServices = customer.serviceIndices.map(idx => services[idx % services.length])
+        const pax = Math.floor(Math.random() * 4) + 2
+        const childCount = Math.random() < 0.4 ? Math.floor(Math.random() * 2) + 1 : 0
+        const isRest = pi === 3 // 1 tanesi REST olsun
+        const selectedServices = pi % 2 === 1 && services.length > 1
+          ? [services[serviceIdx], services[(serviceIdx + 1) % services.length]]
+          : [primaryService]
 
         const appointment = await prisma.appointment.create({
           data: {
-            customerName: customer.name,
+            customerName: pendingNames[pi % pendingNames.length],
             roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
             serviceId: primaryService.id,
             hotelId: hotel.id,
             agencyId: sunwayAgency.id,
             startTime,
             endTime,
-            pax: customer.pax,
-            childCount: customer.childCount,
+            pax,
+            childCount,
             status: "CONFIRMED",
             approvalStatus: "PENDING_APPROVAL",
-            notes: customer.notes || null,
-            restAmount: customer.restAmount || null,
-            restCurrency: customer.restCurrency || null,
-            voucherNo: customer.voucherNo,
+            notes: pi === 0 ? "Bebek koltuğu gerekli" : pi === 2 ? "Çocuklar 2 ve 7 yaşında" : null,
+            restAmount: isRest ? 120 : null,
+            restCurrency: isRest ? "EUR" : null,
+            voucherNo: `SWT-${2001 + pi}`,
           },
         })
 
-        // AppointmentService — her seçilen paket için tek kayıt
         for (const svc of selectedServices) {
           await prisma.appointmentService.create({
             data: {
@@ -410,6 +482,28 @@ export async function POST(request: Request) {
               staffIncomeAmount: amount,
               staffIncomeCurrency: cur,
               description: `[DEMO] ${staff.user.name} satışı`,
+              createdBy: userId,
+            },
+          })
+          kasaCount++
+        }
+
+        // Personel kredi kartı gelirleri (1-2 adet/gün) — prim hem nakit hem KK'dan görünsün
+        const staffCCCount = Math.floor(Math.random() * 2) + 1
+        for (let i = 0; i < staffCCCount; i++) {
+          const staff = staffMembers[Math.floor(Math.random() * staffMembers.length)]
+          const cur = ["EUR", "USD", "TRY"][Math.floor(Math.random() * 3)]
+          const amount = cur === "TRY" ? (Math.floor(Math.random() * 2000) + 500)
+            : (Math.floor(Math.random() * 100) + 30)
+
+          await prisma.cashEntry.create({
+            data: {
+              date: kasaDate,
+              voucherNo: voucherNo++,
+              staffId: staff.id,
+              creditCardAmount: amount,
+              creditCardCurrency: cur,
+              description: `[DEMO] ${staff.user.name} kredi kartı satışı`,
               createdBy: userId,
             },
           })

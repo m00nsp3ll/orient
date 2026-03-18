@@ -142,7 +142,7 @@ export default function StatisticsPage() {
           </div>
           <span className="text-sm font-semibold text-slate-700">Filtreler</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Dönem */}
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dönem</Label>
@@ -254,16 +254,6 @@ export default function StatisticsPage() {
             </Select>
           </div>
 
-          {/* Voucher No Arama */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Voucher No</Label>
-            <Input
-              placeholder="Voucher ara..."
-              value={voucherSearch}
-              onChange={(e) => setVoucherSearch(e.target.value)}
-              className="h-9 text-sm bg-white border-slate-200 shadow-sm"
-            />
-          </div>
         </div>
       </div>
 
@@ -452,22 +442,43 @@ export default function StatisticsPage() {
           </div>
 
           {/* Müşteri Listesi */}
-          {stats.customers?.length > 0 && (() => {
-            const filteredCustomers = stats.customers.filter((c: any) =>
+          {(() => {
+            const customers = stats.customers || []
+            const filteredCustomers = customers.filter((c: any) =>
               !voucherSearch || c.voucherNo?.toLowerCase().includes(voucherSearch.toLowerCase())
             )
             return (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded bg-indigo-100 flex items-center justify-center">
-                    <ClipboardList className="h-3.5 w-3.5 text-indigo-600" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 rounded bg-indigo-100 flex items-center justify-center">
+                      <ClipboardList className="h-3.5 w-3.5 text-indigo-600" />
+                    </div>
+                    <CardTitle className="text-sm font-semibold text-slate-700">Müşteri Listesi</CardTitle>
+                    <Badge variant="secondary" className="text-xs">{filteredCustomers.length} kayıt</Badge>
                   </div>
-                  <CardTitle className="text-sm font-semibold text-slate-700">Müşteri Listesi</CardTitle>
-                  <Badge variant="secondary" className="text-xs">{filteredCustomers.length} kayıt</Badge>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      placeholder="Voucher No ara..."
+                      value={voucherSearch}
+                      onChange={(e) => setVoucherSearch(e.target.value)}
+                      className="h-8 w-48 text-sm bg-white border-slate-200 shadow-sm"
+                    />
+                    {voucherSearch && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600" onClick={() => setVoucherSearch("")}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
+                {filteredCustomers.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    {voucherSearch ? `"${voucherSearch}" ile eşleşen kayıt bulunamadı` : "Bu dönemde müşteri kaydı yok"}
+                  </div>
+                ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -514,6 +525,7 @@ export default function StatisticsPage() {
                     </TableBody>
                   </Table>
                 </div>
+                )}
               </CardContent>
             </Card>
             )

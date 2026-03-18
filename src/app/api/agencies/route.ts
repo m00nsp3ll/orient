@@ -7,12 +7,12 @@ import { z } from "zod"
 
 const agencySchema = z.object({
   name: z.string().min(2, "İsim en az 2 karakter olmalı"),
-  email: z.string().email("Geçerli bir email adresi girin"),
+  email: z.string().min(2, "Kullanıcı adı en az 2 karakter olmalı"),
   password: z.string().min(6, "Şifre en az 6 karakter olmalı"),
   phone: z.string().optional(),
   companyName: z.string().min(2, "Şirket adı gerekli"),
   address: z.string().optional(),
-  currency: z.enum(["EUR", "USD", "GBP"]).optional().default("EUR"),
+  currency: z.enum(["EUR", "USD", "GBP", "TRY"]).optional().default("EUR"),
 })
 
 export async function GET() {
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Bu email adresi zaten kullanılıyor" },
+        { error: "Bu kullanıcı adı zaten kullanılıyor" },
         { status: 400 }
       )
     }
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
         companyName: validatedData.companyName,
         address: validatedData.address,
         currency: validatedData.currency,
+        plainPassword: validatedData.password,
       },
       include: {
         user: {
@@ -107,8 +108,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
+    console.error("Agency POST error:", error)
     return NextResponse.json(
-      { error: "Acenta oluşturulamadı" },
+      { error: "Acenta oluşturulamadı", details: String(error) },
       { status: 500 }
     )
   }

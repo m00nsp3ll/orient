@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
@@ -63,7 +63,9 @@ export default function AppointmentsPage() {
   const [currentWeek] = useState(new Date())
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null)
   const [currentDay, setCurrentDay] = useState(new Date())
-  const [viewMode, setViewMode] = useState<"weekly" | "daily">("weekly")
+  const [viewMode, setViewMode] = useState<"weekly" | "daily">("daily")
+  const [showDensity, setShowDensity] = useState(false)
+  const [densityChart, setDensityChart] = useState<"vertical" | "horizontal">("vertical")
 
   const dayStart = startOfDay(currentDay)
   const dayEnd = endOfDay(currentDay)
@@ -85,6 +87,24 @@ export default function AppointmentsPage() {
       if (!res.ok) throw new Error("Failed to fetch appointments")
       return res.json()
     },
+  })
+
+  // Session times — tüm bölgelerin saat dilimlerini çek (yoğunluk grafiği için)
+  const { data: allSessionTimes = [] } = useQuery<string[]>({
+    queryKey: ["session-times-slots"],
+    queryFn: async () => {
+      const res = await fetch("/api/regions/session-times")
+      if (!res.ok) return []
+      const regions = await res.json()
+      const timeSet = new Set<string>()
+      for (const r of regions) {
+        for (const st of r.sessionTimes || []) {
+          timeSet.add(st.time)
+        }
+      }
+      return Array.from(timeSet).sort()
+    },
+    enabled: showDensity,
   })
 
   const handleAppointmentClick = (appointment: Appointment) => {
@@ -171,16 +191,25 @@ export default function AppointmentsPage() {
               <span>İptal</span>
             </div>
           </div>
+          {/* Yoğunluk Butonu */}
+          <Button
+            variant={showDensity ? "default" : "outline"}
+            className={cn("gap-1.5", showDensity && "bg-orange-500 hover:bg-orange-600")}
+            onClick={() => setShowDensity(!showDensity)}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Yoğunluk
+          </Button>
           {/* View Mode Selector */}
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "weekly" | "daily")}>
             <TabsList>
-              <TabsTrigger value="weekly" className="flex items-center gap-1">
-                <CalendarDays className="h-4 w-4" />
-                Haftalık
-              </TabsTrigger>
               <TabsTrigger value="daily" className="flex items-center gap-1">
                 <CalendarIcon className="h-4 w-4" />
                 Günlük
+              </TabsTrigger>
+              <TabsTrigger value="weekly" className="flex items-center gap-1">
+                <CalendarDays className="h-4 w-4" />
+                Haftalık
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -190,6 +219,136 @@ export default function AppointmentsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Yoğunluk Paneli */}
+      {showDensity && (() => {
+        const activeAppointments = appointments.filter(a => a.status !== "CANCELLED")
+        const byHour: Record<string, { count: number; pax: number }> = {}
+        for (const a of activeAppointments) {
+          const timeKey = format(new Date(a.startTime), "HH:mm")
+          if (!byHour[timeKey]) byHour[timeKey] = { count: 0, pax: 0 }
+          byHour[timeKey].count += 1
+          byHour[timeKey].pax += (a.pax || 1) + (a.childCount || 0)
+        }
+        // Tüm session-times saatlerini kullan, randevu olmayan saatler 0
+        const allTimes = allSessionTimes.length > 0 ? allSessionTimes : Object.keys(byHour).sort()
+        const slots = allTimes.map(time => ({
+          time,
+          count: byHour[time]?.count || 0,
+          pax: byHour[time]?.pax || 0,
+        }))
+        const maxPax = Math.max(...slots.map(s => s.pax), 1)
+        const totalPax = slots.reduce((s, x) => s + x.pax, 0)
+
+        const getBarColor = (pax: number) => {
+          if (pax === 0) return "bg-gray-200"
+          const intensity = pax / maxPax
+          if (intensity >= 0.8) return "bg-red-400"
+          if (intensity >= 0.5) return "bg-orange-400"
+          if (intensity >= 0.3) return "bg-amber-300"
+          return "bg-emerald-300"
+        }
+
+        return (
+          <Card className="border-orange-200 bg-orange-50/50">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded bg-orange-100 flex items-center justify-center">
+                    <BarChart3 className="h-3.5 w-3.5 text-orange-600" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold text-slate-700">
+                    Saatlik Yoğunluk
+                  </CardTitle>
+                  <Badge variant="secondary" className="text-xs">
+                    {activeAppointments.length} randevu • {totalPax} PAX
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-1 border rounded-lg p-0.5 bg-white">
+                  <button
+                    className={cn("px-2 py-1 text-xs rounded font-medium transition-colors",
+                      densityChart === "vertical" ? "bg-orange-500 text-white" : "text-gray-500 hover:text-gray-700"
+                    )}
+                    onClick={() => setDensityChart("vertical")}
+                  >
+                    Dikey
+                  </button>
+                  <button
+                    className={cn("px-2 py-1 text-xs rounded font-medium transition-colors",
+                      densityChart === "horizontal" ? "bg-orange-500 text-white" : "text-gray-500 hover:text-gray-700"
+                    )}
+                    onClick={() => setDensityChart("horizontal")}
+                  >
+                    Yatay
+                  </button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {slots.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Seans saati tanımlı değil</p>
+              ) : densityChart === "horizontal" ? (
+                /* Yatay Bar Chart */
+                <div className="space-y-2">
+                  {slots.map(slot => {
+                    const barWidth = slot.pax === 0 ? 0 : Math.max((slot.pax / maxPax) * 100, 3)
+                    return (
+                      <div key={slot.time} className="flex items-center gap-3">
+                        <div className="w-14 shrink-0 text-right">
+                          <span className={cn("text-sm font-bold", slot.pax > 0 ? "text-gray-700" : "text-gray-400")}>{slot.time}</span>
+                        </div>
+                        <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden relative">
+                          {barWidth > 0 && (
+                            <div
+                              className={cn("h-full rounded-lg transition-all duration-500", getBarColor(slot.pax))}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          )}
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-700">
+                            {slot.pax > 0 ? `${slot.count} randevu • ${slot.pax} PAX` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* Dikey Bar Chart */
+                <div className="flex items-end gap-1 justify-around" style={{ minHeight: 200 }}>
+                  {slots.map(slot => {
+                    const barHeight = slot.pax === 0 ? 4 : Math.max((slot.pax / maxPax) * 180, 8)
+                    return (
+                      <div key={slot.time} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                        {slot.pax > 0 && (
+                          <span className="text-[10px] font-bold text-gray-600">{slot.pax}</span>
+                        )}
+                        <div
+                          className={cn("w-full max-w-10 rounded-t-md transition-all duration-500", getBarColor(slot.pax))}
+                          style={{ height: barHeight }}
+                          title={`${slot.time} — ${slot.count} randevu, ${slot.pax} PAX`}
+                        />
+                        <span className={cn("text-[10px] font-medium", slot.pax > 0 ? "text-gray-700" : "text-gray-400")}>
+                          {slot.time}
+                        </span>
+                        {slot.count > 0 && (
+                          <span className="text-[9px] text-gray-400">{slot.count} rdv</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Renk Açıklaması */}
+              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-orange-200/50 justify-center">
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-300" /><span className="text-[10px] text-gray-500">Düşük</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-amber-300" /><span className="text-[10px] text-gray-500">Orta</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-orange-400" /><span className="text-[10px] text-gray-500">Yüksek</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-400" /><span className="text-[10px] text-gray-500">Çok Yüksek</span></div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {viewMode === "weekly" ? (
         <WeeklyCalendar
