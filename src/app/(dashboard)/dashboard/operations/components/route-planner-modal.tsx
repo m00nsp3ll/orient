@@ -34,7 +34,6 @@ import {
   Plus,
   Map,
   Navigation,
-  SortAsc,
   Car,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -111,67 +110,67 @@ interface RoutePlannerModalProps {
 // Orient Marina Hamam koordinatları
 const ORIENT_SPA_COORDS = { lat: 36.5603513, lng: 31.9483576 }
 
-// Bölgelerin yaklaşık koordinatları (Alanya ve çevresi)
-const REGION_COORDS: Record<string, { lat: number; lng: number }> = {
-  "Alanya Merkez": { lat: 36.5436, lng: 31.9956 },
-  "Konaklı": { lat: 36.5833, lng: 31.8667 },
-  "Mahmutlar": { lat: 36.4667, lng: 32.0833 },
-  "Oba": { lat: 36.5500, lng: 32.0167 },
-  "Kestel": { lat: 36.5333, lng: 32.0333 },
-  "Kargıcak": { lat: 36.5000, lng: 32.0667 },
-  "Tosmur": { lat: 36.5333, lng: 32.0000 },
-  "Cikcilli": { lat: 36.5500, lng: 32.0000 },
-  "Avsallar": { lat: 36.6333, lng: 31.7667 },
-  "Türkler": { lat: 36.6167, lng: 31.8000 },
-  "Okurcalar": { lat: 36.6667, lng: 31.7167 },
-  "Payallar": { lat: 36.6500, lng: 31.7333 },
-  "İncekum": { lat: 36.6833, lng: 31.7000 },
+// Batı rotası: en uzaktan Orient SPA'ya doğru (alış sırası)
+const WEST_ROUTE_ORDER = [
+  "Çenger", "Okurcalar", "İncekum", "Avsallar", "Türkler", "Payallar", "Konaklı",
+]
+
+// Doğu rotası: en uzaktan Orient SPA'ya doğru (alış sırası)
+const EAST_ROUTE_ORDER = [
+  "Kargıcak", "Mahmutlar", "Kestel", "Tosmur", "Oba",
+  "Atatürk Anıtı", "Damlataş", "Kleopatra",
+]
+
+// Cikcilli → Tosmur ile aynı sırada
+const REGION_ALIASES: Record<string, string> = {
+  "Cikcilli": "Tosmur",
+  "Alanya Merkez": "Kleopatra",
 }
 
-// Mesafe hesaplama (Haversine)
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371 // km
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a =
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng/2) * Math.sin(dLng/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  return R * c
+// Bölgenin hangi rotada olduğunu ve sırasını bul
+function getRouteInfo(regionName: string): { route: "west" | "east" | "unknown"; order: number } {
+  const resolved = REGION_ALIASES[regionName] || regionName
+
+  const westIdx = WEST_ROUTE_ORDER.indexOf(resolved)
+  if (westIdx !== -1) return { route: "west", order: westIdx }
+
+  const eastIdx = EAST_ROUTE_ORDER.indexOf(resolved)
+  if (eastIdx !== -1) return { route: "east", order: eastIdx }
+
+  return { route: "unknown", order: 999 }
 }
 
-// En yakın komşu algoritması ile rota optimizasyonu
-function optimizeRouteByLocation(transfers: Transfer[], startCoords: { lat: number; lng: number }): Transfer[] {
+// Rota optimizasyonu: alış → uzaktan yakına, bırakış → yakından uzağa
+function optimizeRouteByLocation(transfers: Transfer[], mode: "pickup" | "dropoff"): Transfer[] {
   if (transfers.length <= 1) return transfers
 
-  const remaining = [...transfers]
-  const optimized: Transfer[] = []
-  let currentPos = startCoords
+  // Bölge bilgisine göre transferleri grupla
+  const withInfo = transfers.map(t => {
+    const regionName = t.appointment.hotel?.region?.name || "Alanya Merkez"
+    const info = getRouteInfo(regionName)
+    return { transfer: t, ...info }
+  })
 
-  while (remaining.length > 0) {
-    let nearestIdx = 0
-    let nearestDist = Infinity
+  // Batı ve doğu rotalarını ayır
+  const west = withInfo.filter(t => t.route === "west")
+  const east = withInfo.filter(t => t.route === "east")
+  const unknown = withInfo.filter(t => t.route === "unknown")
 
-    remaining.forEach((transfer, idx) => {
-      const regionName = transfer.appointment.hotel?.region?.name || "Alanya Merkez"
-      const coords = REGION_COORDS[regionName] || REGION_COORDS["Alanya Merkez"]
-      const dist = calculateDistance(currentPos.lat, currentPos.lng, coords.lat, coords.lng)
+  // Alış: uzaktan yakına (index 0 en uzak → düz sıra)
+  // Bırakış: yakından uzağa (ters sıra)
+  const sortFn = mode === "pickup"
+    ? (a: { order: number }, b: { order: number }) => a.order - b.order
+    : (a: { order: number }, b: { order: number }) => b.order - a.order
 
-      if (dist < nearestDist) {
-        nearestDist = dist
-        nearestIdx = idx
-      }
-    })
+  west.sort(sortFn)
+  east.sort(sortFn)
 
-    const nearest = remaining.splice(nearestIdx, 1)[0]
-    optimized.push(nearest)
+  // Batı ve doğuyu birleştir: hangi grupta daha fazla transfer varsa onu önce koy
+  const sorted = west.length >= east.length
+    ? [...west, ...east, ...unknown]
+    : [...east, ...west, ...unknown]
 
-    const regionName = nearest.appointment.hotel?.region?.name || "Alanya Merkez"
-    currentPos = REGION_COORDS[regionName] || REGION_COORDS["Alanya Merkez"]
-  }
-
-  return optimized
+  return sorted.map(t => t.transfer)
 }
 
 export function RoutePlannerModal({
@@ -259,9 +258,13 @@ export function RoutePlannerModal({
       toast.info("En az 2 transfer olmalı")
       return
     }
-    const optimized = optimizeRouteByLocation(selectedTransfers, ORIENT_SPA_COORDS)
+    const optimized = optimizeRouteByLocation(selectedTransfers, mode)
     setSelectedTransfers(optimized)
-    toast.success("Rota konuma göre optimize edildi")
+    toast.success(
+      mode === "pickup"
+        ? "Rota sıralandı: en uzaktan yakına (alış)"
+        : "Rota sıralandı: en yakından uzağa (bırakış)"
+    )
   }
 
   const handleAssignClick = () => {
