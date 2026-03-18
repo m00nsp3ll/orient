@@ -202,6 +202,29 @@ export default function AppointmentsPage() {
             <BarChart3 className="h-4 w-4" />
             Yoğunluk
           </Button>
+          {/* Datepicker */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <CalendarIcon className="h-4 w-4" />
+                {format(currentDay, "dd MMM yyyy", { locale: tr })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={currentDay}
+                onSelect={(date) => {
+                  if (date) {
+                    setCurrentDay(date)
+                    setViewMode("daily")
+                  }
+                }}
+                locale={tr}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
           {/* View Mode Selector */}
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "weekly" | "daily")}>
             <TabsList>
@@ -367,23 +390,7 @@ export default function AppointmentsPage() {
                 <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, -1))}>
                   Önceki Gün
                 </Button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" className="gap-2 text-base font-semibold">
-                      <CalendarIcon className="h-4 w-4" />
-                      {format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="center">
-                    <Calendar
-                      mode="single"
-                      selected={currentDay}
-                      onSelect={(date) => date && setCurrentDay(date)}
-                      locale={tr}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <CardTitle>{format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })}</CardTitle>
                 <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, 1))}>
                   Sonraki Gün
                 </Button>

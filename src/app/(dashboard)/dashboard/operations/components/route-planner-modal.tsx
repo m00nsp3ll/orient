@@ -364,8 +364,11 @@ export function RoutePlannerModal({
                             {format(new Date(transfer.appointment.startTime), "HH:mm")}
                           </span>
                           <span className="font-semibold text-sm truncate">
-                            {transfer.appointment.customerName || "Misafir"}
+                            {transfer.appointment.hotel?.name || "Otel"}
                           </span>
+                          <Badge variant="outline" className="text-[10px] h-5">
+                            {transfer.appointment.hotel?.region?.name}
+                          </Badge>
                           {isRest && (
                             <Badge className="bg-red-500 text-white text-[10px] px-1.5 py-0 h-5">
                               <Banknote className="h-3 w-3 mr-0.5" />
@@ -375,12 +378,9 @@ export function RoutePlannerModal({
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-xs text-slate-500">
-                            {transfer.appointment.hotel?.name}
+                          <span className="text-xs text-slate-500 truncate">
+                            {transfer.appointment.customerName || "Misafir"}
                           </span>
-                          <Badge variant="outline" className="text-[10px] h-5">
-                            {transfer.appointment.hotel?.region?.name}
-                          </Badge>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -504,8 +504,11 @@ export function RoutePlannerModal({
                                   {format(new Date(transfer.appointment.startTime), "HH:mm")}
                                 </span>
                                 <span className="font-semibold text-sm truncate">
-                                  {transfer.appointment.customerName || "Misafir"}
+                                  {transfer.appointment.hotel?.name || "Otel"}
                                 </span>
+                                <Badge variant="outline" className="text-[10px] h-5">
+                                  {transfer.appointment.hotel?.region?.name}
+                                </Badge>
                                 {isRest && (
                                   <Badge className="bg-red-500 text-white text-[10px] px-1.5 py-0 h-5">
                                     REST
@@ -519,11 +522,8 @@ export function RoutePlannerModal({
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-3.5 w-3.5 text-slate-400" />
                                 <span className="text-xs text-slate-500 truncate">
-                                  {transfer.appointment.hotel?.name}
+                                  {transfer.appointment.customerName || "Misafir"}
                                 </span>
-                                <Badge variant="outline" className="text-[10px] h-5">
-                                  {transfer.appointment.hotel?.region?.name}
-                                </Badge>
                               </div>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">

@@ -213,18 +213,16 @@ export function TransferCard({
 
       {/* Body */}
       <div className="p-2">
-        {/* Acenta / Müşteri Adı */}
+        {/* Otel / Müşteri Adı */}
         <Popover open={showDetails} onOpenChange={setShowDetails}>
           <PopoverTrigger asChild>
             <button className="w-full text-left group">
-              <div className="font-medium text-sm truncate group-hover:text-blue-600 transition-colors">
-                {appointment.agency?.name || appointment.customerName || "Misafir"}
+              <div className="font-semibold text-sm truncate group-hover:text-blue-600 transition-colors">
+                {appointment.hotel?.name || "Otel"}
               </div>
-              {appointment.agency && appointment.customerName && (
-                <div className="text-[11px] text-slate-400 truncate">
-                  {appointment.customerName}
-                </div>
-              )}
+              <div className="text-[11px] text-slate-400 truncate">
+                {appointment.customerName || "Misafir"}
+              </div>
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-0" align="start">
