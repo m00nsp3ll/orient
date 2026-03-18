@@ -178,18 +178,23 @@ export async function POST(request: Request) {
       let dayCount = 0
 
       // Günlük hedef PAX: 150-200 arası
+      // 31 saat dilimi var, her birine en az 1 randevu konmalı
+      // Ortalama PAX/slot = ~5-6, yani slot başına 2-3 randevu yeterli
       const targetPax = Math.floor(Math.random() * 51) + 150
       let currentPax = 0
 
-      for (const timeSlot of timeSlots) {
-        // Her slot'a mutlaka en az 2 randevu koy (yoğunluk haritası için)
-        // PAX hedefine yaklaştıysa slot başına daha az, uzaksa daha fazla
-        const remainingSlots = timeSlots.length - timeSlots.indexOf(timeSlot)
-        const remaining = Math.max(0, targetPax - currentPax)
-        const avgPaxPerSlot = remainingSlots > 0 ? Math.ceil(remaining / remainingSlots) : 0
-        const appointmentsPerSlot = currentPax >= targetPax
-          ? Math.floor(Math.random() * 2) + 2  // hedef aşıldıysa bile 2-3 randevu
-          : Math.max(2, Math.min(6, Math.ceil(avgPaxPerSlot / 3)))
+      // İlk pass: her slot'a en az 2 randevu garanti et
+      // İkinci olarak PAX dağılımını dengele
+      const slotCount = timeSlots.length
+      const basePaxPerSlot = Math.floor(targetPax / slotCount) // ~5
+      const extraPax = targetPax - (basePaxPerSlot * slotCount)
+
+      for (let slotIdx = 0; slotIdx < timeSlots.length; slotIdx++) {
+        const timeSlot = timeSlots[slotIdx]
+        // Bu slot'un hedef PAX'ı (bazı slotlara +1 ekstra)
+        const slotTargetPax = basePaxPerSlot + (slotIdx < extraPax ? 1 : 0)
+        // Ortalama pax 3 civarı, slot başına 2-3 randevu
+        const appointmentsPerSlot = Math.max(2, Math.min(4, Math.ceil(slotTargetPax / 3)))
 
         for (let i = 0; i < appointmentsPerSlot; i++) {
 
