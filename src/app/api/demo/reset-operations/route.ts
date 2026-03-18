@@ -182,16 +182,16 @@ export async function POST(request: Request) {
       let currentPax = 0
 
       for (const timeSlot of timeSlots) {
-        // PAX hedefine ulaşıldıysa dur
-        if (currentPax >= targetPax) break
-
-        // Kalan PAX'a göre slot başına randevu sayısını ayarla
+        // Her slot'a mutlaka en az 2 randevu koy (yoğunluk haritası için)
+        // PAX hedefine yaklaştıysa slot başına daha az, uzaksa daha fazla
         const remainingSlots = timeSlots.length - timeSlots.indexOf(timeSlot)
-        const avgPaxPerSlot = Math.ceil((targetPax - currentPax) / remainingSlots)
-        const appointmentsPerSlot = Math.max(2, Math.min(6, Math.ceil(avgPaxPerSlot / 3)))
+        const remaining = Math.max(0, targetPax - currentPax)
+        const avgPaxPerSlot = remainingSlots > 0 ? Math.ceil(remaining / remainingSlots) : 0
+        const appointmentsPerSlot = currentPax >= targetPax
+          ? Math.floor(Math.random() * 2) + 2  // hedef aşıldıysa bile 2-3 randevu
+          : Math.max(2, Math.min(6, Math.ceil(avgPaxPerSlot / 3)))
 
         for (let i = 0; i < appointmentsPerSlot; i++) {
-          if (currentPax >= targetPax) break
 
           const hotel = hotels[Math.floor(Math.random() * hotels.length)]
           const agency = createdAgencies[Math.floor(Math.random() * createdAgencies.length)]
