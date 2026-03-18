@@ -362,8 +362,8 @@ export function RoutePlannerModal({
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-sm font-medium text-slate-600">
+                          <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded">
+                            <Clock className="h-3 w-3" />
                             {format(new Date(transfer.appointment.startTime), "HH:mm")}
                           </span>
                           <span className="font-semibold text-sm truncate">
@@ -503,7 +503,8 @@ export function RoutePlannerModal({
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-sm font-medium text-slate-500">
+                                <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded">
+                                  <Clock className="h-3 w-3" />
                                   {format(new Date(transfer.appointment.startTime), "HH:mm")}
                                 </span>
                                 <span className="font-semibold text-sm truncate">

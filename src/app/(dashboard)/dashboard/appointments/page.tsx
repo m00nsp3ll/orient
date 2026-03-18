@@ -484,7 +484,9 @@ export default function AppointmentsPage() {
                                 >
                                   {appointment.hotel.name}
                                 </p>
-                                <p className="text-xs text-gray-500 mt-0.5">{appointment.hotel.region.name}</p>
+                                <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-orange-200 mt-0.5">
+                                  {appointment.hotel.region.name}
+                                </span>
                               </div>
                             )}
                           </div>

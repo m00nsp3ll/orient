@@ -283,12 +283,12 @@ export function TransferCard({
           </PopoverContent>
         </Popover>
 
-        {/* Otel */}
-        {appointment.hotel && (
-          <div className="flex items-center gap-1 mt-1">
-            <MapPin className="h-3 w-3 text-slate-400 flex-shrink-0" />
-            <span className="text-[11px] text-slate-500 truncate">
-              {appointment.hotel.name}
+        {/* Bölge */}
+        {appointment.hotel?.region && (
+          <div className="mt-1.5">
+            <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-orange-200">
+              <MapPin className="h-2.5 w-2.5" />
+              {appointment.hotel.region.name}
             </span>
           </div>
         )}
