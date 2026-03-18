@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
 import { AppointmentForm } from "@/components/forms/appointment-form"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Dialog,
   DialogContent,
@@ -365,7 +367,23 @@ export default function AppointmentsPage() {
                 <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, -1))}>
                   Önceki Gün
                 </Button>
-                <CardTitle>{format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })}</CardTitle>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" className="gap-2 text-base font-semibold">
+                      <CalendarIcon className="h-4 w-4" />
+                      {format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="center">
+                    <Calendar
+                      mode="single"
+                      selected={currentDay}
+                      onSelect={(date) => date && setCurrentDay(date)}
+                      locale={tr}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
                 <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, 1))}>
                   Sonraki Gün
                 </Button>
