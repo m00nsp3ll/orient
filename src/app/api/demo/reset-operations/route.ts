@@ -6,7 +6,7 @@ import { TransferStatus } from "@prisma/client"
 
 /**
  * Demo operasyon verilerini yükle
- * Bugünkü transferleri ve randevuları siler, demo datayı oluşturur
+ * Dün, bugün ve yarın için 150-200 PAX'lık operasyon oluşturur
  */
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
@@ -14,42 +14,38 @@ export async function POST(request: Request) {
   try {
     const { date } = await request.json()
 
-    const targetDate = date ? new Date(date) : new Date()
-    targetDate.setHours(0, 0, 0, 0)
-    const nextDay = new Date(targetDate)
-    nextDay.setDate(nextDay.getDate() + 1)
+    const baseDate = date ? new Date(date) : new Date()
+    baseDate.setHours(0, 0, 0, 0)
 
-    // 1. Seçili günün transferlerini sil
+    // 3 günlük aralık: dün, bugün, yarın
+    const dayStart = new Date(baseDate)
+    dayStart.setDate(dayStart.getDate() - 1)
+    const dayEnd = new Date(baseDate)
+    dayEnd.setDate(dayEnd.getDate() + 2) // yarının sonu
+
+    // 1. 3 günlük transferleri sil
     await prisma.transfer.deleteMany({
       where: {
         appointment: {
-          startTime: {
-            gte: targetDate,
-            lt: nextDay,
-          },
+          startTime: { gte: dayStart, lt: dayEnd },
         },
       },
     })
 
-    // 2. Seçili günün AppointmentService kayıtlarını sil
-    const todayApts = await prisma.appointment.findMany({
-      where: { startTime: { gte: targetDate, lt: nextDay } },
+    // 2. 3 günlük AppointmentService kayıtlarını sil
+    const rangeApts = await prisma.appointment.findMany({
+      where: { startTime: { gte: dayStart, lt: dayEnd } },
       select: { id: true },
     })
-    if (todayApts.length > 0) {
+    if (rangeApts.length > 0) {
       await prisma.appointmentService.deleteMany({
-        where: { appointmentId: { in: todayApts.map(a => a.id) } },
+        where: { appointmentId: { in: rangeApts.map(a => a.id) } },
       })
     }
 
-    // 3. Seçili günün randevularını sil
+    // 3. 3 günlük randevuları sil
     await prisma.appointment.deleteMany({
-      where: {
-        startTime: {
-          gte: targetDate,
-          lt: nextDay,
-        },
-      },
+      where: { startTime: { gte: dayStart, lt: dayEnd } },
     })
 
     // 4. Eski demo kasa girişlerini sil
@@ -162,192 +158,237 @@ export async function POST(request: Request) {
 
     const voucherPrefixes = ["SWT", "BST", "GLT", "PRH", "VIP", "RES"]
 
-    // 9. Her saat dilimi için 3-6 randevu oluştur (200+ kişilik yoğun operasyon)
-    let count = 0
+    let totalCount = 0
     let nameIdx = 0
     const now = new Date()
     const currentHour = now.getHours()
 
-    for (const timeSlot of timeSlots) {
-      const appointmentsPerSlot = Math.floor(Math.random() * 4) + 3 // 3-6 randevu
+    // =============================================
+    // 9. 3 gün için operasyon oluştur (dün, bugün, yarın)
+    // =============================================
+    const operationDays = [
+      { date: new Date(baseDate.getTime() - 86400000), label: "dün" },
+      { date: new Date(baseDate), label: "bugün" },
+      { date: new Date(baseDate.getTime() + 86400000), label: "yarın" },
+    ]
 
-      for (let i = 0; i < appointmentsPerSlot; i++) {
-        const hotel = hotels[Math.floor(Math.random() * hotels.length)]
-        const agency = createdAgencies[Math.floor(Math.random() * createdAgencies.length)]
-        const serviceCount = Math.random() < 0.3 && services.length > 1 ? 2 : 1
-        const firstIdx = Math.floor(Math.random() * services.length)
-        const selectedServiceIndices = serviceCount === 2
-          ? [firstIdx, (firstIdx + 1 + Math.floor(Math.random() * (services.length - 1))) % services.length]
-          : [firstIdx]
-        const primaryService = services[selectedServiceIndices[0]]
+    for (const opDay of operationDays) {
+      const targetDate = opDay.date
+      targetDate.setHours(0, 0, 0, 0)
+      let dayCount = 0
 
-        const [hours, minutes] = timeSlot.split(":").map(Number)
-        const startTime = new Date(targetDate)
-        startTime.setHours(hours, minutes, 0, 0)
+      // Günlük hedef PAX: 150-200 arası
+      const targetPax = Math.floor(Math.random() * 51) + 150
+      let currentPax = 0
 
-        const endTime = new Date(startTime)
-        endTime.setMinutes(endTime.getMinutes() + 60)
+      for (const timeSlot of timeSlots) {
+        // PAX hedefine ulaşıldıysa dur
+        if (currentPax >= targetPax) break
 
-        count++
-        const customerName = customerNames[nameIdx % customerNames.length]
-        nameIdx++
+        // Kalan PAX'a göre slot başına randevu sayısını ayarla
+        const remainingSlots = timeSlots.length - timeSlots.indexOf(timeSlot)
+        const avgPaxPerSlot = Math.ceil((targetPax - currentPax) / remainingSlots)
+        const appointmentsPerSlot = Math.max(2, Math.min(6, Math.ceil(avgPaxPerSlot / 3)))
 
-        // Daha fazla 3-5 kişilik gruplar
-        const pax = Math.random() < 0.15 ? 1 : Math.random() < 0.35 ? 2 : Math.floor(Math.random() * 3) + 3
-        const childCount = Math.random() < 0.35 ? Math.floor(Math.random() * 3) + 1 : 0
+        for (let i = 0; i < appointmentsPerSlot; i++) {
+          if (currentPax >= targetPax) break
 
-        // ~%20 iptal edilmiş randevu
-        const isCancelled = Math.random() < 0.2
+          const hotel = hotels[Math.floor(Math.random() * hotels.length)]
+          const agency = createdAgencies[Math.floor(Math.random() * createdAgencies.length)]
+          const serviceCount = Math.random() < 0.3 && services.length > 1 ? 2 : 1
+          const firstIdx = Math.floor(Math.random() * services.length)
+          const selectedServiceIndices = serviceCount === 2
+            ? [firstIdx, (firstIdx + 1 + Math.floor(Math.random() * (services.length - 1))) % services.length]
+            : [firstIdx]
+          const primaryService = services[selectedServiceIndices[0]]
 
-        // %20 REST (iptal edilmeyenler için)
-        const isRest = !isCancelled && Math.random() < 0.2
-        const restCurrencies = ["TRY", "EUR", "USD", "GBP"]
-        const restCurrency = isRest ? restCurrencies[Math.floor(Math.random() * restCurrencies.length)] : null
-        const restAmount = isRest
-          ? (restCurrency === "TRY" ? Math.floor(Math.random() * 3000) + 500 : Math.floor(Math.random() * 150) + 30)
-          : null
+          const [hours, minutes] = timeSlot.split(":").map(Number)
+          const startTime = new Date(targetDate)
+          startTime.setHours(hours, minutes, 0, 0)
 
-        const prefix = voucherPrefixes[Math.floor(Math.random() * voucherPrefixes.length)]
-        const voucherNo = `${prefix}-${String(1000 + count)}`
+          const endTime = new Date(startTime)
+          endTime.setMinutes(endTime.getMinutes() + 60)
 
-        const note = notesPool[Math.floor(Math.random() * notesPool.length)]
+          totalCount++
+          dayCount++
+          const customerName = customerNames[nameIdx % customerNames.length]
+          nameIdx++
 
-        const selectedServices = selectedServiceIndices.map(idx => services[idx])
+          const pax = Math.random() < 0.15 ? 1 : Math.random() < 0.35 ? 2 : Math.floor(Math.random() * 3) + 3
+          const childCount = Math.random() < 0.35 ? Math.floor(Math.random() * 3) + 1 : 0
+          currentPax += pax + childCount
 
-        const appointment = await prisma.appointment.create({
-          data: {
-            customerName,
-            roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
-            serviceId: primaryService.id,
-            hotelId: hotel.id,
-            agencyId: agency.id,
-            startTime,
-            endTime,
-            pax,
-            childCount,
-            status: isCancelled ? "CANCELLED" : "CONFIRMED",
-            approvalStatus: isCancelled ? "APPROVED" : "APPROVED",
-            notes: note,
-            restAmount,
-            restCurrency,
-            voucherNo,
-          },
-        })
+          // ~%15 iptal edilmiş randevu
+          const isCancelled = Math.random() < 0.15
 
-        for (const svc of selectedServices) {
-          await prisma.appointmentService.create({
+          // %20 REST (iptal edilmeyenler için)
+          const isRest = !isCancelled && Math.random() < 0.2
+          const restCurrencies = ["TRY", "EUR", "USD", "GBP"]
+          const restCurrency = isRest ? restCurrencies[Math.floor(Math.random() * restCurrencies.length)] : null
+          const restAmount = isRest
+            ? (restCurrency === "TRY" ? Math.floor(Math.random() * 3000) + 500 : Math.floor(Math.random() * 150) + 30)
+            : null
+
+          const prefix = voucherPrefixes[Math.floor(Math.random() * voucherPrefixes.length)]
+          const voucherNo = `${prefix}-${String(1000 + totalCount)}`
+
+          const note = notesPool[Math.floor(Math.random() * notesPool.length)]
+
+          const selectedServices = selectedServiceIndices.map(idx => services[idx])
+
+          const appointment = await prisma.appointment.create({
             data: {
-              appointmentId: appointment.id,
-              serviceId: svc.id,
-              price: svc.price,
+              customerName,
+              roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
+              serviceId: primaryService.id,
+              hotelId: hotel.id,
+              agencyId: agency.id,
+              startTime,
+              endTime,
+              pax,
+              childCount,
+              status: isCancelled ? "CANCELLED" : "CONFIRMED",
+              approvalStatus: "APPROVED",
+              notes: note,
+              restAmount,
+              restCurrency,
+              voucherNo,
             },
           })
-        }
 
-        // İptal edilmiş randevulara transfer oluşturma
-        if (!isCancelled) {
-          // Saate göre transfer statüsü belirle
-          let transferStatus: TransferStatus
-          let transferDriverId: string | undefined = undefined
-          let transferDropoffTime: Date | undefined = undefined
-
-          if (hours < currentHour - 2) {
-            transferStatus = "COMPLETED"
-            transferDropoffTime = new Date(startTime)
-            transferDropoffTime.setMinutes(transferDropoffTime.getMinutes() + 90)
-          } else if (hours < currentHour - 1) {
-            transferStatus = "DROPPING_OFF"
-            if (drivers.length > 0) {
-              transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
-            }
-          } else if (hours < currentHour) {
-            transferStatus = "IN_SERVICE"
-            if (drivers.length > 0) {
-              transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
-            }
-          } else if (hours === currentHour) {
-            transferStatus = "PICKING_UP"
-            if (drivers.length > 0) {
-              transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
-            }
-          } else {
-            transferStatus = "PENDING"
+          for (const svc of selectedServices) {
+            await prisma.appointmentService.create({
+              data: {
+                appointmentId: appointment.id,
+                serviceId: svc.id,
+                price: svc.price,
+              },
+            })
           }
 
-          await prisma.transfer.create({
-            data: {
-              appointmentId: appointment.id,
-              status: transferStatus,
-              driverId: transferDriverId || null,
-              dropoffTime: transferDropoffTime || null,
-            },
-          })
+          // İptal edilmiş randevulara transfer oluşturma
+          if (!isCancelled) {
+            let transferStatus: TransferStatus
+            let transferDriverId: string | undefined = undefined
+            let transferDropoffTime: Date | undefined = undefined
+
+            if (opDay.label === "dün") {
+              // Dünkü tüm transferler tamamlanmış
+              transferStatus = "COMPLETED"
+              transferDropoffTime = new Date(startTime)
+              transferDropoffTime.setMinutes(transferDropoffTime.getMinutes() + 90)
+              if (drivers.length > 0) {
+                transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+              }
+            } else if (opDay.label === "yarın") {
+              // Yarınkiler hep PENDING
+              transferStatus = "PENDING"
+            } else {
+              // Bugün: saate göre statü
+              if (hours < currentHour - 2) {
+                transferStatus = "COMPLETED"
+                transferDropoffTime = new Date(startTime)
+                transferDropoffTime.setMinutes(transferDropoffTime.getMinutes() + 90)
+                if (drivers.length > 0) {
+                  transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+                }
+              } else if (hours < currentHour - 1) {
+                transferStatus = "DROPPING_OFF"
+                if (drivers.length > 0) {
+                  transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+                }
+              } else if (hours < currentHour) {
+                transferStatus = "IN_SERVICE"
+                if (drivers.length > 0) {
+                  transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+                }
+              } else if (hours === currentHour) {
+                transferStatus = "PICKING_UP"
+                if (drivers.length > 0) {
+                  transferDriverId = drivers[Math.floor(Math.random() * drivers.length)].id
+                }
+              } else {
+                transferStatus = "PENDING"
+              }
+            }
+
+            await prisma.transfer.create({
+              data: {
+                appointmentId: appointment.id,
+                status: transferStatus,
+                driverId: transferDriverId || null,
+                dropoffTime: transferDropoffTime || null,
+              },
+            })
+          }
         }
       }
-    }
 
-    // 10. Sunway Travel'dan onay bekleyen (her 3. saat dilimine 1 adet)
-    const sunwayAgency = createdAgencies.find(a => a.code === "SWT001")
+      // Onay bekleyenler (sadece bugün ve yarın)
+      if (opDay.label !== "dün") {
+        const sunwayAgency = createdAgencies.find(a => a.code === "SWT001")
+        if (sunwayAgency) {
+          const pendingNames = ["Emre Kılıç", "Derya Aydın", "Gökhan Şen", "Hülya Koç", "İsmail Yurt"]
+          const pendingSlots = timeSlots.filter((_, idx) => idx % 3 === 0).slice(0, 5)
 
-    if (sunwayAgency) {
-      const pendingNames = ["Emre Kılıç", "Derya Aydın", "Gökhan Şen", "Hülya Koç", "İsmail Yurt"]
-      const pendingSlots = timeSlots.filter((_, idx) => idx % 3 === 0).slice(0, 5)
+          for (let pi = 0; pi < pendingSlots.length; pi++) {
+            const slot = pendingSlots[pi]
+            const hotel = hotels[Math.floor(Math.random() * hotels.length)]
+            const serviceIdx = pi % services.length
+            const primaryService = services[serviceIdx]
 
-      for (let pi = 0; pi < pendingSlots.length; pi++) {
-        const slot = pendingSlots[pi]
-        const hotel = hotels[Math.floor(Math.random() * hotels.length)]
-        const serviceIdx = pi % services.length
-        const primaryService = services[serviceIdx]
+            const [hours, mins] = slot.split(":").map(Number)
+            const startTime = new Date(targetDate)
+            startTime.setHours(hours, mins, 0, 0)
 
-        const [hours, mins] = slot.split(":").map(Number)
-        const startTime = new Date(targetDate)
-        startTime.setHours(hours, mins, 0, 0)
+            const endTime = new Date(startTime)
+            endTime.setMinutes(endTime.getMinutes() + 60)
 
-        const endTime = new Date(startTime)
-        endTime.setMinutes(endTime.getMinutes() + 60)
+            totalCount++
+            dayCount++
+            const pax = Math.floor(Math.random() * 4) + 2
+            const childCount = Math.random() < 0.4 ? Math.floor(Math.random() * 2) + 1 : 0
+            const isRest = pi === 3
+            const selectedServices = pi % 2 === 1 && services.length > 1
+              ? [services[serviceIdx], services[(serviceIdx + 1) % services.length]]
+              : [primaryService]
 
-        count++
-        const pax = Math.floor(Math.random() * 4) + 2
-        const childCount = Math.random() < 0.4 ? Math.floor(Math.random() * 2) + 1 : 0
-        const isRest = pi === 3 // 1 tanesi REST olsun
-        const selectedServices = pi % 2 === 1 && services.length > 1
-          ? [services[serviceIdx], services[(serviceIdx + 1) % services.length]]
-          : [primaryService]
+            const appointment = await prisma.appointment.create({
+              data: {
+                customerName: pendingNames[pi % pendingNames.length],
+                roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
+                serviceId: primaryService.id,
+                hotelId: hotel.id,
+                agencyId: sunwayAgency.id,
+                startTime,
+                endTime,
+                pax,
+                childCount,
+                status: "CONFIRMED",
+                approvalStatus: "PENDING_APPROVAL",
+                notes: pi === 0 ? "Bebek koltuğu gerekli" : pi === 2 ? "Çocuklar 2 ve 7 yaşında" : null,
+                restAmount: isRest ? 120 : null,
+                restCurrency: isRest ? "EUR" : null,
+                voucherNo: `SWT-${2001 + pi + (opDay.label === "yarın" ? 100 : 0)}`,
+              },
+            })
 
-        const appointment = await prisma.appointment.create({
-          data: {
-            customerName: pendingNames[pi % pendingNames.length],
-            roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
-            serviceId: primaryService.id,
-            hotelId: hotel.id,
-            agencyId: sunwayAgency.id,
-            startTime,
-            endTime,
-            pax,
-            childCount,
-            status: "CONFIRMED",
-            approvalStatus: "PENDING_APPROVAL",
-            notes: pi === 0 ? "Bebek koltuğu gerekli" : pi === 2 ? "Çocuklar 2 ve 7 yaşında" : null,
-            restAmount: isRest ? 120 : null,
-            restCurrency: isRest ? "EUR" : null,
-            voucherNo: `SWT-${2001 + pi}`,
-          },
-        })
-
-        for (const svc of selectedServices) {
-          await prisma.appointmentService.create({
-            data: {
-              appointmentId: appointment.id,
-              serviceId: svc.id,
-              price: svc.price,
-            },
-          })
+            for (const svc of selectedServices) {
+              await prisma.appointmentService.create({
+                data: {
+                  appointmentId: appointment.id,
+                  serviceId: svc.id,
+                  price: svc.price,
+                },
+              })
+            }
+          }
         }
       }
     }
 
     // =============================================
-    // 11. KASA DEMO DATA (son 7 gün)
+    // 10. KASA DEMO DATA (son 7 gün)
     // =============================================
     const userId = session?.user?.id || "system"
     const serviceNames = services.map(s => s.name)
@@ -367,7 +408,7 @@ export async function POST(request: Request) {
     const agenciesForKasa = allAgencies.length > 0 ? allAgencies : createdAgencies
 
     for (let dayOffset = 6; dayOffset >= 0; dayOffset--) {
-      const kasaDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() - dayOffset)
+      const kasaDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() - dayOffset)
 
       let voucherNo = 1
 
@@ -488,7 +529,7 @@ export async function POST(request: Request) {
           kasaCount++
         }
 
-        // Personel kredi kartı gelirleri (1-2 adet/gün) — prim hem nakit hem KK'dan görünsün
+        // Personel kredi kartı gelirleri (1-2 adet/gün)
         const staffCCCount = Math.floor(Math.random() * 2) + 1
         for (let i = 0; i < staffCCCount; i++) {
           const staff = staffMembers[Math.floor(Math.random() * staffMembers.length)]
@@ -531,8 +572,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `${count} operasyon + ${kasaCount} kasa girişi oluşturuldu`,
-      count,
+      message: `3 günlük ${totalCount} randevu + ${kasaCount} kasa girişi oluşturuldu (dün/bugün/yarın)`,
+      count: totalCount,
       kasaCount,
     })
   } catch (error) {
