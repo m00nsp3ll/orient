@@ -168,14 +168,14 @@ export default function AppointmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Randevular</h1>
           <p className="text-gray-500">Randevu takvimini görüntüleyin ve yönetin</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Renk Kodları */}
-          <div className="flex items-center gap-3 text-xs border rounded-lg px-3 py-1.5 bg-white">
+          <div className="hidden md:flex items-center gap-3 text-xs border rounded-lg px-3 py-1.5 bg-white">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded bg-blue-500"></div>
               <span>Onaylı</span>
@@ -238,7 +238,7 @@ export default function AppointmentsPage() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button onClick={() => setShowAppointmentForm(true)}>
+          <Button className="w-full sm:w-auto" onClick={() => setShowAppointmentForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Yeni Randevu
           </Button>
@@ -385,12 +385,12 @@ export default function AppointmentsPage() {
         /* Daily View */
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, -1))}>
                   Önceki Gün
                 </Button>
-                <CardTitle>{format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })}</CardTitle>
+                <CardTitle className="text-sm sm:text-base">{format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })}</CardTitle>
                 <Button variant="outline" size="sm" onClick={() => setCurrentDay(addDays(currentDay, 1))}>
                   Sonraki Gün
                 </Button>
@@ -422,7 +422,7 @@ export default function AppointmentsPage() {
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                             <span className="text-lg font-semibold">
                               {format(new Date(appointment.startTime), "HH:mm")}
                             </span>

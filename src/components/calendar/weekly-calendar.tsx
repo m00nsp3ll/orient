@@ -89,7 +89,7 @@ export function WeeklyCalendar({
   return (
     <div className="bg-white rounded-lg border">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b">
         <h2 className="text-lg font-semibold">
           {format(weekStart, "d MMM", { locale: tr })} -{" "}
           {format(weekEnd, "d MMM yyyy", { locale: tr })}

@@ -160,14 +160,14 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-gray-500">
             {format(today, "d MMMM yyyy, EEEE", { locale: tr })}
           </p>
         </div>
-        <Button onClick={() => setShowAppointmentForm(true)}>
+        <Button className="w-full sm:w-auto" onClick={() => setShowAppointmentForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Yeni Randevu
         </Button>
@@ -232,10 +232,10 @@ export default function DashboardPage() {
 
       {/* Tabs: Onay Bekleyenler + Onaylananlar + İptal Edilenler */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="h-auto p-1">
+        <TabsList className="h-auto p-1 flex-wrap">
           <TabsTrigger
             value="pending"
-            className="gap-2 !text-orange-600 data-[state=active]:!bg-orange-100 data-[state=active]:!text-orange-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-orange-50/50"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm !text-orange-600 data-[state=active]:!bg-orange-100 data-[state=active]:!text-orange-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-orange-50/50"
           >
             <Clock className="h-4 w-4" />
             Onay Bekleyenler
@@ -247,7 +247,7 @@ export default function DashboardPage() {
           </TabsTrigger>
           <TabsTrigger
             value="approved"
-            className="gap-2 !text-green-600 data-[state=active]:!bg-green-100 data-[state=active]:!text-green-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-green-50/50"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm !text-green-600 data-[state=active]:!bg-green-100 data-[state=active]:!text-green-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-green-50/50"
           >
             <CheckCircle className="h-4 w-4" />
             Onaylananlar
@@ -259,7 +259,7 @@ export default function DashboardPage() {
           </TabsTrigger>
           <TabsTrigger
             value="cancelled"
-            className="gap-2 !text-red-600 data-[state=active]:!bg-red-100 data-[state=active]:!text-red-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-red-50/50"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm !text-red-600 data-[state=active]:!bg-red-100 data-[state=active]:!text-red-700 data-[state=active]:!shadow-none data-[state=inactive]:!bg-red-50/50"
           >
             <XCircle className="h-4 w-4" />
             İptal Edilenler
@@ -293,7 +293,7 @@ export default function DashboardPage() {
                 .map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => setSelectedAppointment(appointment)}
                 >
                   <div className="flex items-center gap-4">
@@ -372,7 +372,7 @@ export default function DashboardPage() {
                 .map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex items-center justify-between p-4 border border-red-100 rounded-lg hover:bg-red-50/50 cursor-pointer transition-colors opacity-75"
+                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-4 border border-red-100 rounded-lg hover:bg-red-50/50 cursor-pointer transition-colors opacity-75"
                   onClick={() => setSelectedAppointment(appointment)}
                 >
                   <div className="flex items-center gap-4">

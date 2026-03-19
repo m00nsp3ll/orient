@@ -160,6 +160,8 @@ export function PendingApprovals() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Desktop Table */}
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -272,6 +274,83 @@ export function PendingApprovals() {
               ))}
             </TableBody>
           </Table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {pendingAppointments.map((appointment) => (
+              <div key={appointment.id} className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-gray-500" />
+                    <span className="font-medium">
+                      {format(new Date(appointment.startTime), "d MMM yyyy", { locale: tr })}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {format(new Date(appointment.startTime), "HH:mm")}
+                    </span>
+                  </div>
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {appointment.pax || 1}{appointment.childCount ? `+${appointment.childCount}` : ""}
+                  </Badge>
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium">{appointment.customerName || "-"}</span>
+                  {appointment.hotel && (
+                    <span className="text-gray-500"> · {appointment.hotel.name}</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium">
+                      {appointment.services && appointment.services.length > 0
+                        ? appointment.services.map(s => s.service.name).join(", ")
+                        : appointment.service.name}
+                    </span>
+                    <span className="text-gray-500 ml-2">
+                      {appointment.services && appointment.services.length > 0
+                        ? appointment.services.map(s => `${getCurrencySymbol(s.service.currency || "EUR")} ${s.price}`).join(", ")
+                        : `${getCurrencySymbol(appointment.service.currency || "EUR")} ${appointment.service.price}`}
+                    </span>
+                  </div>
+                </div>
+                {isAdmin && appointment.agency && (
+                  <div className="flex items-center gap-1 text-sm text-blue-600">
+                    <Building2 className="h-3 w-3" />
+                    {appointment.agency.companyName || appointment.agency.name}
+                  </div>
+                )}
+                {appointment.restAmount && appointment.restCurrency && (
+                  <div className="flex items-center gap-1 text-sm text-red-600 font-medium">
+                    <Banknote className="h-3 w-3" />
+                    REST: {appointment.restAmount} {appointment.restCurrency}
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => handleAction(appointment, "approve")}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Onayla
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() => handleAction(appointment, "reject")}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reddet
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

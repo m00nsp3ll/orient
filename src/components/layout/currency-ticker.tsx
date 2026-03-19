@@ -29,7 +29,7 @@ export function CurrencyTicker() {
   ]
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1 sm:gap-2">
       {isLoading
         ? currencies.map((c) => (
             <div
@@ -43,7 +43,7 @@ export function CurrencyTicker() {
             return (
               <span
                 key={c.code}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${c.color}`}
+                className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded text-[11px] sm:text-xs font-semibold ${c.color}`}
               >
                 {c.symbol} {rate.selling.toFixed(2)}
               </span>
