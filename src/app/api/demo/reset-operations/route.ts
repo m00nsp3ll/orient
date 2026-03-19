@@ -97,12 +97,19 @@ export async function POST(request: Request) {
       )
     }
 
-    // 7. Otelleri al
-    const hotels = await prisma.hotel.findMany({
+    // 7. Otelleri al — her aktif bölgeden en az 2 otel
+    const activeRegions = await prisma.region.findMany({
       where: { isActive: true },
-      include: { region: true },
-      take: 30,
     })
+    let hotels: Awaited<ReturnType<typeof prisma.hotel.findMany>> = []
+    for (const region of activeRegions) {
+      const regionHotels = await prisma.hotel.findMany({
+        where: { isActive: true, regionId: region.id },
+        include: { region: true },
+        take: 5,
+      })
+      hotels.push(...regionHotels)
+    }
 
     if (hotels.length === 0) {
       return NextResponse.json(

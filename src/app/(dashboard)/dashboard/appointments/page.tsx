@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3 } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
@@ -484,23 +484,24 @@ export default function AppointmentsPage() {
                                 >
                                   {appointment.hotel.name}
                                 </p>
-                                <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-orange-200 mt-0.5">
-                                  {appointment.hotel.region.name}
-                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-orange-200">
+                                    {appointment.hotel.region.name}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-blue-200">
+                                    <Clock className="h-2.5 w-2.5" />
+                                    {format(new Date(appointment.startTime), "HH:mm")}
+                                  </span>
+                                  {appointment.pax && appointment.pax > 0 && (
+                                    <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-[10px] font-semibold px-1.5 py-0.5 rounded border border-gray-200">
+                                      <Users className="h-2.5 w-2.5" />
+                                      {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} PAX
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
-                          {appointment.agency && (
-                            <div className="mt-2 flex items-center gap-1 text-sm text-blue-600">
-                              <Building2 className="h-3 w-3" />
-                              {appointment.agency.companyName}
-                            </div>
-                          )}
-                          {appointment.pax && appointment.pax > 1 && (
-                            <div className="mt-1 text-sm text-gray-500">
-                              PAX: {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""} kişi
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
