@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { CalendarIcon, RefreshCw, Database } from "lucide-react"
+import { CalendarIcon, RefreshCw, Database, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -283,6 +283,33 @@ export default function OperationsPage() {
     }
   }
 
+  const handleResetDemo = async () => {
+    if (!confirm("Tüm demo veriler (randevular, kasa, pending onaylar) silinecek. Emin misiniz?")) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      const res = await fetch("/api/demo/reset", {
+        method: "POST",
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(data.message || "Demo veriler sıfırlandı")
+        await fetchData()
+      } else {
+        const error = await res.json()
+        toast.error(error.error || "Sıfırlama başarısız")
+      }
+    } catch (error) {
+      console.error("Demo sıfırlama hatası:", error)
+      toast.error("Demo sıfırlama başarısız")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -323,6 +350,15 @@ export default function OperationsPage() {
           >
             <Database className="h-4 w-4" />
             Demo Data Yükle
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleResetDemo}
+            disabled={loading}
+            className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            Demo Sıfırla
           </Button>
           <Button variant="outline" size="icon" onClick={fetchData}>
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />

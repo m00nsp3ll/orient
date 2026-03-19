@@ -48,8 +48,16 @@ export async function POST() {
       },
     })
 
-    // Otelleri al
-    const hotels = await prisma.hotel.findMany({ where: { isActive: true }, take: 20 })
+    // Otelleri al — her aktif bölgeden en az birkaç otel
+    const activeRegions = await prisma.region.findMany({ where: { isActive: true } })
+    const hotels: any[] = []
+    for (const region of activeRegions) {
+      const regionHotels = await prisma.hotel.findMany({
+        where: { isActive: true, regionId: region.id },
+        take: 5,
+      })
+      hotels.push(...regionHotels)
+    }
 
     // Personelleri al (kasa demo için)
     const staffMembers = await prisma.staff.findMany({
