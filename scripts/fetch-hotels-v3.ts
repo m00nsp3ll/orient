@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const client = new ApifyClient({
-    token: 'REDACTED',
+    token: process.env.APIFY_TOKEN || '',
 });
 
 const prisma = new PrismaClient();

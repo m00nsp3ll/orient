@@ -2,7 +2,7 @@ import { ApifyClient } from 'apify-client';
 import { PrismaClient } from '@prisma/client';
 
 const client = new ApifyClient({
-    token: 'REDACTED',
+    token: process.env.APIFY_TOKEN || '',
 });
 
 const prisma = new PrismaClient();
