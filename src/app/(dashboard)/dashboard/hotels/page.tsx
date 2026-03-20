@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Pencil, Trash2, Check, X, Hotel, MapPin, Navigation, Search, Map as MapIcon, AlertTriangle } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-media-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
@@ -52,6 +53,7 @@ interface HotelData {
 
 export default function HotelsPage() {
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showRegionDialog, setShowRegionDialog] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -554,6 +556,94 @@ export default function HotelsPage() {
             <div className="text-center py-8 text-gray-500">Yükleniyor...</div>
           ) : filteredHotels.length === 0 ? (
             <div className="text-center py-8 text-gray-500">Otel bulunamadı</div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {filteredHotels.map((hotel) => (
+                <div key={hotel.id} className="border rounded-lg p-4 space-y-2">
+                  {editingId === hotel.id ? (
+                    <div className="space-y-3">
+                      <Input
+                        value={editingData.name}
+                        onChange={(e) => setEditingData({ ...editingData, name: e.target.value })}
+                        className="w-full"
+                        placeholder="Otel adı"
+                      />
+                      <Select
+                        value={editingData.regionId}
+                        onValueChange={(v) => setEditingData({ ...editingData, regionId: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {regions.map((region) => (
+                            <SelectItem key={region.id} value={region.id}>
+                              {region.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setEditingId(null)}>
+                          <X className="h-4 w-4 mr-1" /> İptal
+                        </Button>
+                        <Button size="sm" onClick={handleSaveEdit} disabled={updateHotel.isPending}>
+                          <Check className="h-4 w-4 mr-1" /> Kaydet
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium">{hotel.name}</div>
+                          {showJunk && junkParentMap.get(hotel.id) && (
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              → {junkParentMap.get(hotel.id)}
+                            </div>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="text-xs shrink-0">{hotel.region.name}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm">
+                          {hotel.googleMapsUrl ? (
+                            <a
+                              href={hotel.googleMapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline flex items-center gap-1 text-xs"
+                            >
+                              <MapPin className="h-3 w-3" />
+                              <span className="truncate max-w-[120px]">{hotel.address || 'Haritada Göster'}</span>
+                            </a>
+                          ) : (
+                            <span className="text-gray-400 text-xs">Adres yok</span>
+                          )}
+                          {hotel.distanceToMarina !== null && (
+                            <span className="text-xs text-gray-500 flex items-center gap-0.5">
+                              <Navigation className="h-3 w-3 text-green-600" />
+                              {hotel.distanceToMarina} km
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenLocationPicker(hotel)}>
+                            <MapIcon className={`h-4 w-4 ${!hotel.address ? 'text-orange-500' : 'text-blue-500'}`} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleStartEdit(hotel)}>
+                            <Pencil className="h-4 w-4 text-blue-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteHotel.mutate(hotel.id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Pencil, Calendar, Trash2 } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-media-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -43,6 +44,7 @@ const DAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", 
 
 export default function StaffPage() {
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [showHoursDialog, setShowHoursDialog] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
@@ -147,6 +149,44 @@ export default function StaffPage() {
             <div className="text-center py-8 text-gray-500">Yükleniyor...</div>
           ) : staff.length === 0 ? (
             <div className="text-center py-8 text-gray-500">Henüz personel eklenmemiş</div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {staff.map((member) => (
+                <div key={member.id} className="border rounded-lg p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{member.user.name}</div>
+                      <div className="text-sm text-gray-500 mt-0.5">{member.user.email}</div>
+                      {member.user.phone && (
+                        <div className="text-sm text-gray-500">{member.user.phone}</div>
+                      )}
+                    </div>
+                    <Badge variant={member.isActive ? "default" : "secondary"} className="text-xs shrink-0">
+                      {member.isActive ? "Aktif" : "Pasif"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      {member.position && <span>{member.position}</span>}
+                      {member.commissionRate != null && (
+                        <Badge variant="outline" className="text-xs">%{member.commissionRate}</Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingStaff(member)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedStaff(member); setShowHoursDialog(true) }}>
+                        <Calendar className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeletingStaff(member)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <Table>
               <TableHeader>

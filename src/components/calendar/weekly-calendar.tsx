@@ -9,12 +9,15 @@ import {
   isSameDay,
   addWeeks,
   subWeeks,
+  addDays,
+  subDays,
 } from "date-fns"
 import { tr } from "date-fns/locale"
 import { ChevronLeft, ChevronRight, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { useIsMobile } from "@/hooks/use-media-query"
 
 interface Appointment {
   id: string
@@ -49,11 +52,24 @@ export function WeeklyCalendar({
   onSlotClick,
   onWeekChange,
 }: WeeklyCalendarProps) {
+  const isMobile = useIsMobile()
   const [currentDate, setCurrentDate] = useState(new Date())
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd })
+
+  // Mobilde 3 günlük görünüm: seçili gün merkez
+  const mobileDays = useMemo(() => {
+    if (!isMobile) return days
+    return [
+      subDays(currentDate, 1),
+      currentDate,
+      addDays(currentDate, 1),
+    ]
+  }, [isMobile, currentDate, days])
+
+  const visibleDays = isMobile ? mobileDays : days
 
   // Notify parent when week changes
   useEffect(() => {
@@ -86,24 +102,51 @@ export function WeeklyCalendar({
     }
   }
 
+  const handlePrev = () => {
+    if (isMobile) {
+      setCurrentDate(subDays(currentDate, 1))
+    } else {
+      setCurrentDate(subWeeks(currentDate, 1))
+    }
+  }
+
+  const handleNext = () => {
+    if (isMobile) {
+      setCurrentDate(addDays(currentDate, 1))
+    } else {
+      setCurrentDate(addWeeks(currentDate, 1))
+    }
+  }
+
+  // Grid columns: 1 (hour label) + number of visible days
+  const gridCols = isMobile ? "grid-cols-4" : "grid-cols-8"
+
   return (
     <div className="bg-white rounded-lg border">
       {/* Header */}
       <div className="flex items-center justify-between p-3 sm:p-4 border-b">
-        <h2 className="text-lg font-semibold">
-          {format(weekStart, "d MMM", { locale: tr })} -{" "}
-          {format(weekEnd, "d MMM yyyy", { locale: tr })}
+        <h2 className="text-sm md:text-lg font-semibold">
+          {isMobile ? (
+            format(currentDate, "d MMMM yyyy, EEEE", { locale: tr })
+          ) : (
+            <>
+              {format(weekStart, "d MMM", { locale: tr })} -{" "}
+              {format(weekEnd, "d MMM yyyy", { locale: tr })}
+            </>
+          )}
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setCurrentDate(subWeeks(currentDate, 1))}
+            className="h-8 w-8 md:h-9 md:w-9"
+            onClick={handlePrev}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setCurrentDate(new Date())}
           >
             Bugün
@@ -111,7 +154,8 @@ export function WeeklyCalendar({
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setCurrentDate(addWeeks(currentDate, 1))}
+            className="h-8 w-8 md:h-9 md:w-9"
+            onClick={handleNext}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -120,11 +164,11 @@ export function WeeklyCalendar({
 
       {/* Calendar Grid */}
       <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
+        <div className={isMobile ? "" : "min-w-[800px]"}>
           {/* Day Headers */}
-          <div className="grid grid-cols-8 border-b">
+          <div className={cn("grid border-b", gridCols)}>
             <div className="p-2 text-center text-sm text-gray-500 border-r" />
-            {days.map((day) => (
+            {visibleDays.map((day) => (
               <div
                 key={day.toISOString()}
                 className={cn(
@@ -132,12 +176,14 @@ export function WeeklyCalendar({
                   isSameDay(day, new Date()) && "bg-primary/5"
                 )}
               >
-                <div className="text-sm font-medium">
-                  {format(day, "EEEE", { locale: tr })}
+                <div className="text-xs md:text-sm font-medium">
+                  {isMobile
+                    ? format(day, "EEE", { locale: tr })
+                    : format(day, "EEEE", { locale: tr })}
                 </div>
                 <div
                   className={cn(
-                    "text-2xl font-bold",
+                    "text-lg md:text-2xl font-bold",
                     isSameDay(day, new Date()) && "text-primary"
                   )}
                 >
@@ -150,11 +196,11 @@ export function WeeklyCalendar({
           {/* Time Slots */}
           <div className="relative">
             {hours.map((hour) => (
-              <div key={hour} className="grid grid-cols-8 border-b">
-                <div className="p-2 text-right text-sm text-gray-500 border-r pr-3">
+              <div key={hour} className={cn("grid border-b", gridCols)}>
+                <div className="p-1 md:p-2 text-right text-xs md:text-sm text-gray-500 border-r pr-1 md:pr-3">
                   {hour}:00
                 </div>
-                {days.map((day) => {
+                {visibleDays.map((day) => {
                   const dateKey = format(day, "yyyy-MM-dd")
                   const dayAppointments = appointmentsByDay[dateKey] || []
                   const hourAppointments = dayAppointments.filter((apt) => {
@@ -166,7 +212,7 @@ export function WeeklyCalendar({
                     <div
                       key={day.toISOString()}
                       className={cn(
-                        "min-h-[60px] p-1 border-r last:border-r-0 cursor-pointer hover:bg-gray-50",
+                        "min-h-[50px] md:min-h-[60px] p-0.5 md:p-1 border-r last:border-r-0 cursor-pointer hover:bg-gray-50",
                         isSameDay(day, new Date()) && "bg-primary/5"
                       )}
                       onClick={() =>
@@ -174,12 +220,12 @@ export function WeeklyCalendar({
                       }
                     >
                       {hourAppointments.map((apt) => {
-                        const isRest = apt.notes?.includes("REST")
+                        const isRest = apt.restAmount != null && apt.restAmount > 0
                         return (
                           <div
                             key={apt.id}
                             className={cn(
-                              "text-xs p-1 rounded border mb-1 cursor-pointer",
+                              "text-[10px] md:text-xs p-0.5 md:p-1 rounded border mb-0.5 md:mb-1 cursor-pointer overflow-hidden",
                               getStatusColor(apt.status)
                             )}
                             onClick={(e) => {
@@ -187,23 +233,29 @@ export function WeeklyCalendar({
                               onAppointmentClick?.(apt)
                             }}
                           >
-                            <div className="font-medium truncate flex items-center gap-1">
+                            <div className="font-medium truncate flex items-center gap-0.5">
                               {isRest && <Banknote className="h-2.5 w-2.5 shrink-0 text-red-500" />}
-                              {apt.agency?.companyName || apt.agency?.name || apt.customerName || apt.customer?.name || "-"}
+                              <span className="truncate">
+                                {apt.agency?.companyName || apt.agency?.name || apt.customerName || apt.customer?.name || "-"}
+                              </span>
                             </div>
                             <div className="truncate opacity-75">
-                              {apt.service.name}{apt.pax && apt.pax > 0 ? ` • ${apt.pax}${apt.childCount ? `+${apt.childCount}` : ""} PAX` : ""}
+                              {isMobile
+                                ? `${apt.pax || ""}${apt.childCount ? `+${apt.childCount}` : ""} PAX`
+                                : `${apt.service.name}${apt.pax && apt.pax > 0 ? ` • ${apt.pax}${apt.childCount ? `+${apt.childCount}` : ""} PAX` : ""}`}
                             </div>
-                            <div className="text-[10px] flex items-center justify-between">
-                              <span>
-                                {format(new Date(apt.startTime), "HH:mm")}
-                              </span>
-                              {isRest && apt.restAmount && apt.restCurrency && (
-                                <span className="font-bold text-red-600">
-                                  {apt.restAmount} {apt.restCurrency}
+                            {!isMobile && (
+                              <div className="text-[10px] flex items-center justify-between">
+                                <span>
+                                  {format(new Date(apt.startTime), "HH:mm")}
                                 </span>
-                              )}
-                            </div>
+                                {isRest && apt.restAmount && apt.restCurrency && (
+                                  <span className="font-bold text-red-600">
+                                    {apt.restAmount} {apt.restCurrency}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )
                       })}

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, Car, Clock, Route, Banknote } from "lucide-react"
 import { format } from "date-fns"
+import { useIsMobile } from "@/hooks/use-media-query"
 
 interface Transfer {
   id: string
@@ -140,6 +141,8 @@ export function TransferBoard({
   onStartDropoff,
   onCancelAppointment,
 }: TransferBoardProps) {
+  const isMobile = useIsMobile()
+  const [activeTab, setActiveTab] = useState("PENDING")
   const [sortMode, setSortMode] = useState<Record<string, "region" | "time">>({
     PENDING: "region",
     DROPPING_OFF: "region",
@@ -195,6 +198,190 @@ export function TransferBoard({
 
   const completedTransfers = transfers.filter(t => t.status === "COMPLETED")
 
+  // Her kolonun transfer sayısını hesapla (tab badge'leri için)
+  const columnCounts = columns.reduce((acc, col) => {
+    acc[col.key] = getTransfersByStatus(col.key).length
+    return acc
+  }, {} as Record<string, number>)
+
+  // Tek bir kolonu renderla (hem mobile hem desktop'ta kullanılır)
+  const renderColumn = (column: typeof columns[0]) => {
+    const columnTransfers = getTransfersByStatus(column.key)
+    const currentSortMode = sortMode[column.key] || column.groupBy
+
+    let groupedByRegion: Map<string, Transfer[]> | null = null
+    let groupedByDriver: Map<string, Transfer[]> | null = null
+    let sortedByTime: Transfer[] | null = null
+
+    if (column.key === "PENDING" || column.key === "DROPPING_OFF") {
+      if (currentSortMode === "region") {
+        groupedByRegion = groupByRegion(columnTransfers)
+      } else {
+        sortedByTime = sortByTime(columnTransfers)
+      }
+    } else if (column.groupBy === "driver") {
+      groupedByDriver = groupByDriver(columnTransfers)
+    } else if (column.groupBy === "region") {
+      groupedByRegion = groupByRegion(columnTransfers)
+    }
+
+    return (
+      <div
+        key={column.key}
+        className={cn(
+          "min-w-0 overflow-hidden rounded-lg",
+          column.color
+        )}
+      >
+        {/* Kolon Header — sadece desktop'ta göster (mobilde tab zaten başlık) */}
+        <div className={cn("p-3 border-b", isMobile && "pt-2 pb-2")}>
+          {!isMobile && (
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium text-sm">{column.label}</h3>
+              <span className="text-xs text-muted-foreground bg-white px-2 py-0.5 rounded-full">
+                {columnTransfers.length}
+              </span>
+            </div>
+          )}
+          {column.hasRoute && columnTransfers.length > 0 && (
+            <div className={cn("flex items-center gap-1", !isMobile && "mt-2")}>
+              <div className="flex rounded-md overflow-hidden border text-[10px]">
+                <button
+                  onClick={() => setSortMode({ ...sortMode, [column.key]: "region" })}
+                  className={cn(
+                    "px-2 py-1 flex items-center gap-0.5",
+                    currentSortMode === "region" ? "bg-slate-200" : "bg-white hover:bg-slate-50"
+                  )}
+                >
+                  <MapPin className="h-3 w-3" />
+                  Bölge
+                </button>
+                <button
+                  onClick={() => setSortMode({ ...sortMode, [column.key]: "time" })}
+                  className={cn(
+                    "px-2 py-1 flex items-center gap-0.5 border-l",
+                    currentSortMode === "time" ? "bg-slate-200" : "bg-white hover:bg-slate-50"
+                  )}
+                >
+                  <Clock className="h-3 w-3" />
+                  Saat
+                </button>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] px-2 ml-auto"
+                onClick={() => handleOpenRouteModal(column.key === "PENDING" ? "pickup" : "dropoff")}
+              >
+                <Route className="h-3 w-3 mr-1" />
+                Rota
+              </Button>
+            </div>
+          )}
+        </div>
+        <ScrollArea className={isMobile ? "h-[calc(100vh-320px)]" : "h-[calc(100vh-280px)]"}>
+          <div className="p-2 min-w-0 overflow-hidden">
+            {columnTransfers.length === 0 ? (
+              <div className="text-center text-sm text-muted-foreground py-8">
+                {column.emptyText}
+              </div>
+            ) : groupedByRegion ? (
+              Array.from(groupedByRegion.entries()).map(([regionName, regionTransfers]) => (
+                <div key={regionName} className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-2 px-1">
+                    <MapPin className="h-3.5 w-3.5 text-slate-600" />
+                    <span className="text-xs font-bold text-slate-700">{regionName}</span>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-auto">
+                      {regionTransfers.length}
+                    </Badge>
+                  </div>
+                  <div className="space-y-2 pl-1 border-l-2 border-slate-300">
+                    {regionTransfers.map((transfer) => (
+                      <TransferCard
+                        key={transfer.id}
+                        transfer={transfer}
+                        drivers={drivers}
+                        busyDriverIds={busyDriverIds}
+                        onStatusChange={onStatusChange}
+                        onDriverChange={onDriverChange}
+                        onStartDropoff={onStartDropoff}
+                        onCancelAppointment={onCancelAppointment}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : sortedByTime ? (
+              sortedByTime.map((transfer) => (
+                <div key={transfer.id} className="mb-2">
+                  <div className="flex items-center gap-1 mb-1 px-1">
+                    <Clock className="h-3 w-3 text-slate-500" />
+                    <span className="text-[10px] font-medium text-slate-600">
+                      {format(new Date(transfer.appointment.startTime), "HH:mm")}
+                    </span>
+                    <span className="text-[10px] text-slate-400">•</span>
+                    <span className="text-[10px] text-slate-500 truncate">
+                      {transfer.appointment.hotel?.region?.name}
+                    </span>
+                  </div>
+                  <TransferCard
+                    transfer={transfer}
+                    drivers={drivers}
+                    busyDriverIds={busyDriverIds}
+                    onStatusChange={onStatusChange}
+                    onDriverChange={onDriverChange}
+                    onStartDropoff={onStartDropoff}
+                    onCancelAppointment={onCancelAppointment}
+                  />
+                </div>
+              ))
+            ) : groupedByDriver ? (
+              Array.from(groupedByDriver.entries()).map(([driverName, driverTransfers]) => (
+                <div key={driverName} className="mb-4 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-2 px-1 py-1 bg-blue-100 rounded min-w-0">
+                    <Car className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                    <span className="text-xs font-bold text-blue-700 truncate">{driverName}</span>
+                    <Badge className="text-[10px] px-1.5 py-0 h-4 ml-auto bg-blue-500 shrink-0">
+                      {driverTransfers.length} müşteri
+                    </Badge>
+                  </div>
+                  <div className="space-y-1 bg-white rounded-lg border shadow-sm overflow-hidden">
+                    {driverTransfers.map((transfer, idx) => (
+                      <div key={transfer.id} className={cn(idx > 0 && "border-t border-dashed")}>
+                        <TransferCard
+                          transfer={transfer}
+                          drivers={drivers}
+                          busyDriverIds={busyDriverIds}
+                          onStatusChange={onStatusChange}
+                          onDriverChange={onDriverChange}
+                          onStartDropoff={onStartDropoff}
+                          onCancelAppointment={onCancelAppointment}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            ) : (
+              columnTransfers.map((transfer) => (
+                <TransferCard
+                  key={transfer.id}
+                  transfer={transfer}
+                  drivers={drivers}
+                  busyDriverIds={busyDriverIds}
+                  onStatusChange={onStatusChange}
+                  onDriverChange={onDriverChange}
+                  onStartDropoff={onStartDropoff}
+                  onCancelAppointment={onCancelAppointment}
+                />
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Tamamlananlar Butonu */}
@@ -209,188 +396,45 @@ export function TransferBoard({
         </Button>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
-      {columns.map((column) => {
-        const columnTransfers = getTransfersByStatus(column.key)
-        const currentSortMode = sortMode[column.key] || column.groupBy
-
-        // Sıralama moduna göre grupla veya sırala
-        let groupedByRegion: Map<string, Transfer[]> | null = null
-        let groupedByDriver: Map<string, Transfer[]> | null = null
-        let sortedByTime: Transfer[] | null = null
-
-        if (column.key === "PENDING" || column.key === "DROPPING_OFF") {
-          if (currentSortMode === "region") {
-            groupedByRegion = groupByRegion(columnTransfers)
-          } else {
-            sortedByTime = sortByTime(columnTransfers)
-          }
-        } else if (column.groupBy === "driver") {
-          groupedByDriver = groupByDriver(columnTransfers)
-        } else if (column.groupBy === "region") {
-          groupedByRegion = groupByRegion(columnTransfers)
-        }
-
-        return (
-          <div
-            key={column.key}
-            className={cn(
-              "min-w-0 rounded-lg",
-              column.color
-            )}
-          >
-            <div className="p-3 border-b">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-sm">{column.label}</h3>
-                <span className="text-xs text-muted-foreground bg-white px-2 py-0.5 rounded-full">
-                  {columnTransfers.length}
-                </span>
-              </div>
-              {/* Sıralama ve Rota butonları */}
-              {column.hasRoute && columnTransfers.length > 0 && (
-                <div className="flex items-center gap-1 mt-2">
-                  <div className="flex rounded-md overflow-hidden border text-[10px]">
-                    <button
-                      onClick={() => setSortMode({ ...sortMode, [column.key]: "region" })}
-                      className={cn(
-                        "px-2 py-1 flex items-center gap-0.5",
-                        currentSortMode === "region" ? "bg-slate-200" : "bg-white hover:bg-slate-50"
-                      )}
-                    >
-                      <MapPin className="h-3 w-3" />
-                      Bölge
-                    </button>
-                    <button
-                      onClick={() => setSortMode({ ...sortMode, [column.key]: "time" })}
-                      className={cn(
-                        "px-2 py-1 flex items-center gap-0.5 border-l",
-                        currentSortMode === "time" ? "bg-slate-200" : "bg-white hover:bg-slate-50"
-                      )}
-                    >
-                      <Clock className="h-3 w-3" />
-                      Saat
-                    </button>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 text-[10px] px-2 ml-auto"
-                    onClick={() => handleOpenRouteModal(column.key === "PENDING" ? "pickup" : "dropoff")}
-                  >
-                    <Route className="h-3 w-3 mr-1" />
-                    Rota
-                  </Button>
-                </div>
-              )}
-            </div>
-            <ScrollArea className="h-[calc(100vh-280px)]">
-              <div className="p-2">
-                {columnTransfers.length === 0 ? (
-                  <div className="text-center text-sm text-muted-foreground py-8">
-                    {column.emptyText}
-                  </div>
-                ) : groupedByRegion ? (
-                  // Bölgeye göre gruplandırılmış görünüm
-                  Array.from(groupedByRegion.entries()).map(([regionName, regionTransfers]) => (
-                    <div key={regionName} className="mb-4">
-                      <div className="flex items-center gap-1.5 mb-2 px-1">
-                        <MapPin className="h-3.5 w-3.5 text-slate-600" />
-                        <span className="text-xs font-bold text-slate-700">{regionName}</span>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-auto">
-                          {regionTransfers.length}
-                        </Badge>
-                      </div>
-                      <div className="space-y-2 pl-1 border-l-2 border-slate-300">
-                        {regionTransfers.map((transfer) => (
-                          <TransferCard
-                            key={transfer.id}
-                            transfer={transfer}
-                            drivers={drivers}
-                            busyDriverIds={busyDriverIds}
-                            onStatusChange={onStatusChange}
-                            onDriverChange={onDriverChange}
-                            onStartDropoff={onStartDropoff}
-                            onCancelAppointment={onCancelAppointment}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : sortedByTime ? (
-                  // Saate göre sıralı görünüm
-                  sortedByTime.map((transfer) => (
-                    <div key={transfer.id} className="mb-2">
-                      <div className="flex items-center gap-1 mb-1 px-1">
-                        <Clock className="h-3 w-3 text-slate-500" />
-                        <span className="text-[10px] font-medium text-slate-600">
-                          {format(new Date(transfer.appointment.startTime), "HH:mm")}
-                        </span>
-                        <span className="text-[10px] text-slate-400">•</span>
-                        <span className="text-[10px] text-slate-500 truncate">
-                          {transfer.appointment.hotel?.region?.name}
-                        </span>
-                      </div>
-                      <TransferCard
-                        transfer={transfer}
-                        drivers={drivers}
-                        busyDriverIds={busyDriverIds}
-                        onStatusChange={onStatusChange}
-                        onDriverChange={onDriverChange}
-                        onStartDropoff={onStartDropoff}
-                        onCancelAppointment={onCancelAppointment}
-                      />
-                    </div>
-                  ))
-                ) : groupedByDriver ? (
-                  // Şoföre göre gruplandırılmış görünüm
-                  Array.from(groupedByDriver.entries()).map(([driverName, driverTransfers]) => (
-                    <div key={driverName} className="mb-4">
-                      <div className="flex items-center gap-1.5 mb-2 px-1 py-1 bg-blue-100 rounded">
-                        <Car className="h-3.5 w-3.5 text-blue-600" />
-                        <span className="text-xs font-bold text-blue-700">{driverName}</span>
-                        <Badge className="text-[10px] px-1.5 py-0 h-4 ml-auto bg-blue-500">
-                          {driverTransfers.length} müşteri
-                        </Badge>
-                      </div>
-                      <div className="space-y-1 bg-white rounded-lg border shadow-sm overflow-hidden">
-                        {driverTransfers.map((transfer, idx) => (
-                          <div key={transfer.id} className={cn(idx > 0 && "border-t border-dashed")}>
-                            <TransferCard
-                              transfer={transfer}
-                              drivers={drivers}
-                              busyDriverIds={busyDriverIds}
-                              onStatusChange={onStatusChange}
-                              onDriverChange={onDriverChange}
-                              onStartDropoff={onStartDropoff}
-                              onCancelAppointment={onCancelAppointment}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  // Normal görünüm
-                  columnTransfers.map((transfer) => (
-                    <TransferCard
-                      key={transfer.id}
-                      transfer={transfer}
-                      drivers={drivers}
-                      busyDriverIds={busyDriverIds}
-                      onStatusChange={onStatusChange}
-                      onDriverChange={onDriverChange}
-                      onStartDropoff={onStartDropoff}
-                      onCancelAppointment={onCancelAppointment}
-                    />
-                  ))
+      {/* Mobil: Tab Sistemi */}
+      {isMobile ? (
+        <div>
+          {/* Tab Bar */}
+          <div className="flex border rounded-lg overflow-hidden mb-3">
+            {columns.map((column) => (
+              <button
+                key={column.key}
+                onClick={() => setActiveTab(column.key)}
+                className={cn(
+                  "flex-1 py-2.5 px-1 text-center text-xs font-medium transition-colors relative",
+                  activeTab === column.key
+                    ? "bg-slate-800 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
                 )}
-              </div>
-            </ScrollArea>
+              >
+                <div className="truncate">{column.label}</div>
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "text-[9px] px-1.5 py-0 h-4 mt-0.5",
+                    activeTab === column.key ? "bg-white/20 text-white" : "bg-slate-100"
+                  )}
+                >
+                  {columnCounts[column.key]}
+                </Badge>
+              </button>
+            ))}
           </div>
-        )
-      })}
 
-      </div>
+          {/* Aktif Tab İçeriği */}
+          {columns.filter(c => c.key === activeTab).map(column => renderColumn(column))}
+        </div>
+      ) : (
+        /* Desktop: 4 Kolonlu Grid */
+        <div className="grid grid-cols-4 gap-2 overflow-hidden">
+          {columns.map(column => renderColumn(column))}
+        </div>
+      )}
 
       {/* Rota Planlama Modal */}
       <RoutePlannerModal

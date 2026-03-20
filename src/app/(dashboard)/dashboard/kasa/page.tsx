@@ -283,15 +283,15 @@ export default function KasaPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Günlük Kasa</h1>
           <p className="text-gray-500">{format(selectedDate, "d MMMM yyyy, EEEE", { locale: tr })}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2 w-full md:w-auto">
                 <CalendarIcon className="h-4 w-4" />
                 {format(selectedDate, "dd.MM.yyyy")}
               </Button>
@@ -300,12 +300,14 @@ export default function KasaPage() {
               <Calendar mode="single" selected={selectedDate} onSelect={(d) => { if (d) { setSelectedDate(d); setCalendarOpen(false) } }} locale={tr} />
             </PopoverContent>
           </Popover>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setEditingEntry(null); setFormMode("income") }}>
-            <Plus className="h-4 w-4 mr-2" /> Gelir Ekle
-          </Button>
-          <Button className="bg-red-500 hover:bg-red-600" onClick={() => { setEditingEntry(null); setFormMode("expense") }}>
-            <Minus className="h-4 w-4 mr-2" /> Gider Ekle
-          </Button>
+          <div className="flex gap-2">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 flex-1 md:flex-none" onClick={() => { setEditingEntry(null); setFormMode("income") }}>
+              <Plus className="h-4 w-4 mr-2" /> Gelir Ekle
+            </Button>
+            <Button className="bg-red-500 hover:bg-red-600 flex-1 md:flex-none" onClick={() => { setEditingEntry(null); setFormMode("expense") }}>
+              <Minus className="h-4 w-4 mr-2" /> Gider Ekle
+            </Button>
+          </div>
         </div>
       </div>
 

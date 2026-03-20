@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Pencil, Trash2 } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-media-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -44,6 +45,7 @@ interface Category {
 
 export default function ServicesPage() {
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const [showForm, setShowForm] = useState(false)
   const [editingService, setEditingService] = useState<Service | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -115,6 +117,46 @@ export default function ServicesPage() {
           ) : services.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               Henüz hizmet eklenmemiş
+            </div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {services.map((service) => (
+                <div key={service.id} className="border rounded-lg p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{service.name}</div>
+                      {service.description && (
+                        <div className="text-sm text-gray-500 line-clamp-2 mt-0.5">
+                          {service.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-semibold">
+                        {service.currency === "TRY" ? "₺" : service.currency === "USD" ? "$" : service.currency === "GBP" ? "£" : "€"}{service.price}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {service.category && (
+                        <Badge variant="outline" className="text-xs">{service.category.name}</Badge>
+                      )}
+                      <Badge variant={service.isActive ? "default" : "secondary"} className="text-xs">
+                        {service.isActive ? "Aktif" : "Pasif"}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(service)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeletingId(service.id)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <Table>

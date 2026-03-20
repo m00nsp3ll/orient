@@ -329,7 +329,7 @@ export function RoutePlannerModal({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="!w-[96vw] !h-[94vh] !max-w-[1800px] !max-h-[95vh] !m-0 !p-6 !rounded-lg !top-[50%] !left-[50%] !-translate-x-1/2 !-translate-y-1/2 overflow-hidden flex flex-col"
+        className="!w-[96vw] !h-[94vh] !max-w-[1800px] !max-h-[95vh] !m-0 !p-4 md:!p-6 !rounded-lg !top-[50%] !left-[50%] !-translate-x-1/2 !-translate-y-1/2 overflow-hidden flex flex-col"
         showCloseButton={true}
       >
         <DialogHeader>
@@ -339,16 +339,16 @@ export function RoutePlannerModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 grid grid-cols-2 gap-6 overflow-hidden min-h-[500px]">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 overflow-hidden md:min-h-[500px]">
           {/* Sol: Mevcut Transferler */}
-          <div className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col overflow-hidden min-h-0">
+            <div className="flex items-center justify-between mb-2 md:mb-3">
               <h3 className="font-semibold text-sm">Mevcut Transferler</h3>
               <Badge variant="secondary" className="text-xs">{sortedAvailable.length} transfer</Badge>
             </div>
-            <div className="flex-1 overflow-y-auto border rounded-lg p-3 bg-gray-50 space-y-2">
+            <div className="flex-1 overflow-y-auto border rounded-lg p-2 md:p-3 bg-gray-50 space-y-2">
               {sortedAvailable.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-12">
+                <p className="text-center text-sm text-muted-foreground py-8 md:py-12">
                   Tüm transferler rotaya eklendi
                 </p>
               ) : (
@@ -357,47 +357,40 @@ export function RoutePlannerModal({
                   return (
                     <div
                       key={transfer.id}
-                      className="flex items-center gap-3 p-3 bg-white border rounded-lg hover:bg-blue-50 cursor-pointer group transition-colors"
+                      className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white border rounded-lg hover:bg-blue-50 cursor-pointer group transition-colors"
                       onClick={() => addToRoute(transfer)}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded">
+                        <div className="flex items-center gap-1.5 md:gap-2 mb-1 flex-wrap">
+                          <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-xs font-bold px-1.5 md:px-2 py-0.5 rounded shrink-0">
                             <Clock className="h-3 w-3" />
                             {format(new Date(transfer.appointment.startTime), "HH:mm")}
                           </span>
-                          <span className="font-semibold text-sm truncate">
+                          <span className="font-semibold text-sm break-words leading-tight">
                             {transfer.appointment.hotel?.name || "Otel"}
                           </span>
-                          <Badge variant="outline" className="text-[10px] h-5">
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant="outline" className="text-[10px] h-5 shrink-0">
                             {transfer.appointment.hotel?.region?.name}
                           </Badge>
                           {isRest && (
-                            <Badge className="bg-red-500 text-white text-[10px] px-1.5 py-0 h-5">
+                            <Badge className="bg-red-500 text-white text-[10px] px-1.5 py-0 h-5 shrink-0">
                               <Banknote className="h-3 w-3 mr-0.5" />
                               REST
                             </Badge>
                           )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-3.5 w-3.5 text-slate-400" />
                           <span className="text-xs text-slate-500 truncate">
                             {transfer.appointment.customerName || "Misafir"}
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 shrink-0">
                         <Badge variant="secondary" className="text-xs">
-                          <Users className="h-3 w-3 mr-1" />
+                          <Users className="h-3 w-3 mr-0.5" />
                           {transfer.appointment.pax || 1}{transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""}
                         </Badge>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Plus className="h-5 w-5 text-blue-600" />
-                        </Button>
+                        <Plus className="h-4 w-4 text-blue-600 hidden md:block opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
                   )
@@ -407,8 +400,8 @@ export function RoutePlannerModal({
           </div>
 
           {/* Sağ: Rota veya Harita */}
-          <div className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col overflow-hidden min-h-0">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 md:mb-3 gap-2">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm">
                   {showMapPreview ? "Rota Haritası" : "Rota Sırası"}
@@ -432,7 +425,8 @@ export function RoutePlannerModal({
                     onClick={handleOptimizeByLocation}
                   >
                     <Navigation className="h-3.5 w-3.5 mr-1" />
-                    Konuma Göre Sırala
+                    <span className="hidden md:inline">Konuma Göre Sırala</span>
+                    <span className="md:hidden">Sırala</span>
                   </Button>
                 )}
                 {selectedTransfers.length > 0 && (
@@ -443,7 +437,7 @@ export function RoutePlannerModal({
                     onClick={() => setShowMapPreview(!showMapPreview)}
                   >
                     <Map className="h-3.5 w-3.5 mr-1" />
-                    {showMapPreview ? "Listeye Dön" : "Haritada Önizle"}
+                    {showMapPreview ? "Liste" : "Harita"}
                   </Button>
                 )}
               </div>
@@ -493,24 +487,26 @@ export function RoutePlannerModal({
                             onDragOver={(e) => handleDragOver(e, index)}
                             onDragEnd={handleDragEnd}
                             className={cn(
-                              "flex items-center gap-3 p-3 bg-white border rounded-lg cursor-move transition-all",
+                              "flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white border rounded-lg cursor-move transition-all",
                               draggedIndex === index && "opacity-50 border-blue-500 shadow-lg"
                             )}
                           >
-                            <GripVertical className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                            <GripVertical className="h-4 w-4 text-slate-400 flex-shrink-0 hidden md:block" />
+                            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs md:text-sm font-bold flex-shrink-0">
                               {index + 1}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-xs font-bold px-2 py-0.5 rounded">
+                              <div className="flex items-center gap-1.5 md:gap-2 mb-1 flex-wrap">
+                                <span className="inline-flex items-center gap-1 bg-orange-500 text-white text-xs font-bold px-1.5 md:px-2 py-0.5 rounded shrink-0">
                                   <Clock className="h-3 w-3" />
                                   {format(new Date(transfer.appointment.startTime), "HH:mm")}
                                 </span>
-                                <span className="font-semibold text-sm truncate">
+                                <span className="font-semibold text-sm break-words leading-tight">
                                   {transfer.appointment.hotel?.name || "Otel"}
                                 </span>
-                                <Badge variant="outline" className="text-[10px] h-5">
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Badge variant="outline" className="text-[10px] h-5 shrink-0">
                                   {transfer.appointment.hotel?.region?.name}
                                 </Badge>
                                 {isRest && (
@@ -583,9 +579,9 @@ export function RoutePlannerModal({
           </div>
         </div>
 
-        <DialogFooter className="flex items-center gap-4 pt-4 border-t mt-4">
-          <div className="flex-1 max-w-xs">
-            <label className="text-sm font-medium mb-2 block">Şoför Seç</label>
+        <DialogFooter className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 pt-4 border-t mt-4">
+          <div className="flex-1 md:max-w-xs">
+            <label className="text-sm font-medium mb-1 md:mb-2 block">Şoför Seç</label>
             <DriverSelector
               drivers={drivers}
               value={selectedDriverId}
@@ -594,15 +590,15 @@ export function RoutePlannerModal({
               currentDriverId={null}
             />
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={handleClose} className="px-6">
+          <div className="flex flex-wrap gap-2 md:gap-3">
+            <Button variant="outline" onClick={handleClose} className="px-4 md:px-6 flex-1 md:flex-none">
               İptal
             </Button>
             <Button
               variant="outline"
               onClick={() => setShowMapPreview(true)}
               disabled={selectedTransfers.length === 0}
-              className="px-6"
+              className="px-4 md:px-6 hidden md:flex"
             >
               <Map className="h-4 w-4 mr-2" />
               Rotayı Görüntüle
@@ -610,10 +606,10 @@ export function RoutePlannerModal({
             <Button
               onClick={handleAssignClick}
               disabled={!selectedDriverId || selectedTransfers.length === 0}
-              className="bg-blue-600 hover:bg-blue-700 px-6"
+              className="bg-blue-600 hover:bg-blue-700 px-4 md:px-6 flex-1 md:flex-none"
             >
               <Route className="h-4 w-4 mr-2" />
-              Rotayı Ata ({selectedTransfers.length} durak)
+              Rotayı Ata ({selectedTransfers.length})
             </Button>
           </div>
         </DialogFooter>

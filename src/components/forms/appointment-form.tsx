@@ -427,7 +427,7 @@ export function AppointmentForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full !max-w-[1200px] max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="w-full !max-w-[1200px] max-h-[100dvh] md:max-h-[90vh] h-[100dvh] md:h-auto overflow-y-auto p-0 md:rounded-lg rounded-none">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-white border-b px-6 py-4">
           <DialogHeader>

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Trash2, Settings, KeyRound, Eye, EyeOff, Pencil, Check, X } from "lucide-react"
+import { useIsMobile } from "@/hooks/use-media-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -67,6 +68,7 @@ interface AgencyServiceWithPrice {
 
 export default function AgenciesPage() {
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const [showForm, setShowForm] = useState(false)
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
@@ -399,6 +401,47 @@ export default function AgenciesPage() {
           ) : agencies.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               Henüz acenta eklenmemiş
+            </div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {agencies.map((agency) => (
+                <div key={agency.id} className="border rounded-lg p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{agency.name || agency.companyName || "-"}</div>
+                      <div className="text-sm text-gray-500 mt-0.5">
+                        {agency.user?.name || agency.contactName || "-"}
+                      </div>
+                      {(agency.user?.phone || agency.phone) && (
+                        <div className="text-sm text-gray-500">{agency.user?.phone || agency.phone}</div>
+                      )}
+                    </div>
+                    <Badge variant={agency.isActive ? "default" : "secondary"} className="text-xs shrink-0">
+                      {agency.isActive ? "Aktif" : "Pasif"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {agency.currency === "EUR" ? "€ EUR" : agency.currency === "USD" ? "$ USD" : agency.currency === "GBP" ? "£ GBP" : "₺ TRY"}
+                      </Badge>
+                      <span className="text-xs text-gray-500">{agency._count.appointments} randevu</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" className="h-8 text-xs px-2" onClick={() => handleOpenServiceModal(agency)}>
+                        <Settings className="h-3.5 w-3.5 mr-1" />
+                        Hizmetler
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenSettingsModal(agency)}>
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setDeleteAgencyTarget(agency); setShowDeleteConfirm(true) }}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <Table>

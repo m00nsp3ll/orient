@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { TransferBoard } from "./components/transfer-board"
 import { ActiveDriversBar } from "./components/active-drivers-bar"
+import { useIsMobile } from "@/hooks/use-media-query"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -312,20 +313,20 @@ export default function OperationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Operasyon Paneli</h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground hidden md:block">
             Günlük transfer takibi ve şoför yönetimi
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={cn(
-                  "w-[200px] justify-start text-left font-normal",
+                  "w-full md:w-[200px] justify-start text-left font-normal",
                   !date && "text-muted-foreground"
                 )}
               >
@@ -342,27 +343,33 @@ export default function OperationsPage() {
               />
             </PopoverContent>
           </Popover>
-          <Button
-            variant="outline"
-            onClick={handleLoadDemoData}
-            disabled={loading}
-            className="gap-2"
-          >
-            <Database className="h-4 w-4" />
-            Demo Data Yükle
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleResetDemo}
-            disabled={loading}
-            className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4" />
-            Demo Sıfırla
-          </Button>
-          <Button variant="outline" size="icon" onClick={fetchData}>
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleLoadDemoData}
+              disabled={loading}
+              className="gap-2"
+              size="sm"
+            >
+              <Database className="h-4 w-4" />
+              <span className="hidden md:inline">Demo Data Yükle</span>
+              <span className="md:hidden">Demo</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleResetDemo}
+              disabled={loading}
+              className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+              size="sm"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="hidden md:inline">Demo Sıfırla</span>
+              <span className="md:hidden">Sıfırla</span>
+            </Button>
+            <Button variant="outline" size="icon" onClick={fetchData}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            </Button>
+          </div>
         </div>
       </div>
 

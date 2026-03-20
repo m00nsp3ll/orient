@@ -59,16 +59,18 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-2.5 left-3 z-50">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
-      </div>
+      {/* Mobile menu button — sadece menü kapalıyken göster */}
+      {!mobileOpen && (
+        <div className="lg:hidden fixed top-2.5 left-3 z-50">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
 
       {/* Sidebar */}
       <div
@@ -79,10 +81,18 @@ export function Sidebar() {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center h-16 px-6 border-b">
+          <div className="flex items-center justify-between h-16 px-6 border-b">
             <Link href="/dashboard" className="text-xl font-bold text-primary">
               Orient SPA
             </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setMobileOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
 
           {/* Navigation */}

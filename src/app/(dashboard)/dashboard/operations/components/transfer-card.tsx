@@ -188,22 +188,22 @@ export function TransferCard({
   return (
     <div className="bg-white rounded-lg border shadow-sm mb-2 overflow-hidden">
       {/* Header - Saat ve PAX */}
-      <div className="flex items-center justify-between px-2 py-1.5 bg-gradient-to-r from-slate-50 to-slate-100 border-b">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between px-2 py-1.5 bg-gradient-to-r from-slate-50 to-slate-100 border-b min-w-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <Clock className="h-3 w-3 text-slate-500" />
           <span className="font-semibold text-xs">
             {format(new Date(appointment.startTime), "HH:mm")}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 min-w-0 justify-end">
           {isRest && (
-            <Badge className="bg-red-500 text-white text-[10px] px-1 py-0 h-4 flex items-center gap-0.5">
+            <Badge className="bg-red-500 text-white text-[10px] px-1 py-0 h-4 flex items-center gap-0.5 shrink-0">
               <Banknote className="h-2.5 w-2.5" />
               {restLabel ? `REST ${restLabel}` : "REST"}
             </Badge>
           )}
           {appointment.pax && (
-            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 shrink-0">
               <Users className="h-2.5 w-2.5 mr-0.5" />
               {appointment.pax}{appointment.childCount ? `+${appointment.childCount}` : ""}
             </Badge>
@@ -212,12 +212,12 @@ export function TransferCard({
       </div>
 
       {/* Body */}
-      <div className="p-2">
+      <div className="p-2 min-w-0 overflow-hidden">
         {/* Otel / Müşteri Adı */}
         <Popover open={showDetails} onOpenChange={setShowDetails}>
           <PopoverTrigger asChild>
-            <button className="w-full text-left group">
-              <div className="font-semibold text-sm truncate group-hover:text-blue-600 transition-colors">
+            <button className="w-full text-left group min-w-0">
+              <div className="font-semibold text-sm break-words leading-tight group-hover:text-blue-600 transition-colors">
                 {appointment.hotel?.name || "Otel"}
               </div>
               <div className="text-[11px] text-slate-400 truncate">
