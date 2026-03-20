@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Plus, Pencil, Trash2, Check, X, Hotel, MapPin, Navigation, Search, Map as MapIcon } from "lucide-react"
+import { Plus, Pencil, Trash2, Check, X, Hotel, MapPin, Navigation, Search, Map as MapIcon, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
@@ -65,7 +65,7 @@ export default function HotelsPage() {
   const [locationPickerOpen, setLocationPickerOpen] = useState(false)
   const [selectedHotelForLocation, setSelectedHotelForLocation] = useState<HotelData | null>(null)
   const [showNoAddress, setShowNoAddress] = useState(false)
-  const [showDuplicates, setShowDuplicates] = useState(false)
+  const [showJunk, setShowJunk] = useState(false)
 
   const { data: hotels = [], isLoading: hotelsLoading } = useQuery<HotelData[]>({
     queryKey: ["hotels"],
@@ -174,65 +174,6 @@ export default function HotelsPage() {
     },
   })
 
-  // String normalization for similarity check
-  const normalizeString = (str: string): string => {
-    return str
-      .toLowerCase()
-      .replace(/hotel|otel|resort|apart|club|beach|spa|wellness/gi, '')
-      .replace(/[^a-z0-9\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }
-
-  // Calculate similarity between two strings (0-1, where 1 is identical)
-  const calculateSimilarity = (str1: string, str2: string): number => {
-    const norm1 = normalizeString(str1)
-    const norm2 = normalizeString(str2)
-
-    // Exact match after normalization
-    if (norm1 === norm2) return 1
-
-    // Check if one contains the other
-    if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.8
-
-    // Levenshtein distance-based similarity
-    const longer = norm1.length > norm2.length ? norm1 : norm2
-    const shorter = norm1.length > norm2.length ? norm2 : norm1
-
-    if (longer.length === 0) return 1.0
-
-    const editDistance = levenshteinDistance(longer, shorter)
-    return (longer.length - editDistance) / longer.length
-  }
-
-  // Levenshtein distance algorithm
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix: number[][] = []
-
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i]
-    }
-
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1]
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          )
-        }
-      }
-    }
-
-    return matrix[str2.length][str1.length]
-  }
 
   const handleStartEdit = (hotel: HotelData) => {
     setEditingId(hotel.id)
@@ -284,36 +225,191 @@ export default function HotelsPage() {
     return R * c
   }
 
-  // Find similar/duplicate hotel names using smart matching
-  const findSimilarHotels = (): string[] => {
-    const similarIds = new Set<string>()
-    const SIMILARITY_THRESHOLD = 0.75 // 75% benzerlik eşiği
+  // Katman 1: Alt-mekan prefix'leri — hotel/otel/resort içerse bile junk
+  const SUB_VENUE_PREFIXES = [
+    'snack bar', 'pool bar', 'beach bar', 'lobby bar', 'bar ',
+    'amfitiyatro', 'amphitheatre', 'amphitheater', 'anfitiyatro',
+    'adventure park', 'aqua park', 'aquapark', 'water park', 'waterpark',
+    'mini club', 'kids club', 'mini kulüp', 'çocuk kulübü',
+    'spa center', 'spa centre', 'wellness center', 'wellness centre',
+    'fitness center', 'fitness centre',
+    'reception', 'resepsiyon', 'lobby',
+    'restaurant', 'restoran', 'buffet', 'büfe',
+    'animation', 'animasyon',
+    'parking', 'otopark', 'car park',
+    'снек бар', 'снэк бар',
+    'transfer desk',
+    'beach of', 'plaj',
+    'market', 'shop', 'boutique of', 'mağaza',
+  ]
 
-    for (let i = 0; i < hotels.length; i++) {
-      for (let j = i + 1; j < hotels.length; j++) {
-        const similarity = calculateSimilarity(hotels[i].name, hotels[j].name)
+  // Katman 2: Keyword-based junk (hasHotelWord guard kaldırıldı, pozisyon bazlı)
+  const JUNK_KEYWORDS = [
+    // Mekanlar
+    'amfitiyatro', 'anfitiyatro', 'amphitheatre', 'amphitheater',
+    'arena', 'stadyum', 'stadium',
+    // Alt-mekan
+    'snack bar', 'pool bar', 'beach bar', 'lobby bar',
+    'animasyon', 'animation',
+    'mini club', 'kids club',
+    // Ekipman / malzeme
+    'ekipman', 'equipment', 'malzeme', 'tedarik', 'mobilya', 'furniture',
+    'tekstil', 'textile', 'halı', 'perde',
+    // Kamp / bungalov
+    'camping', 'kamp alanı', 'çadır', 'karavan', 'çadır kamp', 'bungalov',
+    // Gayrimenkul / site
+    'emlak', 'real estate', 'gayrimenkul', 'inşaat', 'construction',
+    'tatil sitesi', 'tatil evleri', 'site yönetimi', 'tatil köyü',
+    // Yeme-içme
+    'restoran', 'restaurant', 'cafe', 'kafe', 'kahve', 'bistro',
+    'köfteci', 'kebab', 'pizza', 'burger', 'lokanta', 'bakery', 'fırın',
+    // Hizmet / dükkan
+    'kuaför', 'berber', 'güzellik', 'beauty salon', 'hamam',
+    'market', 'süpermarket', 'supermarket', 'mağaza', 'shop', 'boutique store',
+    'eczane', 'pharmacy', 'kuyumcu', 'jewel',
+    'dükkanı', 'mağazası',
+    // Spor / eğlence
+    'gym', 'spor salonu', 'fitness', 'lunapark', 'aquapark', 'eğlence',
+    'dalış', 'diving', 'surf', 'jet ski', 'water sport', 'watersport',
+    // Ulaşım
+    'rent a car', 'otopark', 'parking', 'transfer', 'taxi', 'taksi',
+    // Eğitim
+    'okul', 'school', 'yurt', 'öğrenci', 'kreş', 'anaokulu',
+    // Diğer
+    'plajı', 'beach club', 'kiralık', 'hurda', 'fabrik', 'atölye',
+    'lojman', 'personel', 'depo', 'warehouse', 'piknik',
+    'cami', 'mosque', 'kilise', 'church', 'hastane', 'hospital', 'klinik',
+    'muhasebe', 'accounting', 'avukat', 'lawyer', 'noter',
+    // Rusça
+    'снек бар', 'снэк бар',
+  ]
 
-        if (similarity >= SIMILARITY_THRESHOLD) {
-          similarIds.add(hotels[i].id)
-          similarIds.add(hotels[j].id)
+  // Base name extraction: alt-mekan prefix'ini sil, hotel/otel/resort/spa/beach/club sil, normalize
+  const extractBaseName = (name: string): string => {
+    let n = name.toLowerCase().trim()
+    // Alt-mekan prefix'ini sil
+    for (const prefix of SUB_VENUE_PREFIXES) {
+      if (n.startsWith(prefix)) {
+        n = n.slice(prefix.length).trim()
+        break
+      }
+    }
+    // Hotel keywords sil ve normalize
+    return n
+      .replace(/hotel|otel|resort|spa|beach|club|wellness/gi, '')
+      .replace(/[^a-z0-9\s\u00c0-\u024f\u0400-\u04ff]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  // Junk detection + parent hotel mapping
+  const { junkHotelIds, junkParentMap } = useMemo(() => {
+    const ids = new Set<string>()
+    const parentMap = new Map<string, string>() // junkId → parent hotel name
+
+    // Katman 1: Alt-mekan prefix kontrolü (hotel word olsa bile yakala)
+    for (const hotel of hotels) {
+      const nameLower = hotel.name.toLowerCase().trim()
+      for (const prefix of SUB_VENUE_PREFIXES) {
+        if (nameLower.startsWith(prefix)) {
+          ids.add(hotel.id)
+          break
         }
       }
     }
 
-    return Array.from(similarIds)
-  }
+    // Katman 2: Keyword kontrolü — pozisyon bazlı
+    for (const hotel of hotels) {
+      if (ids.has(hotel.id)) continue
+      const nameLower = hotel.name.toLowerCase()
+      const hasHotelWord = /hotel|otel|resort/i.test(nameLower)
 
-  const duplicateHotelIds = useMemo(() => findSimilarHotels(), [hotels])
+      for (const kw of JUNK_KEYWORDS) {
+        const kwIndex = nameLower.indexOf(kw)
+        if (kwIndex === -1) continue
+        if (hasHotelWord) {
+          // Keyword başta ise (ilk %40 pozisyonda) → junk, sonda ise gerçek otel
+          const kwPosition = kwIndex / nameLower.length
+          if (kwPosition < 0.4) {
+            ids.add(hotel.id)
+          }
+        } else {
+          // Hotel word yoksa doğrudan junk
+          ids.add(hotel.id)
+        }
+        break
+      }
+    }
+
+    // Katman 3: 80+ karakter → junk (Booking.com daire ilanları)
+    for (const hotel of hotels) {
+      if (hotel.name.length > 80) {
+        ids.add(hotel.id)
+      }
+    }
+
+    // "Apart" geçip "hotel/otel" geçmeyenler (daire ilanları)
+    for (const hotel of hotels) {
+      const nameLower = hotel.name.toLowerCase()
+      if (/apart(?!.*(?:hotel|otel))/i.test(nameLower) && /daire|oda|yatak|suite/i.test(nameLower)) {
+        ids.add(hotel.id)
+      }
+    }
+
+    // Katman 4: Gruplama — junk kayıtları için parent otel bul
+    const junkIds = Array.from(ids)
+    const nonJunkHotels = hotels.filter(h => !ids.has(h.id))
+
+    // Base name index for non-junk hotels
+    const baseNameIndex = new Map<string, string>() // baseName → hotel name
+    for (const hotel of nonJunkHotels) {
+      const base = extractBaseName(hotel.name)
+      if (base.length > 2) {
+        // En kısa (veya Hotel/Resort içeren) ismi tercih et
+        const existing = baseNameIndex.get(base)
+        if (!existing || hotel.name.length < existing.length) {
+          baseNameIndex.set(base, hotel.name)
+        }
+      }
+    }
+
+    // Her junk için parent bul
+    for (const junkId of junkIds) {
+      const junkHotel = hotels.find(h => h.id === junkId)
+      if (!junkHotel) continue
+      const junkBase = extractBaseName(junkHotel.name)
+
+      // Exact base match
+      const parentName = baseNameIndex.get(junkBase)
+      if (parentName) {
+        parentMap.set(junkId, parentName)
+        continue
+      }
+
+      // Partial match: junk base name non-junk hotel base name'i içeriyor mu?
+      const baseEntries = Array.from(baseNameIndex.entries())
+      for (let i = 0; i < baseEntries.length; i++) {
+        const base = baseEntries[i][0]
+        const name = baseEntries[i][1]
+        if (junkBase.length > 2 && base.length > 2 && (base.includes(junkBase) || junkBase.includes(base))) {
+          parentMap.set(junkId, name)
+          break
+        }
+      }
+    }
+
+    return { junkHotelIds: junkIds, junkParentMap: parentMap }
+  }, [hotels])
 
   const filteredHotels = useMemo(() => {
     if (selectedHotelId) return hotels.filter(h => h.id === selectedHotelId)
     return hotels.filter(h => {
       if (selectedRegion !== "all" && h.regionId !== selectedRegion) return false
       if (showNoAddress && (h.lat !== null || h.lng !== null)) return false
-      if (showDuplicates && !duplicateHotelIds.includes(h.id)) return false
+      if (showJunk && !junkHotelIds.includes(h.id)) return false
       return true
     })
-  }, [hotels, selectedHotelId, selectedRegion, showNoAddress, showDuplicates, duplicateHotelIds])
+  }, [hotels, selectedHotelId, selectedRegion, showNoAddress, showJunk, junkHotelIds])
 
   return (
     <div className="space-y-6">
@@ -391,7 +487,7 @@ export default function HotelsPage() {
                 size="sm"
                 onClick={() => {
                   setShowNoAddress(!showNoAddress)
-                  setShowDuplicates(false)
+                  setShowJunk(false)
                   setSelectedRegion("all")
                   setSelectedHotelId(null)
                 }}
@@ -400,25 +496,26 @@ export default function HotelsPage() {
                 Adresi Olmayanlar {showNoAddress && `(${hotels.filter(h => h.lat === null || h.lng === null).length})`}
               </Button>
               <Button
-                variant={showDuplicates ? "default" : "outline"}
+                variant={showJunk ? "default" : "outline"}
                 size="sm"
                 onClick={() => {
-                  setShowDuplicates(!showDuplicates)
+                  setShowJunk(!showJunk)
                   setShowNoAddress(false)
                   setSelectedRegion("all")
                   setSelectedHotelId(null)
                 }}
+                className={showJunk ? "" : "text-orange-600 border-orange-300 hover:bg-orange-50"}
               >
-                <Hotel className="h-4 w-4 mr-1" />
-                Benzer İsimli Oteller {showDuplicates && `(${duplicateHotelIds.length})`}
+                <AlertTriangle className="h-4 w-4 mr-1" />
+                Otel Temizle ({junkHotelIds.length})
               </Button>
-              {(selectedRegion !== "all" || selectedHotelId || searchQuery || showNoAddress || showDuplicates) && (
+              {(selectedRegion !== "all" || selectedHotelId || searchQuery || showNoAddress || showJunk) && (
                 <Button variant="outline" size="sm" onClick={() => {
                   setSelectedRegion("all")
                   setSelectedHotelId(null)
                   setSearchQuery("")
                   setShowNoAddress(false)
-                  setShowDuplicates(false)
+                  setShowJunk(false)
                 }}>
                   <X className="h-4 w-4 mr-1" />
                   Temizle
@@ -479,7 +576,14 @@ export default function HotelsPage() {
                           className="w-full"
                         />
                       ) : (
-                        hotel.name
+                        <div>
+                          <span>{hotel.name}</span>
+                          {showJunk && junkParentMap.get(hotel.id) && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              → {junkParentMap.get(hotel.id)}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>
