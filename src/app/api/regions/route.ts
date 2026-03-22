@@ -15,7 +15,7 @@ export async function GET() {
     orderBy: { name: "asc" },
     include: {
       _count: {
-        select: { hotels: true },
+        select: { hotels: { where: { isActive: true } } },
       },
     },
   })
