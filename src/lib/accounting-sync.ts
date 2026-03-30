@@ -59,13 +59,13 @@ export async function syncAccountingEntries(
       description: cashEntry.description ?? "Acenta geliri",
     })
 
-    // Acenta carisi: ödeme aldık → alacak azalır (debit)
+    // Acenta carisi: ödeme aldık → borç azalır (credit)
     if (cashEntry.agencyId) {
       toCreate.push({
         ...base,
         accountCode: agencyAccountCode(cashEntry.agencyId),
-        debit: amt,
-        credit: 0,
+        debit: 0,
+        credit: amt,
         amount: amt,
         currency: cur,
         agencyId: cashEntry.agencyId,
