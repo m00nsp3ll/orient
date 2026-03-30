@@ -17,7 +17,6 @@ export async function GET(req: NextRequest) {
   const endDateStr   = searchParams.get("endDate")
 
   const where: any = {
-    agencyId,
     accountCode: `CARI_ACENTA_${agencyId}`,
   }
 
