@@ -67,7 +67,7 @@ type DetailData = {
 type StaffItem = { id: string; commissionRate: number | null; user: { name: string } }
 type AgencyItem = { id: string; companyName: string; name: string; currency: string }
 
-type AcentaDetayPreset = "today" | "week" | "month" | "custom"
+type AcentaDetayPreset = "today" | "week" | "month" | "all" | "custom"
 
 // ── Yardımcı ─────────────────────────────────────────────────────────────────
 function fmtAmt(amount: number, currency: string) {
@@ -81,6 +81,9 @@ function fmtCur(amount: number, currency: string) {
 
 function localDateRange(preset: string, customStart: string, customEnd: string) {
   const now = new Date()
+  if (preset === "all") {
+    return { startStr: "2020-01-01", endStr: format(new Date(now.getFullYear() + 2, 11, 31), "yyyy-MM-dd") }
+  }
   if (preset === "today") { const d = format(now, "yyyy-MM-dd"); return { startStr: d, endStr: d } }
   if (preset === "week") {
     return { startStr: format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd"), endStr: format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd") }
@@ -134,7 +137,7 @@ function AcentaCariDialog({
   balance: Record<string, { debit: number; credit: number; bakiye: number }>
 }) {
   const now = new Date()
-  const [preset, setPreset]       = useState<AcentaDetayPreset>("month")
+  const [preset, setPreset]       = useState<AcentaDetayPreset>("all")
   const [customStart, setCustomStart] = useState(format(startOfMonth(now), "yyyy-MM-dd"))
   const [customEnd,   setCustomEnd]   = useState(format(now, "yyyy-MM-dd"))
   const [startOpen,   setStartOpen]   = useState(false)
@@ -289,6 +292,7 @@ function AcentaCariDialog({
     preset === "today" ? "Bugün" :
     preset === "week"  ? "Bu Hafta" :
     preset === "month" ? "Bu Ay" :
+    preset === "all"   ? "Tüm Zamanlar" :
     `${format(new Date(startStr + "T12:00:00"), "dd.MM.yyyy")} – ${format(new Date(endStr + "T12:00:00"), "dd.MM.yyyy")}`
 
   return (
@@ -312,6 +316,12 @@ function AcentaCariDialog({
         <div ref={printRef} className="space-y-4">
           {/* Tarih Filtresi */}
           <div className="flex flex-wrap items-center gap-2 bg-slate-50 rounded-lg p-3">
+            <Button size="sm" variant={preset === "all" ? "default" : "outline"}
+              className={cn("h-7 text-xs", preset === "all" && "bg-blue-600 hover:bg-blue-700")}
+              onClick={() => setPreset("all")}>
+              Tümü
+            </Button>
+            <div className="w-px h-4 bg-gray-300" />
             {(["today", "week", "month"] as const).map(p => (
               <Button key={p} size="sm" variant={preset === p ? "default" : "outline"}
                 className={cn("h-7 text-xs", preset === p && "bg-blue-600 hover:bg-blue-700")}
