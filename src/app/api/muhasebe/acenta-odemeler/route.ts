@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
 
   const where: any = {
     accountCode: `CARI_ACENTA_${agencyId}`,
+    credit: { gt: 0 },
   }
 
   if (startDateStr && endDateStr) {

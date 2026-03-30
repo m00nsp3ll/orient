@@ -161,9 +161,9 @@ function AcentaCariDialog({
   })
 
   const { data: odemeler } = useQuery<any[]>({
-    queryKey: ["acenta-odemeler", agencyId, startStr, endStr],
+    queryKey: ["acenta-odemeler", agencyId],
     queryFn: async () => {
-      const params = new URLSearchParams({ agencyId, startDate: startStr, endDate: endStr })
+      const params = new URLSearchParams({ agencyId })
       const res = await fetch(`/api/muhasebe/acenta-odemeler?${params}`)
       if (!res.ok) throw new Error("Yüklenemedi")
       return res.json()
