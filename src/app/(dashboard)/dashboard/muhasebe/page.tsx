@@ -1111,6 +1111,7 @@ export default function MuhasebePage() {
     queryClient.invalidateQueries({ queryKey: ["muhasebe-cari"] })
     queryClient.invalidateQueries({ queryKey: ["muhasebe-ozet"] })
     queryClient.invalidateQueries({ queryKey: ["muhasebe-virman"] })
+    queryClient.invalidateQueries({ queryKey: ["acenta-odemeler"] })
     if (detailAccount) queryClient.invalidateQueries({ queryKey: ["muhasebe-cari-detail", detailAccount.code] })
   }
 
