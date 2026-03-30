@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     where,
     orderBy: { date: "asc" },
     include: {
-      cashEntry: { select: { voucherNo: true } },
+      cashEntry: { select: { voucherNo: true, info: true } },
     },
   })
 

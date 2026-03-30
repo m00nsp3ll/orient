@@ -514,7 +514,11 @@ function AcentaCariDialog({
                               {fmtCur(e.credit || 0, e.currency)}
                             </TableCell>
                             <TableCell className="text-xs">
-                              {e.cashEntry ? (
+                              {e.cashEntry?.info === "MUHASEBE" ? (
+                                <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">
+                                  Muhasebe
+                                </Badge>
+                              ) : e.cashEntry ? (
                                 <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-[10px]">
                                   Kasa #{e.cashEntry.voucherNo}
                                 </Badge>

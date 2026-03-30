@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
           expenseCurrency: data.expenseCurrency || null,
           expenseCategory: data.expenseCategory || null,
           description: data.description || null,
+          info: "MUHASEBE",
           createdBy: session.user.id,
         },
         include: { staff: { select: { commissionRate: true } } },
