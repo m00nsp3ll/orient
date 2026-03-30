@@ -209,10 +209,14 @@ export default function KasaPage() {
   const entries = data?.entries || []
   const summary = data?.summary
 
+  // Muhasebe girişlerini kasadan ayır
+  const muhasebeEntries = entries.filter(e => e.info === "MUHASEBE")
+  const kasaEntries = entries.filter(e => e.info !== "MUHASEBE")
+
   // Gelirler: kredi kartı hariç nakit gelirler + kredi kartları ayrı
-  const cashIncomeEntries = entries.filter(e => !!(e.agencyIncomeAmount || e.receptionIncomeAmount || e.staffIncomeAmount))
-  const creditCardEntries = entries.filter(e => !!e.creditCardAmount)
-  const expenseEntries = entries.filter(e => !isIncomeEntry(e))
+  const cashIncomeEntries = kasaEntries.filter(e => !!(e.agencyIncomeAmount || e.receptionIncomeAmount || e.staffIncomeAmount))
+  const creditCardEntries = kasaEntries.filter(e => !!e.creditCardAmount)
+  const expenseEntries = kasaEntries.filter(e => !isIncomeEntry(e))
 
   // Personel prim özeti (sadece o personelin staffIncome'undan)
   const commissionData = (() => {
@@ -341,10 +345,25 @@ export default function KasaPage() {
           return { cur, amount }
         }).filter(Boolean) as { cur: typeof CURRENCIES[number]; amount: number }[]
 
-        if (cashRows.length === 0 && ccRows.length === 0) return null
+        const muhasebeRows = CURRENCIES.map(cur => {
+          const muhasebeCreditEntries = muhasebeEntries.filter(e => e.receptionIncomeAmount && e.receptionIncomeCurrency === cur.value)
+          const muhasebeDebitEntries = muhasebeEntries.filter(e => e.expenseAmount && e.expenseCurrency === cur.value)
+          const muhasebeAgencyEntries = muhasebeEntries.filter(e => e.agencyIncomeAmount && e.agencyIncomeCurrency === cur.value)
+          const muhasebeStaffEntries = muhasebeEntries.filter(e => e.staffIncomeAmount && e.staffIncomeCurrency === cur.value)
+          const muhasebeCCEntries = muhasebeEntries.filter(e => e.creditCardAmount && e.creditCardCurrency === cur.value)
+          const totalIn = muhasebeCreditEntries.reduce((s, e) => s + (e.receptionIncomeAmount || 0), 0)
+            + muhasebeAgencyEntries.reduce((s, e) => s + (e.agencyIncomeAmount || 0), 0)
+            + muhasebeStaffEntries.reduce((s, e) => s + (e.staffIncomeAmount || 0), 0)
+            + muhasebeCCEntries.reduce((s, e) => s + (e.creditCardAmount || 0), 0)
+          const totalOut = muhasebeDebitEntries.reduce((s, e) => s + (e.expenseAmount || 0), 0)
+          if (totalIn === 0 && totalOut === 0) return null
+          return { cur, totalIn, totalOut }
+        }).filter(Boolean) as { cur: typeof CURRENCIES[number]; totalIn: number; totalOut: number }[]
+
+        if (cashRows.length === 0 && ccRows.length === 0 && muhasebeRows.length === 0) return null
 
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Nakit Kasa */}
             <Card className="border shadow-sm">
               <CardContent className="p-5">
@@ -426,6 +445,37 @@ export default function KasaPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Muhasebe */}
+            <Card className="border shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                  <h3 className="font-semibold text-gray-700">Muhasebe</h3>
+                  <span className="text-[10px] text-gray-400">(kasaya dahil değil)</span>
+                </div>
+                {muhasebeRows.length === 0 ? (
+                  <p className="text-sm text-gray-400">Muhasebe girişi yok</p>
+                ) : (
+                  <div className="space-y-3">
+                    {muhasebeRows.map(({ cur, totalIn, totalOut }) => (
+                      <div key={cur.value} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                        <div className="space-y-1">
+                          <Badge className={cn("text-white text-xs", cur.bg)}>{cur.symbol} {cur.value}</Badge>
+                          <div className="flex gap-3 text-xs text-gray-500">
+                            {totalIn > 0 && <span className="text-emerald-600">+{totalIn.toLocaleString("tr-TR")}</span>}
+                            {totalOut > 0 && <span className="text-red-500">-{totalOut.toLocaleString("tr-TR")}</span>}
+                          </div>
+                        </div>
+                        <div className={cn("text-xl font-bold", (totalIn - totalOut) >= 0 ? "text-blue-700" : "text-red-600")}>
+                          {cur.symbol} {Math.abs(totalIn - totalOut).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )
       })()}
@@ -436,7 +486,7 @@ export default function KasaPage() {
       ) : entries.length === 0 ? (
         <div className="text-center py-12 text-gray-500">Bu tarihte kasa girişi yok</div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Nakit Gelirler */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -498,6 +548,20 @@ export default function KasaPage() {
             )}
             {expenseEntries.length === 0 && commissionData.length === 0 && (
               <p className="text-sm text-gray-400 py-4 text-center">Gider girişi yok</p>
+            )}
+          </div>
+
+          {/* Muhasebe Girişleri */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-blue-500" />
+              <h2 className="font-semibold text-blue-800">Muhasebe ({muhasebeEntries.length})</h2>
+              <span className="text-xs text-gray-400">(kasaya dahil değil)</span>
+            </div>
+            {muhasebeEntries.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">Muhasebe girişi yok</p>
+            ) : (
+              muhasebeEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
             )}
           </div>
         </div>

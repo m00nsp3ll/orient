@@ -34,8 +34,14 @@ export async function GET(req: NextRequest) {
     orderBy: { date: "asc" },
     include: {
       cashEntry: { select: { voucherNo: true, info: true } },
+      createdByUser: { select: { name: true } },
     },
   })
 
-  return NextResponse.json(entries)
+  const enriched = entries.map(e => ({
+    ...e,
+    createdByName: (e as any).createdByUser?.name ?? null,
+  }))
+
+  return NextResponse.json(enriched)
 }

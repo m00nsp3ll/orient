@@ -495,17 +495,19 @@ function AcentaCariDialog({
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-blue-50">
-                          <TableHead className="text-xs font-semibold">Tarih</TableHead>
+                          <TableHead className="text-xs font-semibold">Tarih / Saat</TableHead>
                           <TableHead className="text-xs font-semibold">Açıklama</TableHead>
                           <TableHead className="text-right text-xs font-semibold text-emerald-700">Tahsilat</TableHead>
                           <TableHead className="text-xs font-semibold">Kaynak</TableHead>
+                          <TableHead className="text-xs font-semibold">Kullanıcı</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {odemeler.map((e: any) => (
                           <TableRow key={e.id} className="hover:bg-blue-50/40">
-                            <TableCell className="text-xs text-gray-600">
-                              {format(new Date(e.date), "dd.MM.yyyy")}
+                            <TableCell className="text-xs text-gray-600 whitespace-nowrap">
+                              <div>{format(new Date(e.createdAt || e.date), "dd.MM.yyyy")}</div>
+                              <div className="text-[10px] text-gray-400">{format(new Date(e.createdAt || e.date), "HH:mm")}</div>
                             </TableCell>
                             <TableCell className="text-xs text-gray-700">
                               {e.description || "—"}
@@ -527,6 +529,9 @@ function AcentaCariDialog({
                                   Muhasebe
                                 </Badge>
                               )}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500">
+                              {e.createdByName || "—"}
                             </TableCell>
                           </TableRow>
                         ))}
