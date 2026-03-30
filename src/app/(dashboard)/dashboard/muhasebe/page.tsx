@@ -160,6 +160,17 @@ function AcentaCariDialog({
     enabled: open,
   })
 
+  const { data: odemeler } = useQuery<any[]>({
+    queryKey: ["acenta-odemeler", agencyId, startStr, endStr],
+    queryFn: async () => {
+      const params = new URLSearchParams({ agencyId, startDate: startStr, endDate: endStr })
+      const res = await fetch(`/api/muhasebe/acenta-odemeler?${params}`)
+      if (!res.ok) throw new Error("Yüklenemedi")
+      return res.json()
+    },
+    enabled: open,
+  })
+
   const customers: any[] = stats?.customers ?? []
   const filtered = customers.filter(c =>
     !search ||
@@ -471,6 +482,53 @@ function AcentaCariDialog({
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {/* Ödemeler Bölümü */}
+              {odemeler && odemeler.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                    <ArrowLeftRight className="h-3.5 w-3.5" /> Tahsilat / Ödeme Hareketleri
+                    <span className="text-gray-400 font-normal">({odemeler.length} kayıt)</span>
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-blue-100">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-blue-50">
+                          <TableHead className="text-xs font-semibold">Tarih</TableHead>
+                          <TableHead className="text-xs font-semibold">Açıklama</TableHead>
+                          <TableHead className="text-right text-xs font-semibold text-emerald-700">Tahsilat</TableHead>
+                          <TableHead className="text-xs font-semibold">Kaynak</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {odemeler.map((e: any) => (
+                          <TableRow key={e.id} className="hover:bg-blue-50/40">
+                            <TableCell className="text-xs text-gray-600">
+                              {format(new Date(e.date), "dd.MM.yyyy")}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-700">
+                              {e.description || "—"}
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-semibold text-emerald-700">
+                              {fmtCur(e.credit || 0, e.currency)}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {e.cashEntry ? (
+                                <Badge className="bg-gray-100 text-gray-600 border-gray-200 text-[10px]">
+                                  Kasa #{e.cashEntry.voucherNo}
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">
+                                  Muhasebe
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
             </>
