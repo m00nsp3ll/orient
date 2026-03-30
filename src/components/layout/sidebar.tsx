@@ -28,6 +28,7 @@ import {
   Car,
   Timer,
   Wallet,
+  BookOpen,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -42,6 +43,7 @@ const navigation = [
   { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN"] },
   { name: "Alınış Saatleri", href: "/dashboard/session-times", icon: Timer, roles: ["ADMIN"] },
   { name: "Günlük Kasa", href: "/dashboard/kasa", icon: Wallet, roles: ["ADMIN"] },
+  { name: "Muhasebe", href: "/dashboard/muhasebe", icon: BookOpen, roles: ["ADMIN"] },
   { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"] },
   { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN"] },
   { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },

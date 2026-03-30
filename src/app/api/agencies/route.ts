@@ -100,6 +100,21 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Acenta için otomatik cari aç (sıfır bakiye sentinel entry)
+    await prisma.accountingEntry.create({
+      data: {
+        date: new Date(),
+        accountCode: `CARI_ACENTA_${agency.id}`,
+        debit: 0,
+        credit: 0,
+        amount: 0,
+        currency: validatedData.currency ?? "EUR",
+        description: `${validatedData.companyName} carisi açıldı`,
+        agencyId: agency.id,
+        createdBy: session.user.id,
+      },
+    })
+
     return NextResponse.json(agency)
   } catch (error) {
     if (error instanceof z.ZodError) {

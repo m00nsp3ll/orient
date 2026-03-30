@@ -58,6 +58,22 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Personel için otomatik cari aç (sıfır bakiye sentinel entry)
+    const userName = staff.user.name || "Personel"
+    await prisma.accountingEntry.create({
+      data: {
+        date: new Date(),
+        accountCode: `CARI_PERSONEL_${staff.id}`,
+        debit: 0,
+        credit: 0,
+        amount: 0,
+        currency: "TRY",
+        description: `${userName} carisi açıldı`,
+        staffId: staff.id,
+        createdBy: session.user.id,
+      },
+    })
+
     return NextResponse.json(staff)
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -2,7 +2,30 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { subDays, addDays, addHours, setHours, setMinutes, startOfDay } from "date-fns"
+import { subDays, addDays, addHours, setHours, setMinutes } from "date-fns"
+import { syncAccountingEntries } from "@/lib/accounting-sync"
+
+const EXPENSE_MAP: Array<{ description: string; category: string }> = [
+  { description: "Elektrik faturası",    category: "GIDER_ELEKTRIK_SU" },
+  { description: "Su faturası",          category: "GIDER_ELEKTRIK_SU" },
+  { description: "İnternet faturası",    category: "GIDER_TELEFON_INTERNET" },
+  { description: "Araç yakıt",           category: "GIDER_ARAC_YAKIT" },
+  { description: "Tamir bakım",          category: "GIDER_ARAC_BAKIM" },
+  { description: "Temizlik malzemesi",   category: "GIDER_SPA_MALZEME" },
+  { description: "Havlu yıkama",         category: "GIDER_SPA_MALZEME" },
+  { description: "Personel yemek",       category: "GIDER_MUTFAK" },
+  { description: "Market alışverişi",    category: "GIDER_MUTFAK" },
+  { description: "Kırtasiye",            category: "GIDER_ISYERI_BAKIM" },
+  { description: "Ofis gideri",          category: "GIDER_ISYERI_BAKIM" },
+  { description: "Çay/kahve",            category: "GIDER_DIGER" },
+]
+
+const RECEPTION_MAP: Array<{ description: string; subCategory: string }> = [
+  { description: "Walk-in müşteri",    subCategory: "GELIR_CILT_BAKIMI" },
+  { description: "Resepsiyon satış",   subCategory: "GELIR_EXTRA_PAKET" },
+  { description: "Direkt müşteri",     subCategory: "GELIR_MASAJ" },
+  { description: "Online rezervasyon", subCategory: "GELIR_MARKET" },
+]
 
 export async function POST() {
   const session = await getServerSession(authOptions)
@@ -19,10 +42,6 @@ export async function POST() {
     })
 
     if (demoAppointments.length > 0) {
-      const demoIds = demoAppointments.map(a => a.id)
-      await prisma.agencyTransaction.deleteMany({
-        where: { appointmentId: { in: demoIds } }
-      })
       await prisma.$executeRaw`DELETE FROM "AppointmentService" WHERE "appointmentId" IN (SELECT id FROM "Appointment" WHERE notes LIKE '%[DEMO]%')`
       await prisma.appointment.deleteMany({
         where: { notes: { contains: "[DEMO]" } }
@@ -282,37 +301,6 @@ export async function POST() {
           }
         })
 
-        // Acenta cari kaydı oluştur
-        if (agency) {
-          const totalPassPrice = selectedServices.reduce((sum: number, s: any) => {
-            const passPrice = getPassPrice(s.id)
-            return sum + (passPrice ?? s.price)
-          }, 0)
-
-          await prisma.agencyTransaction.create({
-            data: {
-              agencyId: agency.id,
-              appointmentId: appointment.id,
-              type: "DEBIT",
-              amount: totalPassPrice,
-              currency: agency.currency || "EUR",
-              description: `[DEMO] Rezervasyon - ${apt.customerName}`,
-            },
-          })
-
-          if (isRest && restAmount && restCurrency) {
-            await prisma.agencyTransaction.create({
-              data: {
-                agencyId: agency.id,
-                appointmentId: appointment.id,
-                type: "CREDIT",
-                amount: restAmount,
-                currency: restCurrency,
-                description: `[DEMO] REST - ${apt.customerName} (${restCurrency})`,
-              },
-            })
-          }
-        }
       } catch (aptError) {
         appointmentErrors++
         console.error("Demo appointment create error:", aptError)
@@ -322,20 +310,38 @@ export async function POST() {
     // =============================================
     // KASA DEMO DATA (randevu hatalarından bağımsız)
     // =============================================
-    const expenseDescriptions = [
-      "Temizlik malzemesi", "Su faturası", "Elektrik faturası", "Personel yemek",
-      "Kırtasiye", "Çay/kahve", "Havlu yıkama", "Araç yakıt", "Tamir bakım",
-      "Ofis gideri", "İnternet faturası", "Market alışverişi"
+    const expenseItems = [
+      { desc: "Elektrik faturası",    category: "GIDER_ELEKTRIK_SU" },
+      { desc: "Su faturası",          category: "GIDER_ELEKTRIK_SU" },
+      { desc: "İnternet faturası",    category: "GIDER_TELEFON_INTERNET" },
+      { desc: "Araç yakıt",           category: "GIDER_ARAC_YAKIT" },
+      { desc: "Tamir bakım",          category: "GIDER_ARAC_BAKIM" },
+      { desc: "Temizlik malzemesi",   category: "GIDER_SPA_MALZEME" },
+      { desc: "Havlu yıkama",         category: "GIDER_SPA_MALZEME" },
+      { desc: "Personel yemek",       category: "GIDER_MUTFAK" },
+      { desc: "Market alışverişi",    category: "GIDER_MUTFAK" },
+      { desc: "Kırtasiye",            category: "GIDER_ISYERI_BAKIM" },
+      { desc: "Ofis gideri",          category: "GIDER_ISYERI_BAKIM" },
+      { desc: "Kira ödemesi",         category: "GIDER_KIRA" },
+      { desc: "SSK prim ödemesi",     category: "GIDER_SSK" },
+      { desc: "Çeşitli gider",        category: "GIDER_DIGER" },
+    ]
+    const receptionItems = [
+      { desc: "Walk-in müşteri",    subCategory: "GELIR_CILT_BAKIMI" },
+      { desc: "Resepsiyon satış",   subCategory: "GELIR_EXTRA_PAKET" },
+      { desc: "Direkt müşteri",     subCategory: "GELIR_MASAJ" },
+      { desc: "Online rezervasyon", subCategory: "GELIR_MARKET" },
+      { desc: "Cilt bakımı",        subCategory: "GELIR_CILT_BAKIMI" },
+      { desc: "Extra paket",        subCategory: "GELIR_EXTRA_PAKET" },
     ]
     const creditDescriptions = [
       "Kredi kartı terminali", "Pos cihazı ödemesi", "Banka kredi taksiti"
     ]
-    const receptionDescriptions = [
-      "Walk-in müşteri", "Resepsiyon satış", "Direkt müşteri", "Online rezervasyon"
-    ]
     const serviceNames = services.map(s => s.name)
+    const userId = session.user.id
 
     let kasaCount = 0
+    let muhasebeCount = 0
 
     // Son 7 gün için kasa girişleri (sunum için zengin veri)
     for (let dayOffset = 6; dayOffset >= 0; dayOffset--) {
@@ -355,86 +361,107 @@ export async function POST() {
           : cur === "USD" ? (Math.floor(Math.random() * 150) + 50)
           : (Math.floor(Math.random() * 130) + 45)
 
-        await prisma.cashEntry.create({
-          data: {
-            date: kasaDate,
-            voucherNo: voucherNo++,
-            agencyId: agency.id,
-            hotelId: hotel?.id || null,
-            roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
-            serviceName: serviceNames[Math.floor(Math.random() * serviceNames.length)] || "Paket",
-            pax: paxCount,
-            agencyIncomeAmount: basePrice * paxCount,
-            agencyIncomeCurrency: cur,
-            description: `[DEMO] ${agency.name} geliri`,
-            createdBy: session.user.id,
-          },
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.cashEntry.create({
+            data: {
+              date: kasaDate,
+              voucherNo: voucherNo++,
+              agencyId: agency.id,
+              hotelId: hotel?.id || null,
+              roomNumber: `${Math.floor(Math.random() * 500) + 100}`,
+              serviceName: serviceNames[Math.floor(Math.random() * serviceNames.length)] || "Paket",
+              pax: paxCount,
+              agencyIncomeAmount: basePrice * paxCount,
+              agencyIncomeCurrency: cur,
+              description: `[DEMO] ${agency.name} geliri`,
+              createdBy: userId,
+            },
+            include: { staff: { select: { commissionRate: true } } },
+          })
+          await syncAccountingEntries(tx, created, userId)
         })
         kasaCount++
+        muhasebeCount += 2 // GELIR_ACENTA + CARI_ACENTA
       }
 
-      // Resepsiyon gelirleri (1-3 adet/gün)
-      const receptionCount = Math.floor(Math.random() * 3) + 1
+      // Resepsiyon gelirleri (2-4 adet/gün)
+      const receptionCount = Math.floor(Math.random() * 3) + 2
       for (let i = 0; i < receptionCount; i++) {
+        const item = receptionItems[Math.floor(Math.random() * receptionItems.length)]
         const cur = ["EUR", "TRY", "USD", "GBP"][Math.floor(Math.random() * 4)]
         const amount = cur === "TRY" ? (Math.floor(Math.random() * 2000) + 500)
           : cur === "GBP" ? (Math.floor(Math.random() * 80) + 25)
           : (Math.floor(Math.random() * 100) + 30)
 
-        await prisma.cashEntry.create({
-          data: {
-            date: kasaDate,
-            voucherNo: voucherNo++,
-            receptionIncomeAmount: amount,
-            receptionIncomeCurrency: cur,
-            description: `[DEMO] ${receptionDescriptions[Math.floor(Math.random() * receptionDescriptions.length)]}`,
-            createdBy: session.user.id,
-          },
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.cashEntry.create({
+            data: {
+              date: kasaDate,
+              voucherNo: voucherNo++,
+              receptionIncomeAmount: amount,
+              receptionIncomeCurrency: cur,
+              incomeSubCategory: item.subCategory,
+              description: `[DEMO] ${item.desc}`,
+              createdBy: userId,
+            },
+            include: { staff: { select: { commissionRate: true } } },
+          })
+          await syncAccountingEntries(tx, created, userId)
         })
         kasaCount++
+        muhasebeCount += 1
       }
 
-      // Giderler (2-4 adet/gün)
-      const expCount = Math.floor(Math.random() * 3) + 2
+      // Giderler (3-5 adet/gün)
+      const expCount = Math.floor(Math.random() * 3) + 3
       for (let i = 0; i < expCount; i++) {
+        const item = expenseItems[Math.floor(Math.random() * expenseItems.length)]
         const isEurExpense = Math.random() < 0.15
         const cur = isEurExpense ? "EUR" : "TRY"
         const amount = isEurExpense
           ? Math.floor(Math.random() * 50) + 10
           : Math.floor(Math.random() * 800) + 50
 
-        await prisma.cashEntry.create({
-          data: {
-            date: kasaDate,
-            voucherNo: voucherNo++,
-            expenseAmount: amount,
-            expenseCurrency: cur,
-            description: `[DEMO] ${expenseDescriptions[Math.floor(Math.random() * expenseDescriptions.length)]}`,
-            createdBy: session.user.id,
-          },
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.cashEntry.create({
+            data: {
+              date: kasaDate,
+              voucherNo: voucherNo++,
+              expenseAmount: amount,
+              expenseCurrency: cur,
+              expenseCategory: item.category,
+              description: `[DEMO] ${item.desc}`,
+              createdBy: userId,
+            },
+            include: { staff: { select: { commissionRate: true } } },
+          })
+          await syncAccountingEntries(tx, created, userId)
         })
         kasaCount++
+        muhasebeCount += 1
       }
 
-      // Kredi kartı geliri (1-3 adet/gün)
+      // Kredi kartı geliri (1-3 adet/gün) — SADECE TRY
       const ccCount = Math.floor(Math.random() * 3) + 1
       for (let i = 0; i < ccCount; i++) {
-        const cur = ["TRY", "EUR", "USD", "GBP"][Math.floor(Math.random() * 4)]
-        const amount = cur === "TRY" ? (Math.floor(Math.random() * 5000) + 1000)
-          : cur === "GBP" ? (Math.floor(Math.random() * 200) + 50)
-          : (Math.floor(Math.random() * 300) + 80)
+        const amount = Math.floor(Math.random() * 5000) + 1000
 
-        await prisma.cashEntry.create({
-          data: {
-            date: kasaDate,
-            voucherNo: voucherNo++,
-            creditCardAmount: amount,
-            creditCardCurrency: cur,
-            description: `[DEMO] Kredi kartı ödemesi (${cur})`,
-            createdBy: session.user.id,
-          },
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.cashEntry.create({
+            data: {
+              date: kasaDate,
+              voucherNo: voucherNo++,
+              creditCardAmount: amount,
+              creditCardCurrency: "TRY",
+              description: "[DEMO] Kredi kartı ödemesi",
+              createdBy: userId,
+            },
+            include: { staff: { select: { commissionRate: true } } },
+          })
+          await syncAccountingEntries(tx, created, userId)
         })
         kasaCount++
+        muhasebeCount += 1
       }
 
       // Personel satışları (2-4 adet/gün) — prim hesaplaması için
@@ -447,34 +474,116 @@ export async function POST() {
             : cur === "GBP" ? (Math.floor(Math.random() * 100) + 30)
             : (Math.floor(Math.random() * 120) + 40)
 
-          await prisma.cashEntry.create({
+          await prisma.$transaction(async (tx) => {
+            const created = await tx.cashEntry.create({
+              data: {
+                date: kasaDate,
+                voucherNo: voucherNo++,
+                staffId: staff.id,
+                staffIncomeAmount: amount,
+                staffIncomeCurrency: cur,
+                description: `[DEMO] ${staff.user.name} satışı`,
+                createdBy: userId,
+              },
+              include: { staff: { select: { commissionRate: true } } },
+            })
+            await syncAccountingEntries(tx, created, userId)
+          })
+          kasaCount++
+          muhasebeCount += staff.commissionRate ? 2 : 1
+        }
+
+        // Personel kredi kartı gelirleri (1-2 adet/gün) — SADECE TRY
+        const staffCCCount = Math.floor(Math.random() * 2) + 1
+        for (let i = 0; i < staffCCCount; i++) {
+          const staff = staffMembers[Math.floor(Math.random() * staffMembers.length)]
+          const amount = Math.floor(Math.random() * 2000) + 500
+
+          await prisma.$transaction(async (tx) => {
+            const created = await tx.cashEntry.create({
+              data: {
+                date: kasaDate,
+                voucherNo: voucherNo++,
+                staffId: staff.id,
+                creditCardAmount: amount,
+                creditCardCurrency: "TRY",
+                description: `[DEMO] ${staff.user.name} kredi kartı satışı`,
+                createdBy: userId,
+              },
+              include: { staff: { select: { commissionRate: true } } },
+            })
+            await syncAccountingEntries(tx, created, userId)
+          })
+          kasaCount++
+          muhasebeCount += staff.commissionRate ? 2 : 1
+        }
+
+        // Personel prim ödemesi (haftada 1-2 kez)
+        if (dayOffset === 0 || dayOffset === 3) {
+          for (const staff of staffMembers.slice(0, Math.min(staffMembers.length, 2))) {
+            if (!staff.commissionRate) continue
+            const amount = Math.floor(Math.random() * 500) + 100
+
+            await prisma.$transaction(async (tx) => {
+              const created = await tx.cashEntry.create({
+                data: {
+                  date: kasaDate,
+                  voucherNo: voucherNo++,
+                  staffId: staff.id,
+                  expenseAmount: amount,
+                  expenseCurrency: "TRY",
+                  expenseCategory: "GIDER_PERSONEL_PRIM",
+                  description: `[DEMO] ${staff.user.name} prim ödemesi`,
+                  createdBy: userId,
+                },
+                include: { staff: { select: { commissionRate: true } } },
+              })
+              await syncAccountingEntries(tx, created, userId)
+            })
+            kasaCount++
+            muhasebeCount += 2
+          }
+        }
+      }
+
+      // Kasa teslim (haftada 2 kez)
+      if (dayOffset === 1 || dayOffset === 4) {
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.cashEntry.create({
             data: {
               date: kasaDate,
               voucherNo: voucherNo++,
-              staffId: staff.id,
-              staffIncomeAmount: amount,
-              staffIncomeCurrency: cur,
-              description: `[DEMO] ${staff.user.name} satışı`,
-              createdBy: session.user.id,
+              expenseAmount: Math.floor(Math.random() * 5000) + 2000,
+              expenseCurrency: "TRY",
+              expenseCategory: "GIDER_KASA_TESLIM_BARIS",
+              description: "[DEMO] Barış Bey kasa teslimi",
+              createdBy: userId,
             },
+            include: { staff: { select: { commissionRate: true } } },
           })
-          kasaCount++
-        }
+          await syncAccountingEntries(tx, created, userId)
+        })
+        kasaCount++
+        muhasebeCount += 1
       }
 
       // Kredi/borç ödemesi (0-1 adet/gün)
       if (Math.random() < 0.4) {
         const amount = Math.floor(Math.random() * 1500) + 500
 
-        await prisma.cashEntry.create({
-          data: {
-            date: kasaDate,
-            voucherNo: voucherNo++,
-            creditAmount: amount,
-            creditCurrency: "TRY",
-            description: `[DEMO] ${creditDescriptions[Math.floor(Math.random() * creditDescriptions.length)]}`,
-            createdBy: session.user.id,
-          },
+        await prisma.$transaction(async (tx) => {
+          const created = await tx.cashEntry.create({
+            data: {
+              date: kasaDate,
+              voucherNo: voucherNo++,
+              creditAmount: amount,
+              creditCurrency: "TRY",
+              description: `[DEMO] ${creditDescriptions[Math.floor(Math.random() * creditDescriptions.length)]}`,
+              createdBy: userId,
+            },
+            include: { staff: { select: { commissionRate: true } } },
+          })
+          await syncAccountingEntries(tx, created, userId)
         })
         kasaCount++
       }
@@ -482,11 +591,12 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      message: `${createdCount} demo randevu ve ${kasaCount} kasa girişi oluşturuldu`,
+      message: `${createdCount} demo randevu + ${kasaCount} kasa girişi + ~${muhasebeCount} muhasebe kaydı oluşturuldu`,
       details: {
         totalAppointments: createdCount,
         appointmentErrors,
         totalCashEntries: kasaCount,
+        muhasebeCount,
         dateRange: "Son 30 gün + Bugün + Önümüzdeki 14 gün",
         kasaRange: "Son 7 gün",
         agencies: agencies.map(a => a.name),

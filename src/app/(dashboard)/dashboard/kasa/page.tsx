@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { getCurrencySymbol, convertCurrency, ExchangeRates } from "@/lib/currency-utils"
+import { EXPENSE_CATEGORIES, INCOME_SUB_CATEGORIES, getExpenseCategoryLabel, getIncomeSubCategoryLabel } from "@/lib/accounting-constants"
 
 interface CashEntry {
   id: string
@@ -56,6 +57,8 @@ interface CashEntry {
   expenseCurrency: string | null
   description: string | null
   info: string | null
+  expenseCategory: string | null
+  incomeSubCategory: string | null
   agency: { id: string; name: string; companyName: string | null } | null
   hotel: { id: string; name: string } | null
   staff: { id: string; position: string | null; commissionRate: number | null; user: { name: string } } | null
@@ -255,6 +258,16 @@ export default function KasaPage() {
                 <Badge className={cn("text-[10px] shrink-0", meta.badgeClass)}>{meta.label}</Badge>
                 {entry.agency && <span className="text-xs text-gray-600 truncate">{entry.agency.companyName || entry.agency.name}</span>}
                 {entry.staff && <span className="text-xs text-gray-600 truncate">{entry.staff.user.name}</span>}
+                {entry.expenseCategory && (
+                  <Badge variant="outline" className="text-[10px] shrink-0 border-red-200 text-red-600">
+                    {getExpenseCategoryLabel(entry.expenseCategory)}
+                  </Badge>
+                )}
+                {entry.incomeSubCategory && (
+                  <Badge variant="outline" className="text-[10px] shrink-0 border-emerald-200 text-emerald-600">
+                    {getIncomeSubCategoryLabel(entry.incomeSubCategory)}
+                  </Badge>
+                )}
               </div>
               {entry.hotel && <p className="text-xs text-gray-500">{entry.hotel.name}{entry.roomNumber ? ` • Oda ${entry.roomNumber}` : ""}</p>}
               {entry.serviceName && <p className="text-xs text-gray-500">{entry.serviceName}{entry.pax ? ` • ${entry.pax} PAX` : ""}</p>}
@@ -555,6 +568,7 @@ export default function KasaPage() {
         onOpenChange={(v) => { if (!v) { setFormMode(null); setEditingEntry(null) } }}
         editingEntry={editingEntry}
         dateStr={dateStr}
+        staffList={staffList || []}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["kasa", dateStr] })
           setFormMode(null)
@@ -588,15 +602,14 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
 }) {
   const isEditing = !!editingEntry
 
-  // incomeType: resepsiyon veya personel
   const [incomeType, setIncomeType] = useState<"reception" | "agency" | "staff">("reception")
-  // paymentMethod: nakit veya kredi kartı (acenta için yok)
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "creditCard">("cash")
   const [agencyId, setAgencyId] = useState("")
   const [staffId, setStaffId] = useState("")
   const [amount, setAmount] = useState("")
   const [currency, setCurrency] = useState("EUR")
   const [description, setDescription] = useState("")
+  const [subCategory, setSubCategory] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -607,27 +620,30 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
           setAgencyId(editingEntry.agencyId || ""); setStaffId("")
           setAmount(editingEntry.agencyIncomeAmount?.toString() || "")
           setCurrency(editingEntry.agencyIncomeCurrency || "EUR")
+          setSubCategory("")
         } else if (editingEntry.staffIncomeAmount) {
           setIncomeType("staff"); setPaymentMethod("cash")
           setStaffId(editingEntry.staffId || ""); setAgencyId("")
           setAmount(editingEntry.staffIncomeAmount?.toString() || "")
           setCurrency(editingEntry.staffIncomeCurrency || "EUR")
+          setSubCategory("")
         } else if (editingEntry.creditCardAmount) {
-          // kredi kartı — hangi tipten geldiğini description'dan anlayamayız, reception varsay
           setIncomeType("reception"); setPaymentMethod("creditCard")
           setAgencyId(""); setStaffId("")
           setAmount(editingEntry.creditCardAmount?.toString() || "")
-          setCurrency(editingEntry.creditCardCurrency || "EUR")
+          setCurrency("TRY")
+          setSubCategory(editingEntry.incomeSubCategory || "")
         } else {
           setIncomeType("reception"); setPaymentMethod("cash")
           setAgencyId(""); setStaffId("")
           setAmount(editingEntry.receptionIncomeAmount?.toString() || "")
           setCurrency(editingEntry.receptionIncomeCurrency || "EUR")
+          setSubCategory(editingEntry.incomeSubCategory || "")
         }
         setDescription(editingEntry.description || "")
       } else {
         setIncomeType("reception"); setPaymentMethod("cash")
-        setAgencyId(""); setStaffId(""); setAmount(""); setCurrency("EUR"); setDescription("")
+        setAgencyId(""); setStaffId(""); setAmount(""); setCurrency("EUR"); setDescription(""); setSubCategory("")
       }
     }
   }, [open, editingEntry])
@@ -637,6 +653,11 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     if (incomeType === "agency") setPaymentMethod("cash")
   }, [incomeType])
 
+  // Kredi kartı seçildiğinde TRY'ye zorla
+  useEffect(() => {
+    if (paymentMethod === "creditCard") setCurrency("TRY")
+  }, [paymentMethod])
+
   const handleSubmit = async () => {
     if (!amount) { toast.error("Miktar giriniz"); return }
     if (incomeType === "staff" && !staffId) { toast.error("Personel seçiniz"); return }
@@ -645,10 +666,10 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
       const payload: Record<string, unknown> = { date: dateStr, description: description || null }
 
       if (paymentMethod === "creditCard") {
-        // Resepsiyon veya personel — kredi kartı olarak kaydet
         payload.creditCardAmount = parseFloat(amount)
-        payload.creditCardCurrency = currency
+        payload.creditCardCurrency = "TRY"
         if (incomeType === "staff") payload.staffId = staffId
+        if (incomeType === "reception" && subCategory) payload.incomeSubCategory = subCategory
       } else if (incomeType === "agency") {
         payload.agencyId = agencyId && agencyId !== "none" ? agencyId : null
         payload.agencyIncomeAmount = parseFloat(amount)
@@ -660,6 +681,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
       } else {
         payload.receptionIncomeAmount = parseFloat(amount)
         payload.receptionIncomeCurrency = currency
+        if (subCategory) payload.incomeSubCategory = subCategory
       }
 
       const url = isEditing ? `/api/kasa/${editingEntry.id}` : "/api/kasa"
@@ -715,7 +737,23 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
 
           {paymentMethod === "creditCard" && (
             <div className="text-xs text-violet-600 bg-violet-50 rounded p-2">
-              Kredi kartı geliri nakit kasaya dahil edilmez, ayrı gösterilir.
+              Kredi kartı geliri nakit kasaya dahil edilmez, ayrı gösterilir. Sadece TRY desteklenir.
+            </div>
+          )}
+
+          {/* Resepsiyon alt kategorisi */}
+          {incomeType === "reception" && (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-600">Alt Kategori</Label>
+              <Select value={subCategory || "none"} onValueChange={(v) => setSubCategory(v === "none" ? "" : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Seçiniz (opsiyonel)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Genel Resepsiyon Geliri</SelectItem>
+                  {INCOME_SUB_CATEGORIES.map(c => (
+                    <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
@@ -760,7 +798,11 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             )}>Miktar</Label>
             <div className="flex gap-2 items-center">
               <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="flex-1 h-10" />
-              <CurrencyButtons value={currency} onChange={setCurrency} />
+              {paymentMethod === "creditCard" ? (
+                <div className="h-8 px-3 text-xs font-bold rounded bg-orange-500 text-white flex items-center">₺ TRY</div>
+              ) : (
+                <CurrencyButtons value={currency} onChange={setCurrency} />
+              )}
             </div>
           </div>
 
@@ -785,14 +827,16 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
 }
 
 // ---- Expense Form ----
-function ExpenseFormDialog({ open, onOpenChange, editingEntry, dateStr, onSuccess }: {
+function ExpenseFormDialog({ open, onOpenChange, editingEntry, dateStr, onSuccess, staffList }: {
   open: boolean; onOpenChange: (open: boolean) => void; editingEntry: CashEntry | null
-  dateStr: string; onSuccess: () => void
+  dateStr: string; onSuccess: () => void; staffList: StaffMember[]
 }) {
   const isEditing = !!editingEntry
   const [amount, setAmount] = useState("")
   const [currency, setCurrency] = useState("TRY")
   const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("")
+  const [staffId, setStaffId] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -801,18 +845,29 @@ function ExpenseFormDialog({ open, onOpenChange, editingEntry, dateStr, onSucces
         setAmount(editingEntry.expenseAmount?.toString() || "")
         setCurrency(editingEntry.expenseCurrency || "TRY")
         setDescription(editingEntry.description || "")
+        setCategory(editingEntry.expenseCategory || "")
+        setStaffId(editingEntry.staffId || "")
       } else {
-        setAmount(""); setCurrency("TRY"); setDescription("")
+        setAmount(""); setCurrency("TRY"); setDescription(""); setCategory(""); setStaffId("")
       }
     }
   }, [open, editingEntry])
 
   const handleSubmit = async () => {
     if (!amount) { toast.error("Miktar giriniz"); return }
+    if (!category) { toast.error("Kategori seçiniz"); return }
+    if (category === "GIDER_DIGER" && !description) { toast.error("Diğer giderler için açıklama giriniz"); return }
+    if (category === "GIDER_PERSONEL_PRIM" && !staffId) { toast.error("Personel seçiniz"); return }
     setSubmitting(true)
     try {
-      const payload: Record<string, unknown> = { date: dateStr, description: description || null }
-      payload.expenseAmount = parseFloat(amount); payload.expenseCurrency = currency
+      const payload: Record<string, unknown> = {
+        date: dateStr,
+        description: description || null,
+        expenseAmount: parseFloat(amount),
+        expenseCurrency: currency,
+        expenseCategory: category,
+        staffId: category === "GIDER_PERSONEL_PRIM" ? (staffId || null) : null,
+      }
       const url = isEditing ? `/api/kasa/${editingEntry.id}` : "/api/kasa"
       const method = isEditing ? "PUT" : "POST"
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -833,6 +888,38 @@ function ExpenseFormDialog({ open, onOpenChange, editingEntry, dateStr, onSucces
           <DialogTitle className="text-red-600">{isEditing ? "Gider Düzenle" : "Gider Ekle"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Kategori */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">Kategori *</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Kategori seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_CATEGORIES.map(c => (
+                  <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Personel seçimi — sadece prim kategorisi */}
+          {category === "GIDER_PERSONEL_PRIM" && (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-600">Personel *</Label>
+              <Select value={staffId} onValueChange={setStaffId}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Personel seçin" /></SelectTrigger>
+                <SelectContent>
+                  {staffList.filter(s => s.isActive).map(s => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.user.name}{s.position ? ` (${s.position})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="border rounded-lg p-3 space-y-2 bg-red-50/30">
             <Label className="text-xs font-semibold text-red-700">Miktar</Label>
             <div className="flex gap-2 items-center">
@@ -841,7 +928,9 @@ function ExpenseFormDialog({ open, onOpenChange, editingEntry, dateStr, onSucces
             </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-gray-600">Açıklama</Label>
+            <Label className="text-xs font-medium text-gray-600">
+              Açıklama{category === "GIDER_DIGER" ? " *" : ""}
+            </Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Açıklama..." className="resize-none h-16" />
           </div>
           <div className="flex justify-end gap-3 pt-2">

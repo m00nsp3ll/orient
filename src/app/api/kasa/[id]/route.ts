@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { syncAccountingEntries } from "@/lib/accounting-sync"
 
 const updateSchema = z.object({
   agencyId: z.string().optional().nullable(),
@@ -18,6 +19,8 @@ const updateSchema = z.object({
   creditCurrency: z.string().optional().nullable(),
   expenseAmount: z.number().optional().nullable(),
   expenseCurrency: z.string().optional().nullable(),
+  expenseCategory: z.string().optional().nullable(),
+  incomeSubCategory: z.string().optional().nullable(),
   staffId: z.string().optional().nullable(),
   staffIncomeAmount: z.number().optional().nullable(),
   staffIncomeCurrency: z.string().optional().nullable(),
@@ -42,35 +45,47 @@ export async function PUT(
     const body = await req.json()
     const data = updateSchema.parse(body)
 
-    const entry = await prisma.cashEntry.update({
-      where: { id },
-      data: {
-        agencyId: data.agencyId ?? undefined,
-        hotelId: data.hotelId ?? undefined,
-        roomNumber: data.roomNumber ?? undefined,
-        serviceName: data.serviceName ?? undefined,
-        pax: data.pax ?? undefined,
-        agencyIncomeAmount: data.agencyIncomeAmount ?? undefined,
-        agencyIncomeCurrency: data.agencyIncomeCurrency ?? undefined,
-        receptionIncomeAmount: data.receptionIncomeAmount ?? undefined,
-        receptionIncomeCurrency: data.receptionIncomeCurrency ?? undefined,
-        creditAmount: data.creditAmount ?? undefined,
-        creditCurrency: data.creditCurrency ?? undefined,
-        expenseAmount: data.expenseAmount ?? undefined,
-        expenseCurrency: data.expenseCurrency ?? undefined,
-        staffId: data.staffId ?? undefined,
-        staffIncomeAmount: data.staffIncomeAmount ?? undefined,
-        staffIncomeCurrency: data.staffIncomeCurrency ?? undefined,
-        creditCardAmount: data.creditCardAmount ?? undefined,
-        creditCardCurrency: data.creditCardCurrency ?? undefined,
-        description: data.description ?? undefined,
-        info: data.info ?? undefined,
-      },
-      include: {
-        agency: { select: { id: true, name: true, companyName: true } },
-        hotel: { select: { id: true, name: true } },
-        staff: { select: { id: true, position: true, commissionRate: true, user: { select: { name: true } } } },
-      },
+    // Kredi kartı sadece TRY
+    if (data.creditCardAmount && data.creditCardCurrency && data.creditCardCurrency !== "TRY") {
+      return NextResponse.json({ error: "Kredi kartı sadece TRY destekler" }, { status: 400 })
+    }
+
+    const entry = await prisma.$transaction(async (tx) => {
+      const updated = await tx.cashEntry.update({
+        where: { id },
+        data: {
+          agencyId: data.agencyId ?? undefined,
+          hotelId: data.hotelId ?? undefined,
+          roomNumber: data.roomNumber ?? undefined,
+          serviceName: data.serviceName ?? undefined,
+          pax: data.pax ?? undefined,
+          agencyIncomeAmount: data.agencyIncomeAmount ?? undefined,
+          agencyIncomeCurrency: data.agencyIncomeCurrency ?? undefined,
+          receptionIncomeAmount: data.receptionIncomeAmount ?? undefined,
+          receptionIncomeCurrency: data.receptionIncomeCurrency ?? undefined,
+          creditAmount: data.creditAmount ?? undefined,
+          creditCurrency: data.creditCurrency ?? undefined,
+          expenseAmount: data.expenseAmount ?? undefined,
+          expenseCurrency: data.expenseCurrency ?? undefined,
+          expenseCategory: data.expenseCategory ?? undefined,
+          incomeSubCategory: data.incomeSubCategory ?? undefined,
+          staffId: data.staffId ?? undefined,
+          staffIncomeAmount: data.staffIncomeAmount ?? undefined,
+          staffIncomeCurrency: data.staffIncomeCurrency ?? undefined,
+          creditCardAmount: data.creditCardAmount ?? undefined,
+          creditCardCurrency: data.creditCardCurrency ?? undefined,
+          description: data.description ?? undefined,
+          info: data.info ?? undefined,
+        },
+        include: {
+          agency: { select: { id: true, name: true, companyName: true } },
+          hotel: { select: { id: true, name: true } },
+          staff: { select: { id: true, position: true, commissionRate: true, user: { select: { name: true } } } },
+        },
+      })
+
+      await syncAccountingEntries(tx, updated, session.user.id)
+      return updated
     })
 
     return NextResponse.json(entry)

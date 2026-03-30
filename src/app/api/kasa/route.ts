@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { startOfDay } from "date-fns"
+import { syncAccountingEntries } from "@/lib/accounting-sync"
 
 const cashEntrySchema = z.object({
   date: z.string(),
@@ -20,6 +21,8 @@ const cashEntrySchema = z.object({
   creditCurrency: z.string().optional().nullable(),
   expenseAmount: z.number().optional().nullable(),
   expenseCurrency: z.string().optional().nullable(),
+  expenseCategory: z.string().optional().nullable(),
+  incomeSubCategory: z.string().optional().nullable(),
   staffId: z.string().optional().nullable(),
   staffIncomeAmount: z.number().optional().nullable(),
   staffIncomeCurrency: z.string().optional().nullable(),
@@ -37,11 +40,11 @@ function computeSummary(entries: any[]) {
   const receptionIncome = zero()
   const staffIncome = zero()
   const creditCardIncome = zero()
-  const cashIncome = zero()   // nakit: agency + reception + staff (creditCard hariç)
-  const totalIncome = zero()  // cash + creditCard
+  const cashIncome = zero()
+  const totalIncome = zero()
   const credit = zero()
   const expense = zero()
-  const commissionExpense = zero() // personel prim gideri
+  const commissionExpense = zero()
 
   for (const e of entries) {
     if (e.agencyIncomeAmount && e.agencyIncomeCurrency) {
@@ -52,7 +55,6 @@ function computeSummary(entries: any[]) {
     }
     if (e.staffIncomeAmount && e.staffIncomeCurrency) {
       staffIncome[e.staffIncomeCurrency] += e.staffIncomeAmount
-      // Personelin komisyon gideri otomatik hesaplanır
       if (e.staff?.commissionRate) {
         const comm = e.staffIncomeAmount * e.staff.commissionRate / 100
         commissionExpense[e.staffIncomeCurrency] = (commissionExpense[e.staffIncomeCurrency] || 0) + comm
@@ -60,7 +62,6 @@ function computeSummary(entries: any[]) {
     }
     if (e.creditCardAmount && e.creditCardCurrency) {
       creditCardIncome[e.creditCardCurrency] += e.creditCardAmount
-      // Personel kredi kartı gelirinden de prim hesapla
       if (e.staffId && e.staff?.commissionRate) {
         const comm = e.creditCardAmount * e.staff.commissionRate / 100
         commissionExpense[e.creditCardCurrency] = (commissionExpense[e.creditCardCurrency] || 0) + comm
@@ -95,7 +96,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Tarih gerekli" }, { status: 400 })
   }
 
-  // yyyy-MM-dd formatını local timezone olarak parse et
   const [year, month, day] = dateStr.split("-").map(Number)
   const targetDate = new Date(year, month - 1, day)
   targetDate.setHours(0, 0, 0, 0)
@@ -129,6 +129,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const data = cashEntrySchema.parse(body)
 
+    // Kredi kartı sadece TRY
+    if (data.creditCardAmount && data.creditCardCurrency && data.creditCardCurrency !== "TRY") {
+      return NextResponse.json({ error: "Kredi kartı sadece TRY destekler" }, { status: 400 })
+    }
+
+    // Gider varsa kategori zorunlu
+    if (data.expenseAmount && !data.expenseCategory) {
+      return NextResponse.json({ error: "Gider kategorisi seçiniz" }, { status: 400 })
+    }
+
     const targetDate = startOfDay(new Date(data.date))
 
     const maxVoucher = await prisma.cashEntry.aggregate({
@@ -137,37 +147,44 @@ export async function POST(req: NextRequest) {
     })
     const nextVoucher = (maxVoucher._max.voucherNo ?? 0) + 1
 
-    const entry = await prisma.cashEntry.create({
-      data: {
-        date: targetDate,
-        voucherNo: nextVoucher,
-        agencyId: data.agencyId || null,
-        hotelId: data.hotelId || null,
-        roomNumber: data.roomNumber || null,
-        serviceName: data.serviceName || null,
-        pax: data.pax || null,
-        agencyIncomeAmount: data.agencyIncomeAmount || null,
-        agencyIncomeCurrency: data.agencyIncomeCurrency || null,
-        receptionIncomeAmount: data.receptionIncomeAmount || null,
-        receptionIncomeCurrency: data.receptionIncomeCurrency || null,
-        creditAmount: data.creditAmount || null,
-        creditCurrency: data.creditCurrency || null,
-        expenseAmount: data.expenseAmount || null,
-        expenseCurrency: data.expenseCurrency || null,
-        staffId: data.staffId || null,
-        staffIncomeAmount: data.staffIncomeAmount || null,
-        staffIncomeCurrency: data.staffIncomeCurrency || null,
-        creditCardAmount: data.creditCardAmount || null,
-        creditCardCurrency: data.creditCardCurrency || null,
-        description: data.description || null,
-        info: data.info || null,
-        createdBy: session.user.id,
-      },
-      include: {
-        agency: { select: { id: true, name: true, companyName: true } },
-        hotel: { select: { id: true, name: true } },
-        staff: { select: { id: true, position: true, commissionRate: true, user: { select: { name: true } } } },
-      },
+    const entry = await prisma.$transaction(async (tx) => {
+      const created = await tx.cashEntry.create({
+        data: {
+          date: targetDate,
+          voucherNo: nextVoucher,
+          agencyId: data.agencyId || null,
+          hotelId: data.hotelId || null,
+          roomNumber: data.roomNumber || null,
+          serviceName: data.serviceName || null,
+          pax: data.pax || null,
+          agencyIncomeAmount: data.agencyIncomeAmount || null,
+          agencyIncomeCurrency: data.agencyIncomeCurrency || null,
+          receptionIncomeAmount: data.receptionIncomeAmount || null,
+          receptionIncomeCurrency: data.receptionIncomeCurrency || null,
+          creditAmount: data.creditAmount || null,
+          creditCurrency: data.creditCurrency || null,
+          expenseAmount: data.expenseAmount || null,
+          expenseCurrency: data.expenseCurrency || null,
+          expenseCategory: data.expenseCategory || null,
+          incomeSubCategory: data.incomeSubCategory || null,
+          staffId: data.staffId || null,
+          staffIncomeAmount: data.staffIncomeAmount || null,
+          staffIncomeCurrency: data.staffIncomeCurrency || null,
+          creditCardAmount: data.creditCardAmount || null,
+          creditCardCurrency: data.creditCardCurrency || null,
+          description: data.description || null,
+          info: data.info || null,
+          createdBy: session.user.id,
+        },
+        include: {
+          agency: { select: { id: true, name: true, companyName: true } },
+          hotel: { select: { id: true, name: true } },
+          staff: { select: { id: true, position: true, commissionRate: true, user: { select: { name: true } } } },
+        },
+      })
+
+      await syncAccountingEntries(tx, created, session.user.id)
+      return created
     })
 
     return NextResponse.json(entry)

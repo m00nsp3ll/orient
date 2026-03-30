@@ -96,12 +96,13 @@ model Staff {
   commissionRate  Float?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
-  appointments    Appointment[]
-  blockedTimes    BlockedTime[]
-  cashEntries     CashEntry[]
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  staffServices   StaffService[]
-  workingHours    WorkingHours[]
+  appointments      Appointment[]
+  blockedTimes      BlockedTime[]
+  cashEntries       CashEntry[]
+  accountingEntries AccountingEntry[]
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffServices     StaffService[]
+  workingHours      WorkingHours[]
 }
 
 model StaffService {
@@ -204,11 +205,12 @@ model Agency {
   name            String
   phone           String?
   plainPassword   String?
-  user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  allowedServices AgencyService[]
-  appointments    Appointment[]
-  transactions    AgencyTransaction[]
-  cashEntries     CashEntry[]
+  user              User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  allowedServices   AgencyService[]
+  appointments      Appointment[]
+  transactions      AgencyTransaction[]
+  cashEntries       CashEntry[]
+  accountingEntries AccountingEntry[]
 }
 
 model AgencyService {
@@ -398,16 +400,51 @@ model CashEntry {
   creditCardAmount      Float?
   creditCardCurrency    String?
 
-  description String?
-  info        String?
+  description       String?
+  info              String?
+  expenseCategory   String?
+  incomeSubCategory String?
   createdBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  agency Agency? @relation(fields: [agencyId], references: [id])
-  hotel  Hotel?  @relation(fields: [hotelId], references: [id])
-  staff  Staff?  @relation(fields: [staffId], references: [id])
+  agency            Agency?          @relation(fields: [agencyId], references: [id])
+  hotel             Hotel?           @relation(fields: [hotelId], references: [id])
+  staff             Staff?           @relation(fields: [staffId], references: [id])
+  accountingEntries AccountingEntry[]
 
   @@index([date])
   @@index([date, voucherNo])
+}
+
+model AccountingEntry {
+  id              String     @id @default(cuid())
+  date            DateTime
+  accountCode     String
+  debit           Float      @default(0)
+  credit          Float      @default(0)
+  amount          Float
+  currency        String
+  description     String?
+
+  cashEntryId     String?
+  cashEntry       CashEntry? @relation(fields: [cashEntryId], references: [id], onDelete: Cascade)
+
+  transferGroupId String?
+
+  staffId         String?
+  staff           Staff?     @relation(fields: [staffId], references: [id])
+
+  agencyId        String?
+  agency          Agency?    @relation(fields: [agencyId], references: [id])
+
+  createdBy       String
+  createdAt       DateTime   @default(now())
+
+  @@index([accountCode])
+  @@index([date])
+  @@index([cashEntryId])
+  @@index([staffId])
+  @@index([agencyId])
+  @@index([transferGroupId])
 }
