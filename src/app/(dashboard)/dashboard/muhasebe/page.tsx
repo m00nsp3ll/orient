@@ -1559,15 +1559,9 @@ export default function MuhasebePage() {
 
       {/* Cari Detay Dialog (personel + gelir/gider kalemleri) */}
       <Dialog open={!!detailAccount && !manuelDialog} onOpenChange={v => { if (!v) { setDetailAccount(null); setEditEntry(null) } }}>
-        <DialogContent className="w-full !max-w-[860px] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full !max-w-[960px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <div className="flex items-center justify-between gap-2 pr-6">
-              <DialogTitle className="text-base font-bold">{detailAccount?.label}</DialogTitle>
-              <Button size="sm" className="h-8 text-xs bg-blue-600 hover:bg-blue-700 gap-1.5"
-                onClick={() => { setEditEntry(null); setManuelDialog(true) }}>
-                <Plus className="h-3.5 w-3.5" /> Hareket Ekle
-              </Button>
-            </div>
+            <DialogTitle className="text-base font-bold">{detailAccount?.label}</DialogTitle>
           </DialogHeader>
           {detailLoading ? (
             <div className="flex items-center justify-center py-12 gap-3 text-gray-400">
@@ -1595,22 +1589,26 @@ export default function MuhasebePage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead className="text-xs">Tarih</TableHead>
+                    <TableHead className="text-xs">Tarih / Saat</TableHead>
                     <TableHead className="text-xs">Açıklama</TableHead>
                     <TableHead className="text-right text-xs text-red-600">Borç</TableHead>
                     <TableHead className="text-right text-xs text-emerald-600">Alacak</TableHead>
                     <TableHead className="text-right text-xs">Bakiye</TableHead>
                     <TableHead className="text-xs">Döviz</TableHead>
-                    <TableHead className="text-xs w-16"></TableHead>
+                    <TableHead className="text-xs">Kullancı</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {detailData.entries.map(e => {
                     const isManuel   = !e.cashEntry && !e.transferGroupId
                     const isSentinel = e.debit === 0 && e.credit === 0
+                    const entryDate  = new Date(e.date)
                     return (
                       <TableRow key={e.id} className={cn("hover:bg-gray-50/60", isSentinel && "opacity-40")}>
-                        <TableCell className="text-xs text-gray-600">{format(new Date(e.date), "dd.MM.yyyy")}</TableCell>
+                        <TableCell className="text-xs text-gray-600 whitespace-nowrap">
+                          <div>{format(entryDate, "dd.MM.yyyy")}</div>
+                          <div className="text-[10px] text-gray-400">{format(entryDate, "HH:mm")}</div>
+                        </TableCell>
                         <TableCell className="text-xs max-w-[200px] truncate">
                           {e.description || "—"}
                           {e.cashEntry && <span className="text-[10px] text-gray-400 ml-1">#{e.cashEntry.voucherNo}</span>}
@@ -1631,19 +1629,8 @@ export default function MuhasebePage() {
                             {e.currency}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          {isManuel && !isSentinel && (
-                            <div className="flex items-center gap-1">
-                              <button className="p-1 rounded hover:bg-blue-50 text-blue-400 hover:text-blue-600 transition-colors"
-                                onClick={() => { setEditEntry(e); setManuelDialog(true) }} title="Düzenle">
-                                <PenLine className="h-3.5 w-3.5" />
-                              </button>
-                              <button className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
-                                onClick={() => handleDeleteEntry(e.id)} title="Sil">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          )}
+                        <TableCell className="text-xs text-gray-500 whitespace-nowrap">
+                          {(e as any).createdByName ?? "—"}
                         </TableCell>
                       </TableRow>
                     )

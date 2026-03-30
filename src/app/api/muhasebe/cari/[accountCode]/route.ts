@@ -42,6 +42,7 @@ export async function GET(
       cashEntry: { select: { voucherNo: true, date: true } },
       staff: { include: { user: { select: { name: true } } } },
       agency: { select: { name: true, companyName: true } },
+      createdByUser: { select: { name: true } },
     },
     orderBy: { date: "asc" },
   })
@@ -64,6 +65,7 @@ export async function GET(
       cashEntry: e.cashEntry ? { voucherNo: e.cashEntry.voucherNo, date: e.cashEntry.date } : null,
       staff: e.staff ? { name: e.staff.user.name } : null,
       agency: e.agency ? { name: e.agency.companyName || e.agency.name } : null,
+      createdByName: (e as any).createdByUser?.name ?? null,
     }
   })
 

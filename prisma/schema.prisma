@@ -18,12 +18,13 @@ model User {
   image         String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  accounts      Account[]
-  agency        Agency?
-  appointments  Appointment[] @relation("CustomerAppointments")
-  driver        Driver?
-  sessions      Session[]
-  staff         Staff?
+  accounts              Account[]
+  agency                Agency?
+  appointments          Appointment[] @relation("CustomerAppointments")
+  driver                Driver?
+  sessions              Session[]
+  staff                 Staff?
+  accountingEntries     AccountingEntry[] @relation("AccountingEntryCreatedBy")
 }
 
 model Account {
@@ -439,6 +440,7 @@ model AccountingEntry {
   agency          Agency?    @relation(fields: [agencyId], references: [id])
 
   createdBy       String
+  createdByUser   User?      @relation("AccountingEntryCreatedBy", fields: [createdBy], references: [id])
   createdAt       DateTime   @default(now())
 
   @@index([accountCode])
