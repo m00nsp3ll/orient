@@ -2,61 +2,31 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { signIn } from "next-auth/react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-
-const loginSchema = z.object({
-  email: z.string().email("Geçerli bir email adresi girin"),
-  password: z.string().min(1, "Şifre gerekli"),
-})
-
-type LoginFormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const form = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  })
-
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!username.trim() || !password) { toast.error("Kullanıcı adı ve şifre gerekli"); return }
     setIsLoading(true)
-
     try {
       const result = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
+        username,
+        password,
         redirect: false,
       })
-
       if (result?.error) {
-        toast.error(result.error)
+        toast.error("Kullanıcı adı veya şifre hatalı")
       } else {
         router.push("/dashboard")
         router.refresh()
@@ -76,46 +46,32 @@ export default function LoginPage() {
           <CardDescription>Hesabınıza giriş yapın</CardDescription>
         </CardHeader>
         <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="ornek@email.com"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Kullanıcı Adı</Label>
+              <Input
+                type="text"
+                placeholder="Kullanıcı adınız"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                autoComplete="off"
+                autoFocus
               />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Şifre</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Şifre</Label>
+              <Input
+                type="password"
+                placeholder="********"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
               />
-
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Giriş yapılıyor..." : "Giriş Yap"}
-              </Button>
-            </form>
-          </Form>
-
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Giriş yapılıyor..." : "Giriş Yap"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

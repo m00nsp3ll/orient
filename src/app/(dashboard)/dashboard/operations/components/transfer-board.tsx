@@ -77,9 +77,9 @@ interface Driver {
 interface TransferBoardProps {
   transfers: Transfer[]
   drivers: Driver[]
-  onStatusChange: (transferId: string, newStatus: string) => void
-  onDriverChange: (transferId: string, driverId: string | null) => void
-  onStartDropoff: (transferId: string) => void
+  onStatusChange?: (transferId: string, newStatus: string) => void
+  onDriverChange?: (transferId: string, driverId: string | null) => void
+  onStartDropoff?: (transferId: string) => void
   onCancelAppointment?: (appointmentId: string) => void
 }
 
@@ -192,7 +192,7 @@ export function TransferBoard({
     // - arrivalTime null kalır (henüz yola çıkmadı)
     // Böylece transferler üst bardaki "Araç Hazırlık" bölümünde toplanır
     for (const transferId of transferIds) {
-      await onDriverChange(transferId, driverId)
+      await onDriverChange?.(transferId, driverId)
     }
   }
 

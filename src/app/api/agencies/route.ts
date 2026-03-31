@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { checkPermission } from "@/lib/permissions"
 
 const agencySchema = z.object({
   name: z.string().min(2, "İsim en az 2 karakter olmalı"),
@@ -18,8 +19,12 @@ const agencySchema = z.object({
 export async function GET() {
   const session = await getServerSession(authOptions)
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "acentalar_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
   const agencies = await prisma.agency.findMany({
@@ -40,8 +45,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "acentalar_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
   try {

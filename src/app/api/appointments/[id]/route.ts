@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { checkPermission } from "@/lib/permissions"
 
 const updateAppointmentSchema = z.object({
   startTime: z.string().transform((str) => new Date(str)).optional(),
@@ -67,6 +68,14 @@ export async function PATCH(
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
+  // STAFF kullanıcılar için operasyon_duzenleme yetkisi kontrolü
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "operasyon_duzenleme")
+    if (!hasPerm) {
+      return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+    }
+  }
+
   try {
     const body = await req.json()
     const validatedData = updateAppointmentSchema.parse(body)
@@ -121,51 +130,11 @@ export async function PATCH(
       },
     })
 
-    // İptal edildiğinde acenta cari bakiyesini düşür
+    // İptal edildiğinde bu randevuya ait tüm AgencyTransaction'ları sil
     if (validatedData.status === "CANCELLED" && existingAppointment.agencyId && existingAppointment.status !== "CANCELLED") {
-      // Bu randevuya ait DEBIT transaction'ları bul
-      const debitTransactions = await prisma.agencyTransaction.findMany({
-        where: {
-          appointmentId: id,
-          type: "DEBIT",
-        },
+      await prisma.agencyTransaction.deleteMany({
+        where: { appointmentId: id },
       })
-
-      // Her DEBIT için ters CREDIT oluştur
-      for (const debit of debitTransactions) {
-        await prisma.agencyTransaction.create({
-          data: {
-            agencyId: debit.agencyId,
-            appointmentId: id,
-            type: "CREDIT",
-            amount: debit.amount,
-            currency: debit.currency,
-            description: `İptal iadesi: ${debit.description || "Randevu iptal edildi"}`,
-          },
-        })
-      }
-
-      // REST CREDIT transaction'ları da tersine çevir (DEBIT olarak geri al)
-      const creditTransactions = await prisma.agencyTransaction.findMany({
-        where: {
-          appointmentId: id,
-          type: "CREDIT",
-          description: { contains: "REST" },
-        },
-      })
-
-      for (const credit of creditTransactions) {
-        await prisma.agencyTransaction.create({
-          data: {
-            agencyId: credit.agencyId,
-            appointmentId: id,
-            type: "DEBIT",
-            amount: credit.amount,
-            currency: credit.currency,
-            description: `İptal: REST iadesi geri alındı`,
-          },
-        })
-      }
     }
 
     // İptal edildiğinde Transfer kaydını sil (operasyondan kaldır)

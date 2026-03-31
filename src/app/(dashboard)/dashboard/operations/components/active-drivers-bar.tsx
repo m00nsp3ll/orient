@@ -73,9 +73,9 @@ interface Driver {
 interface ActiveDriversBarProps {
   transfers: Transfer[]
   drivers: Driver[]
-  onStatusChange: (transferId: string, newStatus: string) => void
-  onDriverChange: (transferId: string, driverId: string | null) => void
-  onStartRoute: (driverTransfers: Transfer[]) => Promise<void> | void
+  onStatusChange?: (transferId: string, newStatus: string) => void
+  onDriverChange?: (transferId: string, driverId: string | null) => void
+  onStartRoute?: (driverTransfers: Transfer[]) => Promise<void> | void
 }
 
 type DriverGroup = {
@@ -162,11 +162,11 @@ export function ActiveDriversBar({
 
   const handleSendDriver = (driverGroup: DriverGroup) => {
     const allTransfers = [...driverGroup.pickupTransfers, ...driverGroup.dropoffTransfers]
-    onStartRoute(allTransfers)
+    onStartRoute?.(allTransfers)
   }
 
   const handleRemoveTransfer = (transferId: string) => {
-    onDriverChange(transferId, null)
+    onDriverChange?.(transferId, null)
   }
 
   return (
@@ -437,7 +437,7 @@ export function ActiveDriversBar({
                                   <Button
                                     size="sm"
                                     className="w-full mt-2 bg-emerald-500 hover:bg-emerald-600 text-white h-7 text-xs"
-                                    onClick={() => onStatusChange(transfer.id, "COMPLETED")}
+                                    onClick={() => onStatusChange?.(transfer.id, "COMPLETED")}
                                   >
                                     ✓ Bırakıldı
                                   </Button>

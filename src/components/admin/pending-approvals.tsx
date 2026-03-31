@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useSession } from "next-auth/react"
+import { usePermissions } from "@/hooks/use-permissions"
 
 interface PendingAppointment {
   id: string
@@ -65,7 +66,9 @@ interface PendingAppointment {
 
 export function PendingApprovals() {
   const { data: session } = useSession()
+  const { has, isAdmin: isFullAdmin, isLoading: permissionsLoading } = usePermissions()
   const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "STAFF"
+  const canApprove = isFullAdmin || (!permissionsLoading && has("operasyon_duzenleme"))
   const queryClient = useQueryClient()
   const [selectedAppointment, setSelectedAppointment] = useState<PendingAppointment | null>(null)
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(null)
@@ -95,6 +98,10 @@ export function PendingApprovals() {
       queryClient.invalidateQueries({ queryKey: ["appointments"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] })
       queryClient.invalidateQueries({ queryKey: ["appointments", "today"] })
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-cari"] })
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-ozet"] })
+      queryClient.invalidateQueries({ queryKey: ["acenta-cari-detay"] })
+      queryClient.invalidateQueries({ queryKey: ["acenta-odemeler"] })
       toast.success(
         variables.action === "approve"
           ? "Rezervasyon onaylandı"
@@ -171,7 +178,7 @@ export function PendingApprovals() {
                 <TableHead>Otel</TableHead>
                 <TableHead>Program</TableHead>
                 <TableHead>PAX</TableHead>
-                {isAdmin && <TableHead className="text-right">İşlemler</TableHead>}
+                {canApprove && <TableHead className="text-right">İşlemler</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -248,7 +255,7 @@ export function PendingApprovals() {
                       {appointment.pax || 1}{appointment.childCount ? `+${appointment.childCount}` : ""}
                     </Badge>
                   </TableCell>
-                  {isAdmin && (
+                  {canApprove && (
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -327,7 +334,7 @@ export function PendingApprovals() {
                     REST: {appointment.restAmount} {appointment.restCurrency}
                   </div>
                 )}
-                {isAdmin && (
+                {canApprove && (
                   <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"

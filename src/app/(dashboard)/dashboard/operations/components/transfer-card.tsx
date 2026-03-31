@@ -91,8 +91,8 @@ interface TransferCardProps {
   transfer: Transfer
   drivers: Driver[]
   busyDriverIds: string[]
-  onStatusChange: (transferId: string, newStatus: string) => void
-  onDriverChange: (transferId: string, driverId: string | null) => void
+  onStatusChange?: (transferId: string, newStatus: string) => void
+  onDriverChange?: (transferId: string, driverId: string | null) => void
   onStartDropoff?: (transferId: string) => void
   onCancelAppointment?: (appointmentId: string) => void
 }
@@ -142,17 +142,15 @@ export function TransferCard({
   const canAdvance = nextStatus && transfer.status !== "COMPLETED" && transfer.status !== "CANCELLED"
 
   const handleStatusChange = () => {
-    // PENDING -> "Almaya Git" sadece şoför ata
     if (transfer.status === "PENDING") {
       if (!selectedDriverId) {
         toast.error("Lütfen önce şoför seçin!")
         return
       }
-      onDriverChange(transfer.id, selectedDriverId)
+      onDriverChange?.(transfer.id, selectedDriverId)
       return
     }
 
-    // DROPPING_OFF -> "Bırakmaya Gönder" - REST ise önce uyarı, sonra şoför ata
     if (transfer.status === "DROPPING_OFF") {
       if (!selectedDriverId) {
         toast.error("Lütfen önce şoför seçin!")
@@ -162,26 +160,25 @@ export function TransferCard({
         setRestWarningAction("dropoff")
         setShowRestWarning(true)
       } else {
-        onDriverChange(transfer.id, selectedDriverId)
+        onDriverChange?.(transfer.id, selectedDriverId)
       }
       return
     }
 
-    // REST uyarısı: IN_SERVICE -> DROPPING_OFF (Hizmeti Bitir)
     if (isRest && transfer.status === "IN_SERVICE") {
       setRestWarningAction("complete")
       setShowRestWarning(true)
     } else {
-      onStatusChange(transfer.id, nextStatus)
+      onStatusChange?.(transfer.id, nextStatus)
     }
   }
 
   const handleRestConfirm = () => {
     setShowRestWarning(false)
     if (restWarningAction === "dropoff") {
-      onDriverChange(transfer.id, selectedDriverId)
+      onDriverChange?.(transfer.id, selectedDriverId)
     } else {
-      onStatusChange(transfer.id, nextStatus)
+      onStatusChange?.(transfer.id, nextStatus)
     }
   }
 
@@ -313,7 +310,7 @@ export function TransferCard({
         )}
 
         {/* Şoför Seçici - Sadece PENDING ve DROPPING_OFF durumlarında göster */}
-        {(transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId && (
+        {onStatusChange && (transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId && (
           <div className="mt-2">
             <DriverSelector
               drivers={drivers}
@@ -328,7 +325,7 @@ export function TransferCard({
         )}
 
         {/* Şoför seçildiyse göster (local state) */}
-        {(transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId && selectedDriverId && (
+        {onStatusChange && (transfer.status === "PENDING" || transfer.status === "DROPPING_OFF") && !transfer.driverId && selectedDriverId && (
           <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
             <Car className="h-3 w-3 text-blue-600" />
             <span className="font-medium">{drivers.find(d => d.id === selectedDriverId)?.user.name}</span>
@@ -344,7 +341,7 @@ export function TransferCard({
         )}
 
         {/* Aksiyon Butonu */}
-        {canAdvance && (
+        {onStatusChange && canAdvance && (
           <Button
             size="sm"
             className={cn(

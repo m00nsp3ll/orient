@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     orderBy: { voucherNo: "asc" },
   })
 
-  const summary = computeSummary(entries)
+  const summary = computeSummary(entries.filter(e => e.info !== "MUHASEBE"))
 
   return NextResponse.json({ entries, summary })
 }

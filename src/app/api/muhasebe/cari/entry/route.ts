@@ -18,7 +18,7 @@ const manualEntrySchema = z.object({
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
@@ -92,7 +92,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 

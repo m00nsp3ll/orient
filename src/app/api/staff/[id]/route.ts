@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import bcrypt from "bcryptjs"
 
 const updateStaffSchema = z.object({
   specializations: z.array(z.string()).optional(),
@@ -10,8 +11,10 @@ const updateStaffSchema = z.object({
   position: z.string().optional().nullable(),
   commissionRate: z.number().optional().nullable(),
   name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().nullable(),
   phone: z.string().optional().nullable(),
+  username: z.string().min(1).optional(),
+  password: z.string().min(1).optional(),
 })
 
 export async function GET(
@@ -24,9 +27,8 @@ export async function GET(
     where: { id },
     include: {
       user: {
-        select: { id: true, name: true, email: true, phone: true },
+        select: { id: true, name: true, email: true, phone: true, username: true },
       },
-      workingHours: true,
       blockedTimes: true,
     },
   })
@@ -53,10 +55,10 @@ export async function PATCH(
     const body = await req.json()
     const validatedData = updateStaffSchema.parse(body)
 
-    const { name, email, phone, ...staffData } = validatedData
+    const { name, email, phone, username, password, ...staffData } = validatedData
 
     // Update user fields if provided
-    if (name || email || phone !== undefined) {
+    if (name || email || phone !== undefined || username || password) {
       const existingStaff = await prisma.staff.findUnique({ where: { id }, select: { userId: true } })
       if (!existingStaff) {
         return NextResponse.json({ error: "Personel bulunamadı" }, { status: 404 })
@@ -66,6 +68,8 @@ export async function PATCH(
       if (name) userData.name = name
       if (email) userData.email = email
       if (phone !== undefined) userData.phone = phone
+      if (username) userData.username = username
+      if (password) userData.password = await bcrypt.hash(password, 10)
 
       if (Object.keys(userData).length > 0) {
         await prisma.user.update({ where: { id: existingStaff.userId }, data: userData })

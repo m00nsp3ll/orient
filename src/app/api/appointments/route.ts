@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { getSessionTimesForHotel } from "@/lib/region-utils"
+import { checkPermission } from "@/lib/permissions"
 
 const appointmentSchema = z.object({
   customerId: z.string().optional().nullable(),
@@ -136,6 +137,14 @@ export async function POST(req: NextRequest) {
 
   if (!session) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+
+  // STAFF kullanıcılar için operasyon_duzenleme yetkisi kontrolü
+  if (session.user.role === "STAFF") {
+    const hasPermission = await checkPermission(session.user.role, session.user.id, "operasyon_duzenleme")
+    if (!hasPermission) {
+      return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+    }
   }
 
   try {
@@ -291,69 +300,6 @@ export async function POST(req: NextRequest) {
           price: s.price,
         })),
       })
-    }
-
-    // Acenta cari kaydı: sepet toplamını DEBIT, REST varsa CREDIT yaz
-    // Fiyatlar acentanın para birimi cinsinden (pass fiyatları)
-    if (agencyId && servicesToSave.length > 0) {
-      const agency = await prisma.agency.findUnique({
-        where: { id: agencyId },
-        select: { currency: true },
-      })
-      const agencyCurrency = agency?.currency || "EUR"
-      const totalPrice = servicesToSave.reduce((sum, s) => sum + s.price, 0)
-
-      // DEBIT: Sepet toplamı (acentanın para biriminde — pass fiyatları zaten bu birimde)
-      await prisma.agencyTransaction.create({
-        data: {
-          agencyId,
-          appointmentId: appointment.id,
-          type: "DEBIT",
-          amount: totalPrice,
-          currency: agencyCurrency,
-          description: `Rezervasyon - ${validatedData.customerName || "Müşteri"} (${servicesToSave.length} paket)`,
-        },
-      })
-
-      // CREDIT: REST tutarı — acentanın para birimine çevrilmiş şekilde kaydedilir
-      if (validatedData.isRest && validatedData.restAmount && validatedData.restAmount > 0 && validatedData.restCurrency) {
-        let creditAmount = validatedData.restAmount
-        const restCurrency = validatedData.restCurrency
-
-        // REST para birimi acentanınkinden farklıysa TCMB kuruyla çevir
-        if (restCurrency !== agencyCurrency) {
-          try {
-            const tcmbRes = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml")
-            if (tcmbRes.ok) {
-              const xml = await tcmbRes.text()
-              const getSellingRate = (code: string): number | null => {
-                if (code === "TRY") return 1
-                const regex = new RegExp(`<Currency[^>]*Kod="${code}"[^>]*>[\\s\\S]*?<ForexSelling>([\\d.]+)</ForexSelling>`)
-                const match = xml.match(regex)
-                return match ? parseFloat(match[1]) : null
-              }
-              const fromRate = getSellingRate(restCurrency)
-              const toRate = getSellingRate(agencyCurrency)
-              if (fromRate && toRate) {
-                creditAmount = (validatedData.restAmount * fromRate) / toRate
-              }
-            }
-          } catch {
-            // Kur çevrimi başarısız olursa orijinal tutarı kaydet
-          }
-        }
-
-        await prisma.agencyTransaction.create({
-          data: {
-            agencyId,
-            appointmentId: appointment.id,
-            type: "CREDIT",
-            amount: parseFloat(creditAmount.toFixed(2)),
-            currency: agencyCurrency,
-            description: `REST - ${validatedData.customerName || "Müşteri"} (${restCurrency !== agencyCurrency ? `${validatedData.restAmount} ${restCurrency} → ${agencyCurrency}` : "kapıda ödeme"})`,
-          },
-        })
-      }
     }
 
     // Auto-create transfer record for appointments with hotel

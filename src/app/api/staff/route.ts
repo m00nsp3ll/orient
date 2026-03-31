@@ -16,7 +16,7 @@ export async function GET() {
   const staff = await prisma.staff.findMany({
     include: {
       user: {
-        select: { id: true, name: true, email: true, phone: true },
+        select: { id: true, name: true, email: true, phone: true, username: true },
       },
       workingHours: true,
     },

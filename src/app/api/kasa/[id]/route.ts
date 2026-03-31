@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { syncAccountingEntries } from "@/lib/accounting-sync"
+import { checkPermission } from "@/lib/permissions"
 
 const updateSchema = z.object({
   agencyId: z.string().optional().nullable(),
@@ -37,6 +38,14 @@ export async function PUT(
   const session = await getServerSession(authOptions)
   if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+
+  // STAFF kullanıcılar için kasa_yonetimi yetkisi kontrolü
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "kasa_yonetimi")
+    if (!hasPerm) {
+      return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+    }
   }
 
   const { id } = await params

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { usePermissions } from "@/hooks/use-permissions"
 import { getCurrencySymbol, convertCurrency, ExchangeRates } from "@/lib/currency-utils"
 import { EXPENSE_CATEGORIES, INCOME_SUB_CATEGORIES, getExpenseCategoryLabel, getIncomeSubCategoryLabel } from "@/lib/accounting-constants"
 
@@ -149,6 +150,8 @@ function CurrencyButtons({ value, onChange }: { value: string; onChange: (v: str
 
 export default function KasaPage() {
   const queryClient = useQueryClient()
+  const { has } = usePermissions()
+  const canManageKasa = has("kasa_yonetimi")
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [formMode, setFormMode] = useState<"income" | "expense" | null>(null)
@@ -283,12 +286,16 @@ export default function KasaPage() {
                 {getCurrencySymbol(currency)} {amount.toLocaleString("tr-TR")}
               </span>
               <div className="flex gap-0.5">
+                {canManageKasa && (
+                <>
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(entry)}>
                   <Pencil className="h-3 w-3" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDeletingId(entry.id)}>
                   <Trash2 className="h-3 w-3 text-red-500" />
                 </Button>
+                </>
+                )}
               </div>
             </div>
           </div>
@@ -351,14 +358,15 @@ export default function KasaPage() {
           const muhasebeAgencyEntries = muhasebeEntries.filter(e => e.agencyIncomeAmount && e.agencyIncomeCurrency === cur.value)
           const muhasebeStaffEntries = muhasebeEntries.filter(e => e.staffIncomeAmount && e.staffIncomeCurrency === cur.value)
           const muhasebeCCEntries = muhasebeEntries.filter(e => e.creditCardAmount && e.creditCardCurrency === cur.value)
-          const totalIn = muhasebeCreditEntries.reduce((s, e) => s + (e.receptionIncomeAmount || 0), 0)
+          const totalCash = muhasebeCreditEntries.reduce((s, e) => s + (e.receptionIncomeAmount || 0), 0)
             + muhasebeAgencyEntries.reduce((s, e) => s + (e.agencyIncomeAmount || 0), 0)
             + muhasebeStaffEntries.reduce((s, e) => s + (e.staffIncomeAmount || 0), 0)
-            + muhasebeCCEntries.reduce((s, e) => s + (e.creditCardAmount || 0), 0)
+          const totalCC = muhasebeCCEntries.reduce((s, e) => s + (e.creditCardAmount || 0), 0)
+          const totalIn = totalCash + totalCC
           const totalOut = muhasebeDebitEntries.reduce((s, e) => s + (e.expenseAmount || 0), 0)
           if (totalIn === 0 && totalOut === 0) return null
-          return { cur, totalIn, totalOut }
-        }).filter(Boolean) as { cur: typeof CURRENCIES[number]; totalIn: number; totalOut: number }[]
+          return { cur, totalIn, totalCash, totalCC, totalOut }
+        }).filter(Boolean) as { cur: typeof CURRENCIES[number]; totalIn: number; totalCash: number; totalCC: number; totalOut: number }[]
 
         if (cashRows.length === 0 && ccRows.length === 0 && muhasebeRows.length === 0) return null
 
@@ -458,17 +466,18 @@ export default function KasaPage() {
                   <p className="text-sm text-gray-400">Muhasebe girişi yok</p>
                 ) : (
                   <div className="space-y-3">
-                    {muhasebeRows.map(({ cur, totalIn, totalOut }) => (
+                    {muhasebeRows.map(({ cur, totalCash, totalCC, totalOut }) => (
                       <div key={cur.value} className="flex items-center justify-between py-2 border-b last:border-b-0">
                         <div className="space-y-1">
                           <Badge className={cn("text-white text-xs", cur.bg)}>{cur.symbol} {cur.value}</Badge>
-                          <div className="flex gap-3 text-xs text-gray-500">
-                            {totalIn > 0 && <span className="text-emerald-600">+{totalIn.toLocaleString("tr-TR")}</span>}
-                            {totalOut > 0 && <span className="text-red-500">-{totalOut.toLocaleString("tr-TR")}</span>}
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            {totalCash > 0 && <span className="text-emerald-600">Nakit +{totalCash.toLocaleString("tr-TR")}</span>}
+                            {totalCC > 0 && <span className="text-violet-600">KK +{totalCC.toLocaleString("tr-TR")}</span>}
+                            {totalOut > 0 && <span className="text-red-500">Gider -{totalOut.toLocaleString("tr-TR")}</span>}
                           </div>
                         </div>
-                        <div className={cn("text-xl font-bold", (totalIn - totalOut) >= 0 ? "text-blue-700" : "text-red-600")}>
-                          {cur.symbol} {Math.abs(totalIn - totalOut).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        <div className={cn("text-xl font-bold", (totalCash + totalCC - totalOut) >= 0 ? "text-blue-700" : "text-red-600")}>
+                          {cur.symbol} {Math.abs(totalCash + totalCC - totalOut).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                     ))}
@@ -842,7 +851,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
               <Select value={staffId} onValueChange={setStaffId}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Personel seçin" /></SelectTrigger>
                 <SelectContent>
-                  {staffList.filter(s => s.isActive).map(s => (
+                  {staffList.filter(s => s.isActive && s.position?.toLowerCase() === "infocu").map(s => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.user.name}{s.position ? ` (${s.position})` : ""}
                       {s.commissionRate ? ` — %${s.commissionRate} prim` : ""}

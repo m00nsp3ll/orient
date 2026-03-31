@@ -16,6 +16,7 @@ import { tr } from "date-fns/locale"
 import { CalendarIcon, RefreshCw, Database, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { usePermissions } from "@/hooks/use-permissions"
 
 interface Transfer {
   id: string
@@ -75,6 +76,8 @@ interface Driver {
 }
 
 export default function OperationsPage() {
+  const { has, isAdmin, isLoading: permissionsLoading } = usePermissions()
+  const canEditOps = isAdmin || (!permissionsLoading && has("operasyon_duzenleme"))
   const [date, setDate] = useState<Date>(new Date())
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -344,6 +347,8 @@ export default function OperationsPage() {
             </PopoverContent>
           </Popover>
           <div className="flex items-center gap-2">
+            {canEditOps && (
+            <>
             <Button
               variant="outline"
               onClick={handleLoadDemoData}
@@ -366,6 +371,8 @@ export default function OperationsPage() {
               <span className="hidden md:inline">Demo Sıfırla</span>
               <span className="md:hidden">Sıfırla</span>
             </Button>
+            </>
+            )}
             <Button variant="outline" size="icon" onClick={fetchData}>
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
@@ -378,9 +385,9 @@ export default function OperationsPage() {
         <ActiveDriversBar
           transfers={transfers}
           drivers={drivers}
-          onStatusChange={handleStatusChange}
-          onDriverChange={handleDriverChange}
-          onStartRoute={handleStartRoute}
+          onStatusChange={canEditOps ? handleStatusChange : undefined}
+          onDriverChange={canEditOps ? handleDriverChange : undefined}
+          onStartRoute={canEditOps ? handleStartRoute : undefined}
         />
       )}
 
@@ -397,10 +404,10 @@ export default function OperationsPage() {
         <TransferBoard
           transfers={transfers}
           drivers={drivers}
-          onStatusChange={handleStatusChange}
-          onDriverChange={handleDriverChange}
-          onStartDropoff={handleStartDropoff}
-          onCancelAppointment={handleCancelAppointment}
+          onStatusChange={canEditOps ? handleStatusChange : undefined}
+          onDriverChange={canEditOps ? handleDriverChange : undefined}
+          onStartDropoff={canEditOps ? handleStartDropoff : undefined}
+          onCancelAppointment={canEditOps ? handleCancelAppointment : undefined}
         />
       )}
     </div>

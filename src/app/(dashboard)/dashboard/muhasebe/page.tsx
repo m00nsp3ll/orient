@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns"
 import { tr } from "date-fns/locale"
@@ -130,12 +130,14 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 
 // ── Acenta Cari Detay Dialog ──────────────────────────────────────────────────
 function AcentaCariDialog({
-  open, onClose, agencyId, agencyName, agencyCurrency, balance,
+  open, onClose, agencyId, agencyName, agencyCurrency, balance, onRefresh,
 }: {
   open: boolean; onClose: () => void
   agencyId: string; agencyName: string; agencyCurrency: string
   balance: Record<string, { debit: number; credit: number; bakiye: number }>
+  onRefresh?: () => void
 }) {
+  const queryClient = useQueryClient()
   const now = new Date()
   const [preset, setPreset]       = useState<AcentaDetayPreset>("all")
   const [customStart, setCustomStart] = useState(format(startOfMonth(now), "yyyy-MM-dd"))
@@ -163,7 +165,7 @@ function AcentaCariDialog({
     enabled: open,
   })
 
-  const { data: odemeler } = useQuery<any[]>({
+  const { data: odemeler, refetch: refetchOdemeler } = useQuery<any[]>({
     queryKey: ["acenta-odemeler", agencyId],
     queryFn: async () => {
       const params = new URLSearchParams({ agencyId })
@@ -172,7 +174,12 @@ function AcentaCariDialog({
       return res.json()
     },
     enabled: open,
+    staleTime: 0,
   })
+
+  useEffect(() => {
+    if (open) refetchOdemeler()
+  }, [open])
 
   const customers: any[] = stats?.customers ?? []
   const filtered = customers.filter(c =>
@@ -299,7 +306,7 @@ function AcentaCariDialog({
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="w-full !max-w-[960px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-2 pr-6">
+          <div className="flex items-center justify-between gap-2 pr-10">
             <div>
               <DialogTitle className="text-base font-bold flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-blue-600" />
@@ -494,13 +501,15 @@ function AcentaCariDialog({
                   </Table>
                 </div>
               )}
-              {/* Ödemeler Bölümü */}
-              {odemeler && odemeler.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
-                    <ArrowLeftRight className="h-3.5 w-3.5" /> Tahsilat / Ödeme Hareketleri
-                    <span className="text-gray-400 font-normal">({odemeler.length} kayıt)</span>
-                  </p>
+              {/* Ödemeler Bölümü — her zaman göster */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                  <ArrowLeftRight className="h-3.5 w-3.5" /> Tahsilat / Ödeme Hareketleri
+                  <span className="text-gray-400 font-normal">({odemeler?.length ?? 0} kayıt)</span>
+                </p>
+                {!odemeler || odemeler.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-3 text-center">Tahsilat kaydı yok</p>
+                ) : (
                   <div className="overflow-x-auto rounded-lg border border-blue-100">
                     <Table>
                       <TableHeader>
@@ -548,8 +557,8 @@ function AcentaCariDialog({
                       </TableBody>
                     </Table>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </div>
@@ -1112,6 +1121,11 @@ export default function MuhasebePage() {
     queryClient.invalidateQueries({ queryKey: ["muhasebe-ozet"] })
     queryClient.invalidateQueries({ queryKey: ["muhasebe-virman"] })
     queryClient.invalidateQueries({ queryKey: ["acenta-odemeler"] })
+    queryClient.invalidateQueries({ queryKey: ["acenta-cari-detay"] })
+    if (acentaDetay) {
+      queryClient.invalidateQueries({ queryKey: ["acenta-odemeler", acentaDetay.agencyId] })
+      queryClient.invalidateQueries({ queryKey: ["acenta-cari-detay", acentaDetay.agencyId] })
+    }
     if (detailAccount) queryClient.invalidateQueries({ queryKey: ["muhasebe-cari-detail", detailAccount.code] })
   }
 
@@ -1205,9 +1219,9 @@ export default function MuhasebePage() {
 
       <Tabs defaultValue="ozet">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="ozet">Genel Özet</TabsTrigger>
-          <TabsTrigger value="cari">Cari Hesaplar</TabsTrigger>
-          <TabsTrigger value="virman">Virman</TabsTrigger>
+          <TabsTrigger value="ozet" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Genel Özet</TabsTrigger>
+          <TabsTrigger value="cari" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">Cari Hesaplar</TabsTrigger>
+          <TabsTrigger value="virman" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white">Virman</TabsTrigger>
         </TabsList>
 
         {/* ══ TAB 1: GENEL ÖZET ══════════════════════════════════════════════ */}
@@ -1627,6 +1641,7 @@ export default function MuhasebePage() {
                         </TableCell>
                         <TableCell className="text-xs max-w-[200px] truncate">
                           {e.description || "—"}
+                          {e.staff?.name && <span className="text-[10px] text-gray-500 ml-1">({e.staff.name})</span>}
                           {e.cashEntry && <span className="text-[10px] text-gray-400 ml-1">#{e.cashEntry.voucherNo}</span>}
                           {e.transferGroupId && <span className="text-[10px] text-blue-400 ml-1">[Virman]</span>}
                           {isManuel && !isSentinel && <span className="text-[10px] text-amber-500 ml-1">[Manuel]</span>}

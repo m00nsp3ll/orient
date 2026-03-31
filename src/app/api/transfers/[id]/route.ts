@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { z } from "zod"
 import { notifyDriverAssigned } from "@/lib/onesignal-server"
 import { format } from "date-fns"
+import { checkPermission } from "@/lib/permissions"
 
 const updateTransferSchema = z.object({
   status: z.enum([
@@ -36,6 +37,14 @@ export async function PATCH(
 
   if (!["ADMIN", "STAFF", "DRIVER"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
+  }
+
+  // STAFF kullanıcılar için operasyon_duzenleme yetkisi kontrolü
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "operasyon_duzenleme")
+    if (!hasPerm) {
+      return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+    }
   }
 
   try {

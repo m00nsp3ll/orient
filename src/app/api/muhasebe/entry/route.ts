@@ -36,7 +36,7 @@ const entrySchema = z.object({
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 

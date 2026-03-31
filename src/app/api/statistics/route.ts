@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       status: {
         not: "CANCELLED",
       },
+      approvalStatus: "APPROVED",
     }
 
     if (agencyId) {
@@ -83,51 +84,60 @@ export async function GET(req: NextRequest) {
     const totalAppointments = appointments.length
     const totalPax = appointments.reduce((sum, apt) => sum + (apt.pax || 1), 0)
 
-    // Para birimi bazlı toplam gelir
+    // Para birimi bazlı toplam gelir (REST düşülmüş net tutar)
     const revenueByCurrency: Record<string, number> = {}
     appointments.forEach(apt => {
       const currency = apt.agency?.currency || "EUR"
-      const servicesTotal = apt.services.reduce((s: number, item: any) => s + item.price, 0)
-      revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + servicesTotal
+      const pax = apt.pax || 1
+      const servicesTotal = apt.services.reduce((s: number, item: any) => s + item.price, 0) * pax
+      // REST aynı para birimindeyse düş
+      const restDeduction = (apt.restAmount && apt.restCurrency === currency) ? apt.restAmount : 0
+      revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + servicesTotal - restDeduction
     })
 
-    // Acenta bazlı istatistikler
+    // Acenta bazlı istatistikler (REST düşülmüş net tutar)
     const agencyStats = appointments.reduce((acc: any[], apt) => {
+      const pax = apt.pax || 1
       if (!apt.agency) {
         // Manuel giriş — base service currency
         const manualIndex = acc.findIndex(a => a.id === "manual")
-        const revenue = apt.services.reduce((s: number, item: any) => s + item.price, 0)
         const currency = apt.service?.currency || "EUR"
+        const gross = apt.services.reduce((s: number, item: any) => s + item.price, 0) * pax
+        const restDeduction = (apt.restAmount && apt.restCurrency === currency) ? apt.restAmount : 0
+        const revenue = gross - restDeduction
 
         if (manualIndex >= 0) {
           acc[manualIndex].count += 1
           acc[manualIndex].revenue += revenue
-          acc[manualIndex].pax += apt.pax || 1
+          acc[manualIndex].pax += pax
         } else {
           acc.push({
             id: "manual",
             name: "Manuel Giriş",
             count: 1,
             revenue: revenue,
-            pax: apt.pax || 1,
+            pax: pax,
             currency,
           })
         }
       } else {
         const index = acc.findIndex(a => a.id === apt.agency!.id)
-        const revenue = apt.services.reduce((s: number, item: any) => s + item.price, 0)
+        const currency = apt.agency.currency || "EUR"
+        const gross = apt.services.reduce((s: number, item: any) => s + item.price, 0) * pax
+        const restDeduction = (apt.restAmount && apt.restCurrency === currency) ? apt.restAmount : 0
+        const revenue = gross - restDeduction
 
         if (index >= 0) {
           acc[index].count += 1
           acc[index].revenue += revenue
-          acc[index].pax += apt.pax || 1
+          acc[index].pax += pax
         } else {
           acc.push({
             id: apt.agency.id,
             name: apt.agency.name || apt.agency.companyName || "Bilinmeyen Acenta",
             count: 1,
             revenue: revenue,
-            pax: apt.pax || 1,
+            pax: pax,
             currency: apt.agency.currency || "EUR",
           })
         }
@@ -138,20 +148,21 @@ export async function GET(req: NextRequest) {
     // Program bazlı istatistikler (currency bazlı)
     const serviceStats = appointments.reduce((acc: any[], apt) => {
       const currency = apt.agency?.currency || apt.service?.currency || "EUR"
+      const pax = apt.pax || 1
       apt.services.forEach((item: any) => {
         const key = `${item.serviceId}_${currency}`
         const index = acc.findIndex(s => s.key === key)
 
         if (index >= 0) {
-          acc[index].count += 1
-          acc[index].revenue += item.price
+          acc[index].count += pax
+          acc[index].revenue += item.price * pax
         } else {
           acc.push({
             key,
             id: item.serviceId,
             name: item.service.name,
-            count: 1,
-            revenue: item.price,
+            count: pax,
+            revenue: item.price * pax,
             currency,
           })
         }
@@ -176,8 +187,10 @@ export async function GET(req: NextRequest) {
       const dayRevenueByCurrency: Record<string, number> = {}
       dayAppointments.forEach(apt => {
         const currency = apt.agency?.currency || "EUR"
-        const total = apt.services.reduce((s: number, item: any) => s + item.price, 0)
-        dayRevenueByCurrency[currency] = (dayRevenueByCurrency[currency] || 0) + total
+        const pax = apt.pax || 1
+        const total = apt.services.reduce((s: number, item: any) => s + item.price, 0) * pax
+        const restDeduction = (apt.restAmount && apt.restCurrency === currency) ? apt.restAmount : 0
+        dayRevenueByCurrency[currency] = (dayRevenueByCurrency[currency] || 0) + total - restDeduction
       })
 
       dailyStats.unshift({
@@ -269,8 +282,13 @@ export async function GET(req: NextRequest) {
         notes: a.notes,
         restAmount: a.restAmount,
         restCurrency: a.restCurrency,
-        price: a.services.reduce((s: number, item: any) => s + item.price, 0),
-        currency: a.service?.currency || "EUR",
+        price: (() => {
+          const currency = a.agency?.currency || a.service?.currency || "EUR"
+          const gross = a.services.reduce((s: number, item: any) => s + item.price, 0) * (a.pax || 1)
+          const restDeduction = (a.restAmount && a.restCurrency === currency) ? a.restAmount : 0
+          return gross - restDeduction
+        })(),
+        currency: a.agency?.currency || a.service?.currency || "EUR",
       })),
       kasa: {
         byCurrency: kasaByCurrency,

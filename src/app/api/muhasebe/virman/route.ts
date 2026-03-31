@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import { checkPermission } from "@/lib/permissions"
 
 const virmanSchema = z.object({
   fromAccountCode: z.string(),
@@ -15,8 +16,12 @@ const virmanSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "muhasebe_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
   const virmans = await prisma.accountingEntry.findMany({
@@ -55,8 +60,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "muhasebe_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
   try {

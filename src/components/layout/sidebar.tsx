@@ -5,12 +5,6 @@ import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Calendar,
@@ -29,24 +23,27 @@ import {
   Timer,
   Wallet,
   BookOpen,
+  LogOut,
 } from "lucide-react"
 import { useState } from "react"
+import { usePermissions } from "@/hooks/use-permissions"
+import type { PermissionKey } from "@/lib/permissions"
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "STAFF", "AGENCY"] },
+const navigation: { name: string; href: string; icon: any; roles: string[]; permissionKey?: PermissionKey }[] = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "STAFF", "AGENCY"], permissionKey: "dashboard_view" },
   { name: "Şoför Paneli", href: "/driver", icon: Car, roles: ["DRIVER"] },
-  { name: "Randevular", href: "/dashboard/appointments", icon: Calendar, roles: ["ADMIN", "STAFF", "AGENCY"] },
-  { name: "Operasyon", href: "/dashboard/operations", icon: Truck, roles: ["ADMIN", "STAFF"] },
-  { name: "Şoförler", href: "/dashboard/operations/drivers", icon: UserCog, roles: ["ADMIN"] },
-  { name: "Hizmetler", href: "/dashboard/services", icon: Scissors, roles: ["ADMIN", "STAFF"] },
-  { name: "Personel", href: "/dashboard/staff", icon: Users, roles: ["ADMIN", "STAFF"] },
-  { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN"] },
-  { name: "Alınış Saatleri", href: "/dashboard/session-times", icon: Timer, roles: ["ADMIN"] },
-  { name: "Günlük Kasa", href: "/dashboard/kasa", icon: Wallet, roles: ["ADMIN"] },
-  { name: "Muhasebe", href: "/dashboard/muhasebe", icon: BookOpen, roles: ["ADMIN"] },
-  { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"] },
-  { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN"] },
-  { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
+  { name: "Randevular", href: "/dashboard/appointments", icon: Calendar, roles: ["ADMIN", "STAFF", "AGENCY"], permissionKey: "randevu_view" },
+  { name: "Operasyon", href: "/dashboard/operations", icon: Truck, roles: ["ADMIN", "STAFF"], permissionKey: "operasyon_view" },
+  { name: "Şoförler", href: "/dashboard/operations/drivers", icon: UserCog, roles: ["ADMIN", "STAFF"], permissionKey: "operasyon_view" },
+  { name: "Hizmetler", href: "/dashboard/services", icon: Scissors, roles: ["ADMIN", "STAFF"], permissionKey: "hizmetler_view" },
+  { name: "Personel", href: "/dashboard/staff", icon: Users, roles: ["ADMIN", "STAFF"], permissionKey: "personel_view" },
+  { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN", "STAFF"], permissionKey: "oteller_view" },
+  { name: "Alınış Saatleri", href: "/dashboard/session-times", icon: Timer, roles: ["ADMIN", "STAFF"], permissionKey: "oteller_view" },
+  { name: "Günlük Kasa", href: "/dashboard/kasa", icon: Wallet, roles: ["ADMIN", "STAFF"], permissionKey: "kasa_view" },
+  { name: "Muhasebe", href: "/dashboard/muhasebe", icon: BookOpen, roles: ["ADMIN", "STAFF"], permissionKey: "muhasebe_view" },
+  { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"], permissionKey: "istatistik_view" },
+  { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN", "STAFF"], permissionKey: "acentalar_view" },
+  { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN", "STAFF", "AGENCY", "DRIVER"] },
 ]
 
 export function Sidebar() {
@@ -54,9 +51,17 @@ export function Sidebar() {
   const { data: session } = useSession()
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const { has } = usePermissions()
+
   const filteredNav = navigation.filter((item) => {
     const userRole = session?.user.role || ""
-    return item.roles.includes(userRole)
+    // Rol listesinde yoksa hiç gösterme
+    if (!item.roles.includes(userRole)) return false
+    // STAFF kullanıcılar için permission kontrolü
+    if (userRole === "STAFF" && item.permissionKey) {
+      return has(item.permissionKey)
+    }
+    return true
   })
 
   return (
@@ -121,29 +126,25 @@ export function Sidebar() {
           </nav>
 
           {/* User menu */}
-          <div className="p-4 border-t">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>
-                      {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col items-start text-sm">
-                    <span className="font-medium">{session?.user?.name}</span>
-                    <span className="text-xs text-gray-500">
-                      {session?.user?.role}
-                    </span>
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
-                  Çıkış Yap
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="p-4 border-t space-y-1">
+            <div className="flex items-center gap-3 px-3 py-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback>
+                  {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col text-sm min-w-0">
+                <span className="font-medium truncate">{session?.user?.name}</span>
+                <span className="text-xs text-gray-500">{session?.user?.role}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Çıkış Yap
+            </button>
           </div>
         </div>
       </div>

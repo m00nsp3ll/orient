@@ -6,6 +6,7 @@ import {
   EXPENSE_CATEGORIES, INCOME_SUB_CATEGORIES, ACCOUNT_LABELS,
   getExpenseCategoryLabel, getIncomeSubCategoryLabel,
 } from "@/lib/accounting-constants"
+import { checkPermission } from "@/lib/permissions"
 
 type CustomCategory = { code: string; label: string; type: "income" | "expense" }
 
@@ -25,8 +26,12 @@ async function loadLabelOverrides(): Promise<Record<string, string>> {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "muhasebe_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
   // Sabit cari hesaplar (gider + gelir kategorileri)
@@ -131,32 +136,40 @@ export async function GET(req: NextRequest) {
     ...customCats.map(c => c.code),
   ]
 
-  const staticAccounts = allCodes
-    .filter(code => staticMap[code])
-    .map(code => {
-      const isExpense = EXPENSE_CATEGORIES.some(c => c.code === code)
-      const isIncomeSub = INCOME_SUB_CATEGORIES.some(c => c.code === code)
-      const customCat = customCats.find(c => c.code === code)
-      const label = labelOverrides[code] ?? (
-        customCat ? customCat.label :
-        isExpense ? getExpenseCategoryLabel(code) :
-        isIncomeSub ? getIncomeSubCategoryLabel(code) :
-        (ACCOUNT_LABELS[code] ?? code)
-      )
-      const type = customCat ? customCat.type : isExpense ? "expense" : "income"
-      const balances: Record<string, { debit: number; credit: number; bakiye: number }> = {}
-      for (const [cur, v] of Object.entries(staticMap[code] ?? {})) {
-        balances[cur] = { ...v, bakiye: v.credit - v.debit }
-      }
-      return { accountCode: code, label, type, balances, isCustom: !!customCat }
-    })
-
-  const staffAccounts = Object.entries(staffMap).map(([code, v]) => {
+  const staticAccounts = allCodes.map(code => {
+    const isExpense = EXPENSE_CATEGORIES.some(c => c.code === code)
+    const isIncomeSub = INCOME_SUB_CATEGORIES.some(c => c.code === code)
+    const customCat = customCats.find(c => c.code === code)
+    const label = labelOverrides[code] ?? (
+      customCat ? customCat.label :
+      isExpense ? getExpenseCategoryLabel(code) :
+      isIncomeSub ? getIncomeSubCategoryLabel(code) :
+      (ACCOUNT_LABELS[code] ?? code)
+    )
+    const type = customCat ? customCat.type : isExpense ? "expense" : "income"
     const balances: Record<string, { debit: number; credit: number; bakiye: number }> = {}
-    for (const [cur, b] of Object.entries(v.balances)) {
-      balances[cur] = { ...b, bakiye: b.debit - b.credit }
+    for (const [cur, v] of Object.entries(staticMap[code] ?? {})) {
+      balances[cur] = { ...v, bakiye: v.credit - v.debit }
     }
-    return { accountCode: code, label: v.name, type: "staff", balances }
+    return { accountCode: code, label, type, balances, isCustom: !!customCat }
+  })
+
+  // Tüm aktif personel carileri — işlem olmasa bile göster
+  const allStaff = await prisma.staff.findMany({
+    where: { isActive: true },
+    include: { user: { select: { name: true } } },
+  })
+
+  const staffAccounts = allStaff.map(s => {
+    const code = `CARI_PERSONEL_${s.id}`
+    const v = staffMap[code]
+    const balances: Record<string, { debit: number; credit: number; bakiye: number }> = {}
+    if (v) {
+      for (const [cur, b] of Object.entries(v.balances)) {
+        balances[cur] = { ...b, bakiye: b.debit - b.credit }
+      }
+    }
+    return { accountCode: code, label: s.user.name, type: "staff", balances }
   })
 
   return NextResponse.json({ accounts: [...staticAccounts, ...staffAccounts, ...agencyAccounts] })

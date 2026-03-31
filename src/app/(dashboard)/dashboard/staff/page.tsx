@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useSession } from "next-auth/react"
 import { Plus, Pencil, Calendar, Trash2 } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-media-query"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
+import { StaffPermissions } from "./components/staff-permissions"
+
+const STAFF_POSITIONS = [
+  { value: "Admin", label: "Admin" },
+  { value: "Operasyon", label: "Operasyon" },
+  { value: "Müdür", label: "Müdür" },
+  { value: "Resepsiyon", label: "Resepsiyon" },
+  { value: "İnfocu", label: "İnfocu" },
+]
 
 interface Staff {
   id: string
@@ -28,7 +39,7 @@ interface Staff {
   isActive: boolean
   position: string | null
   commissionRate: number | null
-  user: { id: string; name: string; email: string; phone?: string }
+  user: { id: string; name: string; email: string; phone?: string; username?: string | null }
   workingHours: WorkingHours[]
 }
 
@@ -44,6 +55,7 @@ const DAYS = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", 
 
 export default function StaffPage() {
   const queryClient = useQueryClient()
+  const { data: session } = useSession()
   const isMobile = useIsMobile()
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [showHoursDialog, setShowHoursDialog] = useState(false)
@@ -80,13 +92,14 @@ export default function StaffPage() {
   })
 
   const updateStaffMutation = useMutation({
-    mutationFn: async (data: { id: string; name: string; email: string; phone: string; position: string; commissionRate: number | null }) => {
+    mutationFn: async (data: { id: string; name: string; username: string; password: string; phone: string; position: string; commissionRate: number | null }) => {
       const res = await fetch(`/api/staff/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: data.name || undefined,
-          email: data.email || undefined,
+          username: data.username || undefined,
+          password: data.password || undefined,
           phone: data.phone || null,
           position: data.position || null,
           commissionRate: data.commissionRate,
@@ -192,7 +205,7 @@ export default function StaffPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ad Soyad</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Kullanıcı Adı</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>Pozisyon</TableHead>
                   <TableHead>Prim %</TableHead>
@@ -204,7 +217,7 @@ export default function StaffPage() {
                 {staff.map((member) => (
                   <TableRow key={member.id}>
                     <TableCell className="font-medium">{member.user.name}</TableCell>
-                    <TableCell>{member.user.email}</TableCell>
+                    <TableCell>{member.user.username ?? member.user.name}</TableCell>
                     <TableCell>{member.user.phone || "-"}</TableCell>
                     <TableCell>{member.position || "-"}</TableCell>
                     <TableCell>{member.commissionRate != null ? `%${member.commissionRate}` : "-"}</TableCell>
@@ -233,6 +246,9 @@ export default function StaffPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Personel Rolleri — sadece ADMIN görür */}
+      {session?.user?.role === "ADMIN" && <StaffPermissions />}
 
       {/* Add Dialog */}
       <AddStaffDialog
@@ -314,23 +330,27 @@ function AddStaffDialog({ open, onOpenChange, onSuccess }: {
   open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void
 }) {
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [phone, setPhone] = useState("")
   const [position, setPosition] = useState("")
   const [commissionRate, setCommissionRate] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const reset = () => { setName(""); setEmail(""); setPassword(""); setPhone(""); setPosition(""); setCommissionRate("") }
+  const isInfocu = position === "İnfocu"
+
+  const reset = () => { setName(""); setUsername(""); setPassword(""); setPhone(""); setPosition(""); setCommissionRate("") }
 
   const handleSubmit = async () => {
-    if (!name || !email || !password) { toast.error("İsim, email ve şifre zorunludur"); return }
+    if (!name || !username || !password) { toast.error("İsim, kullanıcı adı ve şifre zorunludur"); return }
+    if (!position) { toast.error("Pozisyon seçiniz"); return }
+    if (isInfocu && !commissionRate) { toast.error("İnfocu için prim oranı zorunludur"); return }
     setSubmitting(true)
     try {
       const userRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, phone: phone || undefined }),
+        body: JSON.stringify({ name: username, password, phone: phone || undefined }),
       })
       if (!userRes.ok) { const err = await userRes.json(); throw new Error(err.error || "Kullanıcı oluşturulamadı") }
       const user = await userRes.json()
@@ -341,12 +361,22 @@ function AddStaffDialog({ open, onOpenChange, onSuccess }: {
         body: JSON.stringify({ userId: user.id, position: position || null, commissionRate: commissionRate ? parseFloat(commissionRate) : null }),
       })
       if (!staffRes.ok) { const err = await staffRes.json(); throw new Error(err.error || "Personel oluşturulamadı") }
+      const staffData = await staffRes.json()
+
+      // Update display name (Ad Soyad) separately from login username
+      if (name !== username) {
+        await fetch(`/api/staff/${staffData.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        })
+      }
 
       toast.success("Personel eklendi")
       reset()
       onSuccess()
-    } catch (error: any) {
-      toast.error(error.message)
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Hata oluştu")
     } finally {
       setSubmitting(false)
     }
@@ -357,14 +387,25 @@ function AddStaffDialog({ open, onOpenChange, onSuccess }: {
       <DialogContent className="w-full !max-w-[450px]">
         <DialogHeader><DialogTitle>Personel Ekle</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2"><Label>İsim *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad" /></div>
-          <div className="space-y-2"><Label>Email *</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" /></div>
+          <div className="space-y-2"><Label>Ad Soyad *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad" /></div>
+          <div className="space-y-2"><Label>Kullanıcı Adı *</Label><Input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="giris_yapilacak_ad" /></div>
           <div className="space-y-2"><Label>Şifre *</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Şifre" /></div>
           <div className="space-y-2"><Label>Telefon</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XX XXX XXXX" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Pozisyon</Label><Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="Infocu" /></div>
-            <div className="space-y-2"><Label>Prim %</Label><Input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="15" /></div>
+          <div className="space-y-2">
+            <Label>Pozisyon *</Label>
+            <Select value={position} onValueChange={setPosition}>
+              <SelectTrigger><SelectValue placeholder="Pozisyon seçin" /></SelectTrigger>
+              <SelectContent>
+                {STAFF_POSITIONS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
+          {isInfocu && (
+            <div className="space-y-2">
+              <Label>Prim % *</Label>
+              <Input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="15" min={0} max={100} />
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>İptal</Button>
             <Button onClick={handleSubmit} disabled={submitting}>{submitting ? "Ekleniyor..." : "Personel Ekle"}</Button>
@@ -378,11 +419,12 @@ function AddStaffDialog({ open, onOpenChange, onSuccess }: {
 // ---- Edit Staff Dialog ----
 function EditStaffDialog({ open, onOpenChange, staff, onSave, saving }: {
   open: boolean; onOpenChange: (open: boolean) => void; staff: Staff | null
-  onSave: (data: { name: string; email: string; phone: string; position: string; commissionRate: number | null }) => void
+  onSave: (data: { name: string; username: string; password: string; phone: string; position: string; commissionRate: number | null }) => void
   saving: boolean
 }) {
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
   const [phone, setPhone] = useState("")
   const [position, setPosition] = useState("")
   const [commissionRate, setCommissionRate] = useState("")
@@ -390,29 +432,44 @@ function EditStaffDialog({ open, onOpenChange, staff, onSave, saving }: {
 
   if (open && staff && staff.id !== lastStaffId) {
     setName(staff.user.name || "")
-    setEmail(staff.user.email || "")
+    setUsername(staff.user.username ?? staff.user.name ?? "")
     setPhone(staff.user.phone || "")
     setPosition(staff.position || "")
     setCommissionRate(staff.commissionRate != null ? String(staff.commissionRate) : "")
+    setPassword("")
     setLastStaffId(staff.id)
   }
   if (!open && lastStaffId) setLastStaffId(null)
+
+  const isInfocu = position === "İnfocu"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full !max-w-[450px]">
         <DialogHeader><DialogTitle>Personel Düzenle</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2"><Label>İsim *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad" /></div>
-          <div className="space-y-2"><Label>Email *</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" /></div>
+          <div className="space-y-2"><Label>Ad Soyad *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ad Soyad" /></div>
+          <div className="space-y-2"><Label>Kullanıcı Adı</Label><Input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Giriş için kullanıcı adı" /></div>
+          <div className="space-y-2"><Label>Yeni Şifre</Label><Input type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Değiştirmek için yeni şifre girin" /></div>
           <div className="space-y-2"><Label>Telefon</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XX XXX XXXX" /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Pozisyon</Label><Input value={position} onChange={(e) => setPosition(e.target.value)} placeholder="Infocu" /></div>
-            <div className="space-y-2"><Label>Prim %</Label><Input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="15" /></div>
+          <div className="space-y-2">
+            <Label>Pozisyon</Label>
+            <Select value={position} onValueChange={setPosition}>
+              <SelectTrigger><SelectValue placeholder="Pozisyon seçin" /></SelectTrigger>
+              <SelectContent>
+                {STAFF_POSITIONS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
+          {isInfocu && (
+            <div className="space-y-2">
+              <Label>Prim % *</Label>
+              <Input type="number" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} placeholder="15" min={0} max={100} />
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>İptal</Button>
-            <Button onClick={() => onSave({ name, email, phone, position, commissionRate: commissionRate ? parseFloat(commissionRate) : null })} disabled={saving || !name || !email}>
+            <Button onClick={() => onSave({ name, username, password, phone, position, commissionRate: commissionRate ? parseFloat(commissionRate) : null })} disabled={saving || !name}>
               {saving ? "Kaydediliyor..." : "Kaydet"}
             </Button>
           </div>

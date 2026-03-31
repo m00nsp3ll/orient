@@ -7,7 +7,6 @@ import { z } from "zod"
 
 const registerSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
   password: z.string().min(4),
   phone: z.string().optional(),
 })
@@ -22,9 +21,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const data = registerSchema.parse(body)
 
-    const existing = await prisma.user.findUnique({ where: { email: data.email } })
+    const existing = await prisma.user.findFirst({ where: { name: data.name } })
     if (existing) {
-      return NextResponse.json({ error: "Bu email zaten kayıtlı" }, { status: 400 })
+      return NextResponse.json({ error: "Bu kullanıcı adı zaten kayıtlı" }, { status: 400 })
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10)
@@ -32,13 +31,12 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.create({
       data: {
         name: data.name,
-        email: data.email,
         password: hashedPassword,
         phone: data.phone || null,
       },
     })
 
-    return NextResponse.json({ id: user.id, name: user.name, email: user.email })
+    return NextResponse.json({ id: user.id, name: user.name })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues[0].message }, { status: 400 })

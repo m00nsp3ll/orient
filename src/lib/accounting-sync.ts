@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { staffAccountCode, agencyAccountCode } from "./accounting-constants"
+import { prisma } from "./prisma"
 
 type TransactionClient = Omit<
   Prisma.TransactionClient,
@@ -24,7 +25,31 @@ interface CashEntryForSync {
   expenseCurrency: string | null
   expenseCategory: string | null
   description: string | null
-  staff: { commissionRate: number | null } | null
+  staff: { commissionRate: number | null; user?: { name: string } } | null
+}
+
+// TCMB kuru ile döviz çevirme (REST hesaplamasındaki aynı algoritma)
+async function convertCurrency(amount: number, fromCurrency: string, toCurrency: string): Promise<{ converted: number; rate: number | null }> {
+  if (fromCurrency === toCurrency) return { converted: amount, rate: 1 }
+  try {
+    const tcmbRes = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml")
+    if (tcmbRes.ok) {
+      const xml = await tcmbRes.text()
+      const getSellingRate = (code: string): number | null => {
+        if (code === "TRY") return 1
+        const regex = new RegExp(`<Currency[^>]*Kod="${code}"[^>]*>[\\s\\S]*?<ForexSelling>([\\d.]+)</ForexSelling>`)
+        const match = xml.match(regex)
+        return match ? parseFloat(match[1]) : null
+      }
+      const fromRate = getSellingRate(fromCurrency)
+      const toRate = getSellingRate(toCurrency)
+      if (fromRate && toRate) {
+        const rate = parseFloat((fromRate / toRate).toFixed(4))
+        return { converted: parseFloat(((amount * fromRate) / toRate).toFixed(2)), rate }
+      }
+    }
+  } catch {}
+  return { converted: amount, rate: null }
 }
 
 export async function syncAccountingEntries(
@@ -60,17 +85,39 @@ export async function syncAccountingEntries(
     })
 
     // Acenta carisi: ödeme aldık → borç azalır (credit)
+    // Para birimi acentanınkinden farklıysa TCMB kuruyla çevir
     if (cashEntry.agencyId) {
-      toCreate.push({
-        ...base,
-        accountCode: agencyAccountCode(cashEntry.agencyId),
-        debit: 0,
-        credit: amt,
-        amount: amt,
-        currency: cur,
-        agencyId: cashEntry.agencyId,
-        description: cashEntry.description ?? "Acenta ödemesi",
+      const agency = await prisma.agency.findUnique({
+        where: { id: cashEntry.agencyId },
+        select: { currency: true },
       })
+      const agencyCurrency = agency?.currency || "EUR"
+
+      if (cur !== agencyCurrency) {
+        const { converted, rate } = await convertCurrency(amt, cur, agencyCurrency)
+        const rateStr = rate ? ` | Kur: 1 ${cur} = ${rate} ${agencyCurrency}` : ""
+        toCreate.push({
+          ...base,
+          accountCode: agencyAccountCode(cashEntry.agencyId),
+          debit: 0,
+          credit: converted,
+          amount: converted,
+          currency: agencyCurrency,
+          agencyId: cashEntry.agencyId,
+          description: `${cashEntry.description ?? "Acenta ödemesi"} (${amt} ${cur} → ${converted} ${agencyCurrency}${rateStr})`,
+        })
+      } else {
+        toCreate.push({
+          ...base,
+          accountCode: agencyAccountCode(cashEntry.agencyId),
+          debit: 0,
+          credit: amt,
+          amount: amt,
+          currency: cur,
+          agencyId: cashEntry.agencyId,
+          description: cashEntry.description ?? "Acenta ödemesi",
+        })
+      }
     }
   }
 
@@ -107,9 +154,23 @@ export async function syncAccountingEntries(
       description: cashEntry.description ?? "Personel geliri",
     })
 
-    // Prim borcu: personel carisi debit (borç)
+    // Prim borcu: personel carisi debit (borç) + GIDER_PERSONEL_PRIM kaydı
     if (cashEntry.staffId && cashEntry.staff?.commissionRate) {
-      const primAmount = amt * cashEntry.staff.commissionRate / 100
+      const primAmount = parseFloat((amt * cashEntry.staff.commissionRate / 100).toFixed(2))
+      const staffName = cashEntry.staff.user?.name ?? "Personel"
+      const primDesc = `Prim: %${cashEntry.staff.commissionRate} × ${amt.toLocaleString("tr-TR")} ${cur} (${staffName})`
+      // Gider tarafı
+      toCreate.push({
+        ...base,
+        accountCode: "GIDER_PERSONEL_PRIM",
+        debit: primAmount,
+        credit: 0,
+        amount: primAmount,
+        currency: cur,
+        staffId: cashEntry.staffId,
+        description: primDesc,
+      })
+      // Cari tarafı (personele olan prim borcu)
       toCreate.push({
         ...base,
         accountCode: staffAccountCode(cashEntry.staffId),
@@ -118,7 +179,7 @@ export async function syncAccountingEntries(
         amount: primAmount,
         currency: cur,
         staffId: cashEntry.staffId,
-        description: `Prim: %${cashEntry.staff.commissionRate} × ${amt.toLocaleString("tr-TR")} ${cur}`,
+        description: primDesc,
       })
     }
   }
@@ -139,9 +200,58 @@ export async function syncAccountingEntries(
       description: cashEntry.description ?? "Kredi kartı geliri",
     })
 
+    // Acenta kredi kartı ödemesi → acenta carisi credit (nakit ile aynı mantık)
+    if (cashEntry.agencyId) {
+      const agency = await prisma.agency.findUnique({
+        where: { id: cashEntry.agencyId },
+        select: { currency: true },
+      })
+      const agencyCurrency = agency?.currency || "EUR"
+
+      if (cur !== agencyCurrency) {
+        const { converted, rate } = await convertCurrency(amt, cur, agencyCurrency)
+        const rateStr = rate ? ` | Kur: 1 ${cur} = ${rate} ${agencyCurrency}` : ""
+        toCreate.push({
+          ...base,
+          accountCode: agencyAccountCode(cashEntry.agencyId),
+          debit: 0,
+          credit: converted,
+          amount: converted,
+          currency: agencyCurrency,
+          agencyId: cashEntry.agencyId,
+          description: `${cashEntry.description ?? "Acenta KK ödemesi"} (${amt} ${cur} → ${converted} ${agencyCurrency}${rateStr})`,
+        })
+      } else {
+        toCreate.push({
+          ...base,
+          accountCode: agencyAccountCode(cashEntry.agencyId),
+          debit: 0,
+          credit: amt,
+          amount: amt,
+          currency: cur,
+          agencyId: cashEntry.agencyId,
+          description: cashEntry.description ?? "Acenta KK ödemesi",
+        })
+      }
+    }
+
     // Personel kredi kartından da prim oluşur
     if (cashEntry.staffId && cashEntry.staff?.commissionRate) {
-      const primAmount = amt * cashEntry.staff.commissionRate / 100
+      const primAmount = parseFloat((amt * cashEntry.staff.commissionRate / 100).toFixed(2))
+      const staffName = cashEntry.staff.user?.name ?? "Personel"
+      const primDesc = `Prim (KK): %${cashEntry.staff.commissionRate} × ${amt.toLocaleString("tr-TR")} ${cur} (${staffName})`
+      // Gider tarafı
+      toCreate.push({
+        ...base,
+        accountCode: "GIDER_PERSONEL_PRIM",
+        debit: primAmount,
+        credit: 0,
+        amount: primAmount,
+        currency: cur,
+        staffId: cashEntry.staffId,
+        description: primDesc,
+      })
+      // Cari tarafı
       toCreate.push({
         ...base,
         accountCode: staffAccountCode(cashEntry.staffId),
@@ -150,7 +260,7 @@ export async function syncAccountingEntries(
         amount: primAmount,
         currency: cur,
         staffId: cashEntry.staffId,
-        description: `Prim (KK): %${cashEntry.staff.commissionRate} × ${amt.toLocaleString("tr-TR")} ${cur}`,
+        description: primDesc,
       })
     }
   }

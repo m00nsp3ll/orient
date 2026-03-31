@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma"
 // key: "accounting_label_GIDER_ELEKTRIK_SU" → value: "Özel İsim"
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 

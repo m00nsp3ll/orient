@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useSession } from "next-auth/react"
+import { usePermissions } from "@/hooks/use-permissions"
 import { toast } from "sonner"
 
 interface Appointment {
@@ -58,7 +59,9 @@ interface Appointment {
 export default function AppointmentsPage() {
   const queryClient = useQueryClient()
   const { data: session } = useSession()
+  const { has } = usePermissions()
   const isAgency = session?.user?.role === "AGENCY"
+  const canEditOps = has("operasyon_duzenleme")
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
@@ -238,10 +241,12 @@ export default function AppointmentsPage() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
+          {canEditOps && (
           <Button className="w-full sm:w-auto" onClick={() => setShowAppointmentForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Yeni Randevu
           </Button>
+          )}
         </div>
       </div>
 
@@ -642,7 +647,7 @@ export default function AppointmentsPage() {
               )}
 
               {/* İptal Butonu — sadece CONFIRMED veya PENDING durumundayken */}
-              {!isAgency && (selectedAppointment.status === "CONFIRMED" || selectedAppointment.status === "PENDING") && (
+              {canEditOps && !isAgency && (selectedAppointment.status === "CONFIRMED" || selectedAppointment.status === "PENDING") && (
                 <Button
                   variant="destructive"
                   className="w-full gap-2"

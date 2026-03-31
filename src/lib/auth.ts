@@ -10,16 +10,23 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        username: { label: "Kullanıcı Adı", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email ve şifre gerekli")
+        if (!credentials?.username || !credentials?.password) {
+          throw new Error("Kullanıcı adı ve şifre gerekli")
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        // Kullanıcı adı (username), görünen ad (name) veya email ile ara
+        const user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { username: credentials.username },
+              { name: credentials.username },
+              { email: credentials.username },
+            ],
+          },
         })
 
         if (!user) {
@@ -32,11 +39,17 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Geçersiz şifre")
         }
 
+        const staff = await prisma.staff.findUnique({
+          where: { userId: user.id },
+          select: { position: true },
+        })
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
+          position: staff?.position || null,
         }
       },
     }),
@@ -49,6 +62,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = user.role
         token.id = user.id
+        token.position = user.position
       }
       return token
     },
@@ -56,6 +70,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.role = token.role as string
         session.user.id = token.id as string
+        session.user.position = (token.position as string | null) ?? null
       }
       return session
     },

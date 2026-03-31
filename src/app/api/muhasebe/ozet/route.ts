@@ -6,6 +6,7 @@ import {
   EXPENSE_CATEGORIES, INCOME_SUB_CATEGORIES, ACCOUNT_LABELS,
   getExpenseCategoryLabel, getIncomeSubCategoryLabel,
 } from "@/lib/accounting-constants"
+import { checkPermission } from "@/lib/permissions"
 
 type CustomCategory = { code: string; label: string; type: "income" | "expense" }
 
@@ -17,8 +18,12 @@ async function loadCustomCategories(): Promise<CustomCategory[]> {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "muhasebe_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
   const { searchParams } = new URL(req.url)

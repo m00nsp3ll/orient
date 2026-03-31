@@ -40,7 +40,9 @@ export async function POST(request: Request) {
     await prisma.appointment.deleteMany({
       where: { startTime: { gte: rangeStart, lt: rangeEnd } },
     })
-    // [DEMO] etiketli kasa + muhasebe (cascade ile silinir)
+    // Tüm muhasebe kayıtlarını sil (manuel + virman + cascade olmayanlar dahil)
+    await prisma.accountingEntry.deleteMany({})
+    // [DEMO] etiketli kasa girişlerini sil
     await prisma.cashEntry.deleteMany({
       where: { description: { contains: "[DEMO]" } },
     })

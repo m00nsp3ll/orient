@@ -25,18 +25,22 @@ export async function POST() {
     // 4. Tüm randevuları sil
     const deletedAppointments = await prisma.appointment.deleteMany({})
 
-    // 5. Tüm kasa girişlerini sil
+    // 5. Tüm muhasebe kayıtlarını sil (manuel + virman + cascade olmayanlar dahil)
+    const deletedAccounting = await prisma.accountingEntry.deleteMany({})
+
+    // 6. Tüm kasa girişlerini sil
     const deletedCash = await prisma.cashEntry.deleteMany({})
 
     return NextResponse.json({
       success: true,
-      message: `${deletedAppointments.count} randevu, ${deletedCash.count} kasa girişi, ${deletedTransfers.count} transfer silindi`,
+      message: `${deletedAppointments.count} randevu, ${deletedCash.count} kasa girişi, ${deletedAccounting.count} muhasebe kaydı, ${deletedTransfers.count} transfer silindi`,
       details: {
         deletedAppointments: deletedAppointments.count,
         deletedTransfers: deletedTransfers.count,
         deletedAppointmentServices: deletedServices.count,
         deletedAgencyTransactions: deletedTransactions.count,
         deletedCashEntries: deletedCash.count,
+        deletedAccountingEntries: deletedAccounting.count,
       },
     })
   } catch (error) {
