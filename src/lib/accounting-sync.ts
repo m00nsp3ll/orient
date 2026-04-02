@@ -142,10 +142,11 @@ export async function syncAccountingEntries(
   if (cashEntry.staffIncomeAmount && cashEntry.staffIncomeCurrency) {
     const amt = cashEntry.staffIncomeAmount
     const cur = cashEntry.staffIncomeCurrency
+    const accountCode = cashEntry.incomeSubCategory ?? "GELIR_PERSONEL"
 
     toCreate.push({
       ...base,
-      accountCode: "GELIR_PERSONEL",
+      accountCode,
       credit: amt,
       debit: 0,
       amount: amt,

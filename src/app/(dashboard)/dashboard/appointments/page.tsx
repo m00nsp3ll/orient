@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock, Search } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock, Search, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -115,6 +115,123 @@ export default function AppointmentsPage() {
     enabled: showDensity,
   })
 
+  const handlePrint = () => {
+    const filtered = appointments
+      .filter((a) => {
+        const nameMatch = !searchName.trim() || (a.customerName || a.customer?.name || "").toLowerCase().includes(searchName.toLowerCase())
+        const hotelMatch = !searchHotel.trim() || (a.hotel?.name || "").toLowerCase().includes(searchHotel.toLowerCase())
+        return nameMatch && hotelMatch
+      })
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+
+    const userName = session?.user?.name || "Bilinmeyen Kullanıcı"
+    const printDate = format(new Date(), "dd.MM.yyyy HH:mm", { locale: tr })
+    const dayLabel = format(currentDay, "d MMMM yyyy, EEEE", { locale: tr })
+
+    const rows = filtered.map((a, idx) => {
+      const time = format(new Date(a.startTime), "HH:mm")
+      const name = a.customerName || a.customer?.name || "-"
+      const pax = a.pax ? `${a.pax}${a.childCount ? `+${a.childCount}` : ""} PAX` : "-"
+      const hotel = a.hotel?.name || "-"
+      const region = a.hotel?.region?.name || "-"
+      const agency = a.agency?.companyName || a.agency?.name || "-"
+      const service = a.service?.name || "-"
+      const voucher = a.voucherNo || "-"
+      const rest = a.restAmount && a.restAmount > 0 ? `REST ${a.restAmount} ${a.restCurrency}` : ""
+      const status = a.status === "CONFIRMED" ? "Onaylı" : a.status === "PENDING" ? "Bekliyor" : a.status === "COMPLETED" ? "Tamamlandı" : a.status === "CANCELLED" ? "İptal" : a.status
+      return `
+        <tr style="${a.restAmount && a.restAmount > 0 ? "background:#fff5f5" : idx % 2 === 0 ? "background:#f9fafb" : "background:#fff"}">
+          <td style="padding:6px 8px;text-align:center;font-weight:600">${idx + 1}</td>
+          <td style="padding:6px 8px;font-weight:700;font-size:15px">${time}</td>
+          <td style="padding:6px 8px">${name}</td>
+          <td style="padding:6px 8px;text-align:center">${pax}</td>
+          <td style="padding:6px 8px">${hotel}<br/><span style="font-size:10px;color:#666">${region}</span></td>
+          <td style="padding:6px 8px">${agency}</td>
+          <td style="padding:6px 8px">${service}</td>
+          <td style="padding:6px 8px;font-family:monospace;font-size:11px">${voucher}</td>
+          <td style="padding:6px 8px;color:${a.status === "CONFIRMED" ? "#1d4ed8" : a.status === "COMPLETED" ? "#15803d" : a.status === "CANCELLED" ? "#b91c1c" : "#92400e"}">${status}</td>
+          <td style="padding:6px 8px;color:#dc2626;font-weight:600">${rest}</td>
+        </tr>`
+    }).join("")
+
+    const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Randevular — ${dayLabel}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 20px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; }
+    .header-left h1 { font-size: 20px; font-weight: 700; color: #1d4ed8; }
+    .header-left p { color: #555; margin-top: 2px; }
+    .header-right { text-align: right; font-size: 11px; color: #666; }
+    .summary { display: flex; gap: 20px; margin-bottom: 14px; }
+    .summary-item { background: #f1f5f9; border-radius: 6px; padding: 8px 14px; }
+    .summary-item strong { display: block; font-size: 18px; color: #1d4ed8; }
+    .summary-item span { font-size: 11px; color: #555; }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: #1d4ed8; color: white; }
+    thead th { padding: 8px 8px; text-align: left; font-size: 11px; font-weight: 600; }
+    tbody tr:hover { filter: brightness(0.97); }
+    td, th { border-bottom: 1px solid #e2e8f0; }
+    @media print { body { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <h1>Orient SPA — Randevu Listesi</h1>
+      <p>${dayLabel}</p>
+    </div>
+    <div class="header-right">
+      <div>Yazdırma Tarihi: <strong>${printDate}</strong></div>
+      <div>Yazdıran: <strong>${userName}</strong></div>
+      <div style="margin-top:4px;color:#1d4ed8">Toplam: <strong>${filtered.length} randevu</strong></div>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="summary-item">
+      <strong>${filtered.length}</strong>
+      <span>Randevu</span>
+    </div>
+    <div class="summary-item">
+      <strong>${filtered.reduce((s, a) => s + (a.pax || 0) + (a.childCount || 0), 0)}</strong>
+      <span>Toplam PAX</span>
+    </div>
+    <div class="summary-item">
+      <strong>${filtered.filter(a => a.restAmount && a.restAmount > 0).length}</strong>
+      <span>REST Bekleyen</span>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Saat</th>
+        <th>Misafir</th>
+        <th>PAX</th>
+        <th>Otel / Bölge</th>
+        <th>Acenta</th>
+        <th>Program</th>
+        <th>Voucher No</th>
+        <th>Durum</th>
+        <th>REST</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`
+
+    const win = window.open("", "_blank")
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 400)
+  }
+
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment)
   }
@@ -208,6 +325,13 @@ export default function AppointmentsPage() {
             <BarChart3 className="h-4 w-4" />
             Yoğunluk
           </Button>
+          {/* Yazdır Butonu — sadece günlük modda */}
+          {viewMode === "daily" && (
+            <Button variant="outline" className="gap-1.5" onClick={handlePrint}>
+              <Printer className="h-4 w-4" />
+              Yazdır
+            </Button>
+          )}
           {/* Datepicker */}
           <Popover>
             <PopoverTrigger asChild>

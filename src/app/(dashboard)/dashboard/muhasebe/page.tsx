@@ -830,6 +830,7 @@ function GelirGiderDialog({
     if (mode === "income" && incomeType === "reception" && !incomeSubCat) { toast.error("Alt kategori seçiniz"); return }
     if (mode === "income" && incomeType === "cari-agency" && !agencyId) { toast.error("Acenta seçiniz"); return }
     if (mode === "income" && incomeType === "cari-staff" && !staffId) { toast.error("Personel seçiniz"); return }
+    if (mode === "income" && incomeType === "cari-staff" && !incomeSubCat) { toast.error("Alt kategori seçiniz"); return }
     setSaving(true)
     try {
       const payload: any = { type: mode, description: description || null }
@@ -844,6 +845,7 @@ function GelirGiderDialog({
         } else if (incomeType === "cari-staff") {
           if (isCreditCard) { payload.creditCardAmount = amt; payload.creditCardCurrency = "TRY"; payload.staffId = staffId }
           else { payload.staffIncomeAmount = amt; payload.staffIncomeCurrency = currency; payload.staffId = staffId }
+          payload.incomeSubCategory = incomeSubCat
         }
       }
       const res = await fetch("/api/muhasebe/entry", {
@@ -920,6 +922,13 @@ function GelirGiderDialog({
                 <Select value={staffId} onValueChange={setStaffId}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Personel seçin" /></SelectTrigger>
                   <SelectContent>{(staffList ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.user.name}{s.commissionRate ? ` (%${s.commissionRate} kom.)` : ""}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-600">Alt Kategori *</Label>
+                <Select value={incomeSubCat} onValueChange={setIncomeSubCat}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Kategori seçin" /></SelectTrigger>
+                  <SelectContent>{INCOME_SUB_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">

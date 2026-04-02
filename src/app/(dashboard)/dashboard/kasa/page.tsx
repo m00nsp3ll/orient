@@ -699,7 +699,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
           setStaffId(editingEntry.staffId || ""); setAgencyId("")
           setAmount(editingEntry.staffIncomeAmount?.toString() || "")
           setCurrency(editingEntry.staffIncomeCurrency || "EUR")
-          setSubCategory("")
+          setSubCategory(editingEntry.incomeSubCategory || "")
         } else if (editingEntry.creditCardAmount) {
           setIncomeType("reception"); setPaymentMethod("creditCard")
           setAgencyId(""); setStaffId("")
@@ -734,6 +734,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   const handleSubmit = async () => {
     if (!amount) { toast.error("Miktar giriniz"); return }
     if (incomeType === "staff" && !staffId) { toast.error("Personel seçiniz"); return }
+    if (incomeType === "staff" && !subCategory) { toast.error("Alt kategori seçiniz"); return }
     setSubmitting(true)
     try {
       const payload: Record<string, unknown> = { date: dateStr, description: description || null }
@@ -751,6 +752,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
         payload.staffId = staffId
         payload.staffIncomeAmount = parseFloat(amount)
         payload.staffIncomeCurrency = currency
+        if (subCategory) payload.incomeSubCategory = subCategory
       } else {
         payload.receptionIncomeAmount = parseFloat(amount)
         payload.receptionIncomeCurrency = currency
@@ -814,22 +816,6 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             </div>
           )}
 
-          {/* Resepsiyon alt kategorisi */}
-          {incomeType === "reception" && (
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-gray-600">Alt Kategori</Label>
-              <Select value={subCategory || "none"} onValueChange={(v) => setSubCategory(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Seçiniz (opsiyonel)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Genel Resepsiyon Geliri</SelectItem>
-                  {INCOME_SUB_CATEGORIES.map(c => (
-                    <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
           {/* Acenta seçimi */}
           {incomeType === "agency" && (
             <div className="space-y-2">
@@ -856,6 +842,24 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
                       {s.user.name}{s.position ? ` (${s.position})` : ""}
                       {s.commissionRate ? ` — %${s.commissionRate} prim` : ""}
                     </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Resepsiyon veya Personel alt kategorisi */}
+          {(incomeType === "reception" || incomeType === "staff") && (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-600">Alt Kategori{incomeType === "staff" ? " *" : ""}</Label>
+              <Select value={subCategory || "none"} onValueChange={(v) => setSubCategory(v === "none" ? "" : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="Seçiniz" /></SelectTrigger>
+                <SelectContent>
+                  {incomeType === "reception" && (
+                    <SelectItem value="none">Genel Resepsiyon Geliri</SelectItem>
+                  )}
+                  {INCOME_SUB_CATEGORIES.map(c => (
+                    <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

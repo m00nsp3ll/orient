@@ -27,6 +27,7 @@ export const INCOME_SUB_CATEGORIES = [
   { code: "GELIR_EXTRA_PAKET", label: "Extra Paket Satışı" },
   { code: "GELIR_MASAJ",       label: "Masaj Satışı" },
   { code: "GELIR_MARKET",      label: "Market Geliri" },
+  { code: "GELIR_REST",        label: "Rest Geliri" },
 ] as const
 
 export type IncomeSubCategoryCode = typeof INCOME_SUB_CATEGORIES[number]["code"]
