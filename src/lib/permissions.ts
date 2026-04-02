@@ -12,6 +12,7 @@ export const PERMISSIONS = [
   { key: "dashboard_view", label: "Dashboard", description: "Ana sayfa görüntüleme", isSpecial: false },
   { key: "randevu_view", label: "Randevular", description: "Randevular sayfası görüntüleme", isSpecial: false },
   { key: "operasyon_view", label: "Operasyon", description: "Operasyon sayfası görüntüleme", isSpecial: false },
+  { key: "soforer_view", label: "Şoförler", description: "Şoförler sayfası görüntüleme", isSpecial: false },
   { key: "kasa_view", label: "Günlük Kasa", description: "Kasa sayfası görüntüleme (salt okunur)", isSpecial: false },
   { key: "muhasebe_view", label: "Muhasebe", description: "Muhasebe sayfası görüntüleme", isSpecial: false },
   { key: "istatistik_view", label: "İstatistikler", description: "İstatistikler sayfası görüntüleme", isSpecial: false },
@@ -31,7 +32,7 @@ export const DEFAULT_STAFF_PERMISSIONS: Record<string, PermissionKey[]> = {
     "oteller_view", "acentalar_view", "operasyon_duzenleme", "kasa_yonetimi",
   ],
   Operasyon: [
-    "dashboard_view", "randevu_view", "operasyon_view", "istatistik_view",
+    "dashboard_view", "randevu_view", "operasyon_view", "soforer_view", "istatistik_view",
     "operasyon_duzenleme",
   ],
   "Müdür": [
@@ -52,7 +53,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, PermissionKey> = {
   "/dashboard": "dashboard_view",
   "/dashboard/appointments": "randevu_view",
   "/dashboard/operations": "operasyon_view",
-  "/dashboard/operations/drivers": "operasyon_view",
+  "/dashboard/operations/drivers": "soforer_view",
   "/dashboard/kasa": "kasa_view",
   "/dashboard/muhasebe": "muhasebe_view",
   "/dashboard/statistics": "istatistik_view",

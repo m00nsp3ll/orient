@@ -34,7 +34,7 @@ const navigation: { name: string; href: string; icon: any; roles: string[]; perm
   { name: "Şoför Paneli", href: "/driver", icon: Car, roles: ["DRIVER"] },
   { name: "Randevular", href: "/dashboard/appointments", icon: Calendar, roles: ["ADMIN", "STAFF", "AGENCY"], permissionKey: "randevu_view" },
   { name: "Operasyon", href: "/dashboard/operations", icon: Truck, roles: ["ADMIN", "STAFF"], permissionKey: "operasyon_view" },
-  { name: "Şoförler", href: "/dashboard/operations/drivers", icon: UserCog, roles: ["ADMIN", "STAFF"], permissionKey: "operasyon_view" },
+  { name: "Şoförler", href: "/dashboard/operations/drivers", icon: UserCog, roles: ["ADMIN", "STAFF"], permissionKey: "soforer_view" },
   { name: "Hizmetler", href: "/dashboard/services", icon: Scissors, roles: ["ADMIN", "STAFF"], permissionKey: "hizmetler_view" },
   { name: "Personel", href: "/dashboard/staff", icon: Users, roles: ["ADMIN", "STAFF"], permissionKey: "personel_view" },
   { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN", "STAFF"], permissionKey: "oteller_view" },
