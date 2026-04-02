@@ -852,7 +852,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
           {(incomeType === "reception" || incomeType === "staff") && (
             <div className="space-y-2">
               <Label className="text-xs font-medium text-gray-600">Alt Kategori{incomeType === "staff" ? " *" : ""}</Label>
-              <Select value={subCategory || "none"} onValueChange={(v) => setSubCategory(v === "none" ? "" : v)}>
+              <Select value={subCategory || undefined} onValueChange={(v) => setSubCategory(v)}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Seçiniz" /></SelectTrigger>
                 <SelectContent>
                   {incomeType === "reception" && (
