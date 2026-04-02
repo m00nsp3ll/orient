@@ -405,7 +405,7 @@ export default function KasaPage() {
                 {/* Euro Karşılığı */}
                 {cashRows.length > 0 && exchangeRates?.rates && (() => {
                   let totalEur = 0
-                  for (const { cur, cashIn, outgoing, net } of cashRows) {
+                  for (const { cur, net } of cashRows) {
                     if (cur.value === "EUR") {
                       totalEur += net
                     } else {
@@ -421,6 +421,59 @@ export default function KasaPage() {
                         <span className="text-xs font-medium text-blue-600">Euro Karşılığı</span>
                         <span className={cn("text-lg font-bold", totalEur >= 0 ? "text-blue-700" : "text-red-600")}>
                           {totalEur < 0 ? "-" : ""}€ {Math.abs(totalEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Kasa Genel Toplam: Nakit + Kredi Kartı */}
+                {(cashRows.length > 0 || ccRows.length > 0) && exchangeRates?.rates && (() => {
+                  // Her para birimi için nakit net + kredi kartı toplamı
+                  const allCurrencies = Array.from(new Set([
+                    ...cashRows.map(r => r.cur.value),
+                    ...ccRows.map(r => r.cur.value),
+                  ]))
+                  const grandRows = allCurrencies.map(curVal => {
+                    const cur = CURRENCIES.find(c => c.value === curVal)!
+                    const cashNet = cashRows.find(r => r.cur.value === curVal)?.net ?? 0
+                    const ccAmt = ccRows.find(r => r.cur.value === curVal)?.amount ?? 0
+                    return { cur, total: cashNet + ccAmt }
+                  }).filter(r => r.total !== 0)
+
+                  // Toplam EUR karşılığı
+                  let grandEur = 0
+                  for (const { cur, total } of grandRows) {
+                    if (cur.value === "EUR") {
+                      grandEur += total
+                    } else {
+                      const converted = convertCurrency(Math.abs(total), cur.value, "EUR", exchangeRates.rates)
+                      if (converted !== null) grandEur += total >= 0 ? converted : -converted
+                    }
+                  }
+
+                  if (grandRows.length === 0) return null
+                  return (
+                    <div className="mt-4 pt-4 border-t-2 border-gray-300">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-2 w-2 rounded-full bg-gray-600" />
+                        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Kasa Genel Toplam</span>
+                        <span className="text-[10px] text-gray-400">(Nakit + KK)</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {grandRows.map(({ cur, total }) => (
+                          <div key={cur.value} className="flex items-center justify-between">
+                            <Badge className={cn("text-white text-xs", cur.bg)}>{cur.symbol} {cur.value}</Badge>
+                            <span className={cn("text-base font-bold", total >= 0 ? "text-gray-800" : "text-red-600")}>
+                              {total < 0 ? "-" : ""}{cur.symbol} {Math.abs(total).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-dashed border-blue-200">
+                        <span className="text-xs font-medium text-blue-600">Toplam Euro Karşılığı</span>
+                        <span className={cn("text-lg font-bold", grandEur >= 0 ? "text-blue-700" : "text-red-600")}>
+                          {grandEur < 0 ? "-" : ""}€ {Math.abs(grandEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
