@@ -95,6 +95,14 @@ export async function GET(req: NextRequest) {
       revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + servicesTotal - restDeduction
     })
 
+    // Para birimi bazlı toplam REST
+    const restByCurrency: Record<string, number> = {}
+    appointments.forEach(apt => {
+      if (apt.restAmount && apt.restAmount > 0 && apt.restCurrency) {
+        restByCurrency[apt.restCurrency] = (restByCurrency[apt.restCurrency] || 0) + apt.restAmount
+      }
+    })
+
     // Acenta bazlı istatistikler (REST düşülmüş net tutar)
     const agencyStats = appointments.reduce((acc: any[], apt) => {
       const pax = apt.pax || 1
@@ -263,6 +271,7 @@ export async function GET(req: NextRequest) {
       summary: {
         totalAppointments,
         revenueByCurrency,
+        restByCurrency,
         totalPax,
       },
       byAgency: agencyStats.sort((a, b) => b.revenue - a.revenue),

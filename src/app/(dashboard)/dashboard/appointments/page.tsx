@@ -4,8 +4,9 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { WeeklyCalendar } from "@/components/calendar/weekly-calendar"
 import { AppointmentForm } from "@/components/forms/appointment-form"
@@ -71,6 +72,8 @@ export default function AppointmentsPage() {
   const [viewMode, setViewMode] = useState<"weekly" | "daily">("daily")
   const [showDensity, setShowDensity] = useState(false)
   const [densityChart, setDensityChart] = useState<"vertical" | "horizontal">("vertical")
+  const [searchName, setSearchName] = useState("")
+  const [searchHotel, setSearchHotel] = useState("")
 
   const dayStart = startOfDay(currentDay)
   const dayEnd = endOfDay(currentDay)
@@ -404,6 +407,26 @@ export default function AppointmentsPage() {
                 Bugün
               </Button>
             </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-40">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="İsim ara..."
+                  value={searchName}
+                  onChange={(e) => setSearchName(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
+              </div>
+              <div className="relative flex-1 sm:w-40">
+                <Building2 className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Otel ara..."
+                  value={searchHotel}
+                  onChange={(e) => setSearchHotel(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {appointments.length === 0 ? (
@@ -413,6 +436,11 @@ export default function AppointmentsPage() {
             ) : (
               <div className="space-y-3">
                 {appointments
+                  .filter((a) => {
+                    const nameMatch = !searchName.trim() || (a.customerName || a.customer?.name || "").toLowerCase().includes(searchName.toLowerCase())
+                    const hotelMatch = !searchHotel.trim() || (a.hotel?.name || "").toLowerCase().includes(searchHotel.toLowerCase())
+                    return nameMatch && hotelMatch
+                  })
                   .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
                   .map((appointment) => (
                     <div

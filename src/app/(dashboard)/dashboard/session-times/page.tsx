@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { toast } from "sonner"
+import { usePermissions } from "@/hooks/use-permissions"
 
 interface SessionTime {
   id: string
@@ -63,6 +64,8 @@ interface RegionWithTimes {
 
 export default function SessionTimesPage() {
   const queryClient = useQueryClient()
+  const { has, isAdmin } = usePermissions()
+  const canEdit = isAdmin || has("operasyon_duzenleme")
 
   // Add dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -291,6 +294,8 @@ export default function SessionTimesPage() {
           <p className="text-gray-500">Bölgelere göre alınış/randevu saatlerini yönetin</p>
         </div>
         <div className="flex items-center gap-4">
+          {canEdit && (
+          <>
           <div className="flex items-center gap-2 px-4 py-2 border rounded-lg">
             <Shield className="h-4 w-4 text-gray-500" />
             <Label htmlFor="quota-toggle" className="text-sm font-medium cursor-pointer">
@@ -310,6 +315,8 @@ export default function SessionTimesPage() {
             <Plus className="h-4 w-4 mr-2" />
             Saat Ekle
           </Button>
+          </>
+          )}
         </div>
       </div>
 
@@ -351,9 +358,9 @@ export default function SessionTimesPage() {
                             {st ? (
                               <div className="inline-flex items-center gap-1 group">
                                 <button
-                                  onClick={() => quotaEnabled ? handleQuotaClick(st, region.name) : undefined}
-                                  className={quotaEnabled ? "cursor-pointer" : "cursor-default"}
-                                  title={quotaEnabled ? "Kota düzenle" : undefined}
+                                  onClick={() => quotaEnabled && canEdit ? handleQuotaClick(st, region.name) : undefined}
+                                  className={quotaEnabled && canEdit ? "cursor-pointer" : "cursor-default"}
+                                  title={quotaEnabled && canEdit ? "Kota düzenle" : undefined}
                                 >
                                   <span className="font-mono text-sm font-semibold text-slate-700">{st.time}</span>
                                   {quotaEnabled && (
@@ -362,6 +369,8 @@ export default function SessionTimesPage() {
                                     </span>
                                   )}
                                 </button>
+                                {canEdit && (
+                                <>
                                 <button
                                   onClick={() => handleEditClick(st, region.name)}
                                   className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -376,6 +385,8 @@ export default function SessionTimesPage() {
                                 >
                                   <Trash2 className="h-3 w-3 text-red-400 hover:text-red-600" />
                                 </button>
+                                </>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-200 text-xs select-none">—</span>

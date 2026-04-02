@@ -35,6 +35,8 @@ import {
   Map,
   Navigation,
   Car,
+  Copy,
+  Check,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -187,6 +189,9 @@ export function RoutePlannerModal({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [showMapPreview, setShowMapPreview] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showWhatsappDialog, setShowWhatsappDialog] = useState(false)
+  const [whatsappText, setWhatsappText] = useState("")
+  const [copied, setCopied] = useState(false)
 
   // Reset when modal opens/closes
   useEffect(() => {
@@ -283,17 +288,41 @@ export function RoutePlannerModal({
   const handleConfirmAssign = () => {
     if (!selectedDriverId) return
 
+    // WhatsApp kopyalama metni oluştur
+    const driverName = selectedDriver?.user.name || "Şoför"
+    const lines = selectedTransfers.map((t, idx) => {
+      const time = format(new Date(t.appointment.startTime), "HH:mm")
+      const hotel = t.appointment.hotel?.name || "-"
+      const name = t.appointment.customerName || "Misafir"
+      const pax = (t.appointment.pax || 1) + (t.appointment.childCount || 0)
+      return `${idx + 1}. ${time} | ${hotel} | ${name} | ${pax} kişi`
+    })
+    const text = `🚐 ${driverName}\n\n${lines.join("\n")}`
+    setWhatsappText(text)
+    setCopied(false)
+
     onAssignRoute(
       selectedTransfers.map((t) => t.id),
       selectedDriverId
     )
 
-    // Reset state
+    setShowConfirmDialog(false)
+    setShowWhatsappDialog(true)
+  }
+
+  const handleWhatsappClose = () => {
+    setShowWhatsappDialog(false)
     setSelectedTransfers([])
     setSelectedDriverId(null)
     setShowMapPreview(false)
-    setShowConfirmDialog(false)
     onOpenChange(false)
+  }
+
+  const handleCopyText = async () => {
+    await navigator.clipboard.writeText(whatsappText)
+    setCopied(true)
+    toast.success("Kopyalandı!")
+    setTimeout(() => setCopied(false), 2000)
   }
 
   // Get selected driver name
@@ -684,6 +713,30 @@ export function RoutePlannerModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* WhatsApp Kopyalama Dialog */}
+      <Dialog open={showWhatsappDialog} onOpenChange={(v) => { if (!v) handleWhatsappClose() }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Copy className="h-4 w-4 text-green-600" />
+              Şoför Bilgi Listesi
+            </DialogTitle>
+          </DialogHeader>
+          <div className="bg-gray-50 border rounded-lg p-4 font-mono text-sm whitespace-pre-wrap select-all">
+            {whatsappText}
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button variant="outline" onClick={handleWhatsappClose}>
+              Kapat
+            </Button>
+            <Button onClick={handleCopyText} className="bg-green-600 hover:bg-green-700 gap-2">
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Kopyalandı!" : "Kopyala"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

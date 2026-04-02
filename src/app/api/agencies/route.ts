@@ -28,6 +28,7 @@ export async function GET() {
   }
 
   const agencies = await prisma.agency.findMany({
+    where: { isActive: true },
     include: {
       user: {
         select: { id: true, name: true, email: true, phone: true },

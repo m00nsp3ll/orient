@@ -795,7 +795,6 @@ function GelirGiderDialog({
 }: {
   mode: "income" | "expense"; open: boolean; onClose: () => void; onSuccess: () => void
 }) {
-  const [date,           setDate]           = useState(format(new Date(), "yyyy-MM-dd"))
   const [amount,         setAmount]         = useState("")
   const [currency,       setCurrency]       = useState(mode === "expense" ? "TRY" : "EUR")
   const [description,    setDescription]    = useState("")
@@ -833,7 +832,7 @@ function GelirGiderDialog({
     if (mode === "income" && incomeType === "cari-staff" && !staffId) { toast.error("Personel seçiniz"); return }
     setSaving(true)
     try {
-      const payload: any = { type: mode, date, description: description || null }
+      const payload: any = { type: mode, description: description || null }
       if (mode === "expense") {
         payload.expenseAmount = amt; payload.expenseCurrency = currency; payload.expenseCategory = expenseCategory
       } else {
@@ -868,10 +867,6 @@ function GelirGiderDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 pt-1">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-600">Tarih</Label>
-            <DatePicker value={date} onChange={setDate} />
-          </div>
           {isIncome && (
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-gray-600">Gelir Tipi</Label>

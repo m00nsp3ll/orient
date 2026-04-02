@@ -8,10 +8,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Car, MapPin, ArrowRight, User, Hotel, Clock, Coffee, Send, Trash2 } from "lucide-react"
+import { Car, MapPin, ArrowRight, User, Hotel, Clock, Coffee, Send, Trash2, Copy, Check } from "lucide-react"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface Transfer {
   id: string
@@ -93,6 +94,7 @@ export function ActiveDriversBar({
   onStartRoute
 }: ActiveDriversBarProps) {
   const [openDriverId, setOpenDriverId] = useState<string | null>(null)
+  const [copiedDriverId, setCopiedDriverId] = useState<string | null>(null)
 
   // Şoför gruplarını oluştur
   const driverGroups: DriverGroup[] = drivers
@@ -231,7 +233,32 @@ export function ActiveDriversBar({
                           <Car className="h-4 w-4" />
                           <span className="font-semibold">{driver.user.name}</span>
                         </div>
-                        <Badge className="bg-blue-500">Hazırlanıyor</Badge>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs gap-1 text-green-700 hover:bg-green-100"
+                            onClick={async () => {
+                              const allTransfers = [...pickupTransfers, ...dropoffTransfers]
+                              const lines = allTransfers.map((t, idx) => {
+                                const time = format(new Date(t.appointment.startTime), "HH:mm")
+                                const hotel = t.appointment.hotel?.name || "-"
+                                const name = t.appointment.customerName || "Misafir"
+                                const pax = (t.appointment.pax || 1) + (t.appointment.childCount || 0)
+                                return `${idx + 1}. ${time} | ${hotel} | ${name} | ${pax} kişi`
+                              })
+                              const text = `🚐 ${driver.user.name}\n\n${lines.join("\n")}`
+                              await navigator.clipboard.writeText(text)
+                              setCopiedDriverId(driver.id)
+                              toast.success("Kopyalandı!")
+                              setTimeout(() => setCopiedDriverId(null), 2000)
+                            }}
+                          >
+                            {copiedDriverId === driver.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedDriverId === driver.id ? "Kopyalandı" : "Kopyala"}
+                          </Button>
+                          <Badge className="bg-blue-500">Hazırlanıyor</Badge>
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         Tel: {driver.phone}
@@ -300,6 +327,7 @@ export function ActiveDriversBar({
                       )}
                     </div>
 
+                    {onStartRoute && (
                     <div className="p-3 border-t bg-muted/30">
                       <Button
                         className="w-full bg-green-600 hover:bg-green-700 text-white"
@@ -312,6 +340,7 @@ export function ActiveDriversBar({
                         Aracı Gönder ({pickupTransfers.length + dropoffTransfers.length} Müşteri)
                       </Button>
                     </div>
+                    )}
                   </PopoverContent>
                 </Popover>
                 )

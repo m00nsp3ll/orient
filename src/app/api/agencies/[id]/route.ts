@@ -183,16 +183,10 @@ export async function DELETE(
   }
 
   try {
-    const agency = await prisma.agency.findUnique({
+    await prisma.agency.update({
       where: { id },
-      select: { userId: true },
+      data: { isActive: false },
     })
-
-    if (agency && agency.userId) {
-      await prisma.user.delete({
-        where: { id: agency.userId },
-      })
-    }
 
     return NextResponse.json({ success: true })
   } catch {

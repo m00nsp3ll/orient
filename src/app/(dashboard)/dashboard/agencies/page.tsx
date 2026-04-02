@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus, Trash2, Settings, KeyRound, Eye, EyeOff, Pencil, Check, X } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-media-query"
+import { usePermissions } from "@/hooks/use-permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -69,6 +70,8 @@ interface AgencyServiceWithPrice {
 export default function AgenciesPage() {
   const queryClient = useQueryClient()
   const isMobile = useIsMobile()
+  const { isAdmin, has } = usePermissions()
+  const canManage = isAdmin || has("operasyon_duzenleme")
   const [showForm, setShowForm] = useState(false)
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
@@ -381,10 +384,12 @@ export default function AgenciesPage() {
           <h1 className="text-2xl font-bold">Acentalar</h1>
           <p className="text-gray-500">Acenta hesaplarını yönetin</p>
         </div>
+        {canManage && (
         <Button onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Yeni Acenta
         </Button>
+        )}
       </div>
 
       <Card>
@@ -432,12 +437,16 @@ export default function AgenciesPage() {
                         <Settings className="h-3.5 w-3.5 mr-1" />
                         Hizmetler
                       </Button>
+                      {canManage && (
+                      <>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenSettingsModal(agency)}>
                         <KeyRound className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setDeleteAgencyTarget(agency); setShowDeleteConfirm(true) }}>
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
+                      </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -485,6 +494,8 @@ export default function AgenciesPage() {
                           <Settings className="h-4 w-4 mr-1" />
                           Hizmetler
                         </Button>
+                        {canManage && (
+                        <>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -503,6 +514,8 @@ export default function AgenciesPage() {
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
+                        </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -692,6 +705,7 @@ export default function AgenciesPage() {
                     onCheckedChange={(checked) =>
                       handleServiceToggle(service.id, checked)
                     }
+                    disabled={!canManage}
                   />
                 </div>
               ))}
@@ -715,7 +729,7 @@ export default function AgenciesPage() {
                 </Button>
                 <Button
                   onClick={handleSaveServices}
-                  disabled={updateAgencyServices.isPending}
+                  disabled={updateAgencyServices.isPending || !canManage}
                 >
                   {updateAgencyServices.isPending ? "Kaydediliyor..." : "Kaydet"}
                 </Button>

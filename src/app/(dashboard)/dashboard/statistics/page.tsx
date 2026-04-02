@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { TrendingUp, Users, Calendar as CalendarIcon, DollarSign, Building2, Package, BarChart3, X, Wallet, ClipboardList } from "lucide-react"
+import { TrendingUp, Users, Calendar as CalendarIcon, DollarSign, Building2, Package, BarChart3, X, Wallet, ClipboardList, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -265,7 +265,7 @@ export default function StatisticsPage() {
       ) : stats ? (
         <>
           {/* Özet Kartlar */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Toplam Gelir */}
             <Card className="border border-emerald-200 shadow-sm bg-emerald-50">
               <CardContent className="p-5">
@@ -286,6 +286,29 @@ export default function StatisticsPage() {
                   )}
                 </div>
                 <p className="text-emerald-600 text-xs mt-1">{stats.summary.totalAppointments} randevu</p>
+              </CardContent>
+            </Card>
+
+            {/* Toplam Rest */}
+            <Card className="border border-red-200 shadow-sm bg-red-50">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-8 w-8 rounded-lg bg-red-100 flex items-center justify-center">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  </div>
+                  <p className="text-xs font-medium text-red-700 uppercase tracking-wide">Toplam Rest</p>
+                </div>
+                <div className="space-y-1">
+                  {stats.summary.restByCurrency && Object.entries(stats.summary.restByCurrency as Record<string, number>).map(([cur, amount]) => (
+                    <div key={cur} className="text-lg font-bold text-red-800">
+                      {formatCurrency(amount, cur)}
+                    </div>
+                  ))}
+                  {(!stats.summary.restByCurrency || Object.keys(stats.summary.restByCurrency).length === 0) && (
+                    <div className="text-2xl font-bold text-red-800">-</div>
+                  )}
+                </div>
+                <p className="text-red-600 text-xs mt-1">Restli randevular</p>
               </CardContent>
             </Card>
 

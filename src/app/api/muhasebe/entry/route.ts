@@ -8,7 +8,7 @@ import { startOfDay } from "date-fns"
 
 const entrySchema = z.object({
   type: z.enum(["income", "expense"]),
-  date: z.string(),
+  date: z.string().optional(),
   // Gelir alanları
   incomeType: z.enum(["reception", "agency", "staff", "creditCard"]).optional(),
   receptionIncomeAmount: z.number().optional().nullable(),
@@ -48,11 +48,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Gider kategorisi seçiniz" }, { status: 400 })
     }
 
-    const [y, m, d] = data.date.split("-").map(Number)
-    const targetDate = new Date(y, m - 1, d, 0, 0, 0, 0)
+    const now = new Date()
+    const targetDate = now
+
+    const dayStart = startOfDay(now)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
 
     const maxVoucher = await prisma.cashEntry.aggregate({
-      where: { date: { gte: startOfDay(targetDate), lt: new Date(y, m - 1, d + 1) } },
+      where: { date: { gte: dayStart, lt: dayEnd } },
       _max: { voucherNo: true },
     })
     const nextVoucher = (maxVoucher._max.voucherNo ?? 0) + 1
