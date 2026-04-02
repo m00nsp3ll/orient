@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkPermission } from "@/lib/permissions"
 import { z } from "zod"
 
 const updateDriverSchema = z.object({
@@ -20,7 +21,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
-  if (!["ADMIN"].includes(session.user.role)) {
+  const canManage = session.user.role === "ADMIN" ||
+    await checkPermission(session.user.role, session.user.id, "soforer_view")
+  if (!canManage) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
@@ -90,7 +93,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
-  if (!["ADMIN"].includes(session.user.role)) {
+  const canManageDelete = session.user.role === "ADMIN" ||
+    await checkPermission(session.user.role, session.user.id, "soforer_view")
+  if (!canManageDelete) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
   }
 
