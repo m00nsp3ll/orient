@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Minus, CalendarIcon, Pencil, Trash2 } from "lucide-react"
+import { Plus, Minus, CalendarIcon, Pencil, Trash2, HandCoins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -156,6 +156,9 @@ export default function KasaPage() {
   const [formMode, setFormMode] = useState<"income" | "expense" | null>(null)
   const [editingEntry, setEditingEntry] = useState<CashEntry | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [kasaTeslimOpen, setKasaTeslimOpen] = useState(false)
+  const [kasaTeslimConfirm, setKasaTeslimConfirm] = useState(false)
+  const [kasaTeslimAmounts, setKasaTeslimAmounts] = useState<Record<string, string>>({})
 
   const dateStr = format(selectedDate, "yyyy-MM-dd")
 
@@ -192,6 +195,53 @@ export default function KasaPage() {
       const res = await fetch("/api/exchange-rates")
       if (!res.ok) throw new Error("Failed")
       return res.json()
+    },
+  })
+
+  const kasaTeslimMutation = useMutation({
+    mutationFn: async (items: { currency: string; amount: number }[]) => {
+      // Her para birimi için kasa gider kaydı + muhasebe kaydı
+      const results = await Promise.all(items.map(async ({ currency, amount }) => {
+        // 1. CashEntry — gider olarak
+        const kasaRes = await fetch("/api/kasa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateStr,
+            expenseAmount: amount,
+            expenseCurrency: currency,
+            expenseCategory: "GIDER_KASA_TESLIM_BARIS",
+            description: "Kasa Teslim - Barış Bey",
+          }),
+        })
+        if (!kasaRes.ok) { const e = await kasaRes.json(); throw new Error(e.error || "Kasa kaydı oluşturulamadı") }
+        // 2. Muhasebe cari hareketi — credit (cari + alacak)
+        const muhRes = await fetch("/api/muhasebe/cari/entry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountCode: "GIDER_KASA_TESLIM_BARIS",
+            date: dateStr,
+            debit: 0,
+            credit: amount,
+            currency,
+            description: `Kasa Teslim - ${dateStr}`,
+          }),
+        })
+        if (!muhRes.ok) { const e = await muhRes.json(); throw new Error(e.error || "Muhasebe kaydı oluşturulamadı") }
+      }))
+      return results
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["kasa", dateStr] })
+      toast.success("Kasa teslimi gerçekleştirildi")
+      setKasaTeslimOpen(false)
+      setKasaTeslimConfirm(false)
+      setKasaTeslimAmounts({})
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+      setKasaTeslimConfirm(false)
     },
   })
 
@@ -339,6 +389,17 @@ export default function KasaPage() {
             <Button className="bg-red-500 hover:bg-red-600 flex-1 md:flex-none" onClick={() => { setEditingEntry(null); setFormMode("expense") }}>
               <Minus className="h-4 w-4 mr-2" /> Gider Ekle
             </Button>
+            {canManageKasa && (
+              <Button
+                className="bg-amber-600 hover:bg-amber-700 flex-1 md:flex-none"
+                onClick={() => {
+                  setKasaTeslimAmounts({})
+                  setKasaTeslimOpen(true)
+                }}
+              >
+                <HandCoins className="h-4 w-4 mr-2" /> Kasa Teslim
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -603,6 +664,124 @@ export default function KasaPage() {
           setEditingEntry(null)
         }}
       />
+
+      {/* Kasa Teslim Modalı */}
+      <Dialog open={kasaTeslimOpen} onOpenChange={(v) => { if (!v) { setKasaTeslimOpen(false); setKasaTeslimAmounts({}) } }}>
+        <DialogContent className="w-full !max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700 flex items-center gap-2">
+              <HandCoins className="h-5 w-5" /> Kasa Teslim — Barış Bey
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const cashRows = summary ? CURRENCIES.map(cur => {
+              const cashIn = summary.cashIncome[cur.value] || 0
+              const outgoing = (summary.credit[cur.value] || 0) + (summary.expense[cur.value] || 0)
+              const net = cashIn - outgoing
+              if (net <= 0) return null
+              return { cur, net }
+            }).filter(Boolean) as { cur: typeof CURRENCIES[number]; net: number }[] : []
+
+            if (cashRows.length === 0) {
+              return <p className="text-sm text-gray-500 text-center py-4">Teslim edilecek nakit bakiye yok.</p>
+            }
+
+            const teslimItems = cashRows.map(({ cur, net }) => ({
+              cur, net,
+              input: kasaTeslimAmounts[cur.value] ?? String(net),
+            }))
+
+            const hasAnyAmount = teslimItems.some(x => parseFloat(x.input) > 0)
+
+            return (
+              <div className="space-y-4">
+                <p className="text-xs text-gray-500">Her para birimi için teslim edilecek miktarı onaylayın veya düzenleyin.</p>
+                <div className="space-y-3">
+                  {teslimItems.map(({ cur, net, input }) => (
+                    <div key={cur.value} className="flex items-center gap-3 bg-amber-50/50 rounded-lg px-4 py-3 border border-amber-100">
+                      <Badge className={cn("text-white shrink-0", cur.bg)}>{cur.symbol} {cur.value}</Badge>
+                      <div className="flex-1 text-xs text-gray-500">
+                        Kasa bakiyesi: <span className="font-semibold text-gray-700">{cur.symbol} {net.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-sm text-gray-500">{cur.symbol}</span>
+                        <Input
+                          type="number"
+                          className="h-8 w-28 text-right"
+                          value={input}
+                          onChange={(e) => setKasaTeslimAmounts(prev => ({ ...prev, [cur.value]: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => { setKasaTeslimOpen(false); setKasaTeslimAmounts({}) }}>İptal</Button>
+                  <Button
+                    className="bg-amber-600 hover:bg-amber-700"
+                    disabled={!hasAnyAmount}
+                    onClick={() => setKasaTeslimConfirm(true)}
+                  >
+                    Devam Et
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Kasa Teslim Onay Dialogu */}
+      <AlertDialog open={kasaTeslimConfirm} onOpenChange={setKasaTeslimConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kasa Teslimini Onaylıyor Musunuz?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <p className="mb-3">Aşağıdaki tutarlar Barış Bey&apos;e teslim edilecek ve muhasebeye işlenecektir:</p>
+                <div className="space-y-2">
+                  {CURRENCIES.map(cur => {
+                    const raw = kasaTeslimAmounts[cur.value]
+                    const amt = raw !== undefined ? parseFloat(raw) : (summary ? (() => {
+                      const cashIn = summary.cashIncome[cur.value] || 0
+                      const outgoing = (summary.credit[cur.value] || 0) + (summary.expense[cur.value] || 0)
+                      return cashIn - outgoing
+                    })() : 0)
+                    if (!amt || amt <= 0) return null
+                    return (
+                      <div key={cur.value} className="flex items-center justify-between bg-amber-50 rounded px-3 py-2">
+                        <Badge className={cn("text-white text-xs", cur.bg)}>{cur.symbol} {cur.value}</Badge>
+                        <span className="font-bold text-amber-800">{cur.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => {
+                const items = CURRENCIES.map(cur => {
+                  const raw = kasaTeslimAmounts[cur.value]
+                  const amt = raw !== undefined ? parseFloat(raw) : (summary ? (() => {
+                    const cashIn = summary.cashIncome[cur.value] || 0
+                    const outgoing = (summary.credit[cur.value] || 0) + (summary.expense[cur.value] || 0)
+                    return cashIn - outgoing
+                  })() : 0)
+                  if (!amt || amt <= 0) return null
+                  return { currency: cur.value, amount: amt }
+                }).filter(Boolean) as { currency: string; amount: number }[]
+                kasaTeslimMutation.mutate(items)
+              }}
+            >
+              {kasaTeslimMutation.isPending ? "İşleniyor..." : "Evet, Teslim Et"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirm */}
       <AlertDialog open={!!deletingId} onOpenChange={() => setDeletingId(null)}>
