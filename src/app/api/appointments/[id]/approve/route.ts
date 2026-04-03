@@ -55,61 +55,6 @@ export async function PATCH(
           data: { appointmentId: params.id },
         })
       }
-
-      // Acenta cari kaydı: onaylandığında DEBIT + REST CREDIT oluştur
-      if (existing.agencyId && existing.services.length > 0) {
-        const agencyCurrency = existing.agency?.currency || "EUR"
-        const paxCount = existing.pax || 1
-        const totalPrice = existing.services.reduce((sum, s) => sum + s.price, 0) * paxCount
-
-        await prisma.agencyTransaction.create({
-          data: {
-            agencyId: existing.agencyId,
-            appointmentId: params.id,
-            type: "DEBIT",
-            amount: totalPrice,
-            currency: agencyCurrency,
-            description: `Rezervasyon - ${existing.customerName || "Müşteri"} (${paxCount} PAX × ${existing.services.length} paket)`,
-          },
-        })
-
-        // REST tutarı varsa CREDIT
-        if (existing.restAmount && existing.restAmount > 0 && existing.restCurrency) {
-          let creditAmount = existing.restAmount
-          const restCurrency = existing.restCurrency
-
-          if (restCurrency !== agencyCurrency) {
-            try {
-              const tcmbRes = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml")
-              if (tcmbRes.ok) {
-                const xml = await tcmbRes.text()
-                const getSellingRate = (code: string): number | null => {
-                  if (code === "TRY") return 1
-                  const regex = new RegExp(`<Currency[^>]*Kod="${code}"[^>]*>[\\s\\S]*?<ForexSelling>([\\d.]+)</ForexSelling>`)
-                  const match = xml.match(regex)
-                  return match ? parseFloat(match[1]) : null
-                }
-                const fromRate = getSellingRate(restCurrency)
-                const toRate = getSellingRate(agencyCurrency)
-                if (fromRate && toRate) {
-                  creditAmount = (existing.restAmount * fromRate) / toRate
-                }
-              }
-            } catch {}
-          }
-
-          await prisma.agencyTransaction.create({
-            data: {
-              agencyId: existing.agencyId,
-              appointmentId: params.id,
-              type: "CREDIT",
-              amount: parseFloat(creditAmount.toFixed(2)),
-              currency: agencyCurrency,
-              description: `REST - ${existing.customerName || "Müşteri"} (${restCurrency !== agencyCurrency ? `${existing.restAmount} ${restCurrency} → ${agencyCurrency}` : "kapıda ödeme"})`,
-            },
-          })
-        }
-      }
     }
 
     if (action === "reject") {

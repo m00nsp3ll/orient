@@ -51,9 +51,7 @@ export async function GET(req: NextRequest) {
         gte: start,
         lte: end,
       },
-      status: {
-        not: "CANCELLED",
-      },
+      status: "COMPLETED",
       approvalStatus: "APPROVED",
     }
 

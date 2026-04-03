@@ -137,12 +137,78 @@ export async function PATCH(
       },
     })
 
-    // Transfer COMPLETED olduğunda appointment'ı da COMPLETED yap
+    // Transfer COMPLETED olduğunda appointment'ı da COMPLETED yap + acenta borcu yaz
     if (validatedData.status === "COMPLETED") {
+      const apt = await prisma.appointment.findUnique({
+        where: { id: transfer.appointmentId },
+        include: {
+          services: true,
+          agency: { select: { id: true, currency: true } },
+        },
+      })
+
       await prisma.appointment.update({
         where: { id: transfer.appointmentId },
         data: { status: "COMPLETED" },
       })
+
+      // Acenta cari: DEBIT yaz (henüz yazılmamışsa)
+      if (apt?.agencyId && apt.services.length > 0) {
+        const existing = await prisma.agencyTransaction.findFirst({
+          where: { appointmentId: transfer.appointmentId, type: "DEBIT" },
+        })
+
+        if (!existing) {
+          const agencyCurrency = apt.agency?.currency || "EUR"
+          const paxCount = apt.pax || 1
+          const totalPrice = apt.services.reduce((sum, s) => sum + s.price, 0) * paxCount
+
+          await prisma.agencyTransaction.create({
+            data: {
+              agencyId: apt.agencyId,
+              appointmentId: transfer.appointmentId,
+              type: "DEBIT",
+              amount: totalPrice,
+              currency: agencyCurrency,
+              description: `Hizmet Tamamlandı - ${apt.customerName || "Müşteri"} (${paxCount} PAX)`,
+            },
+          })
+
+          // REST tutarı varsa CREDIT
+          if (apt.restAmount && apt.restAmount > 0 && apt.restCurrency) {
+            let creditAmount = apt.restAmount
+            const restCurrency = apt.restCurrency
+
+            if (restCurrency !== agencyCurrency) {
+              try {
+                const tcmbRes = await fetch("https://www.tcmb.gov.tr/kurlar/today.xml")
+                if (tcmbRes.ok) {
+                  const xml = await tcmbRes.text()
+                  const getRate = (code: string): number | null => {
+                    if (code === "TRY") return 1
+                    const m = xml.match(new RegExp(`<Currency[^>]*Kod="${code}"[^>]*>[\\s\\S]*?<ForexSelling>([\\d.]+)</ForexSelling>`))
+                    return m ? parseFloat(m[1]) : null
+                  }
+                  const fromRate = getRate(restCurrency)
+                  const toRate = getRate(agencyCurrency)
+                  if (fromRate && toRate) creditAmount = (apt.restAmount * fromRate) / toRate
+                }
+              } catch {}
+            }
+
+            await prisma.agencyTransaction.create({
+              data: {
+                agencyId: apt.agencyId,
+                appointmentId: transfer.appointmentId,
+                type: "CREDIT",
+                amount: parseFloat(creditAmount.toFixed(2)),
+                currency: agencyCurrency,
+                description: `REST - ${apt.customerName || "Müşteri"} (kapıda ödeme)`,
+              },
+            })
+          }
+        }
+      }
     }
 
     // Şoför yeni atandıysa bildirim gönder
