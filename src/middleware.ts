@@ -12,7 +12,7 @@ export default withAuth(
     }
 
     // Check role-based access
-    if (path.startsWith("/dashboard/settings") && token?.role !== "ADMIN") {
+    if (path.startsWith("/dashboard/settings") && token?.role !== "ADMIN" && token?.role !== "STAFF") {
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }
 
