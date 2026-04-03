@@ -245,8 +245,7 @@ export default function AppointmentsPage() {
       const existing = appointments.find(a => a.id === id)
       if (!existing) throw new Error("Randevu bulunamadı")
       const [hours, minutes] = newTime.split(":").map(Number)
-      const newStart = new Date(newDate)
-      newStart.setHours(hours, minutes, 0, 0)
+      const newStart = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), hours, minutes, 0, 0)
       const res = await fetch(`/api/appointments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
