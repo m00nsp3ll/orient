@@ -26,6 +26,7 @@ model User {
   sessions              Session[]
   staff                 Staff?
   accountingEntries     AccountingEntry[] @relation("AccountingEntryCreatedBy")
+  cashEntries           CashEntry[]       @relation("CashEntryCreatedBy")
 }
 
 model Account {
@@ -407,6 +408,7 @@ model CashEntry {
   expenseCategory   String?
   incomeSubCategory String?
   createdBy   String
+  createdByUser User?    @relation("CashEntryCreatedBy", fields: [createdBy], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
