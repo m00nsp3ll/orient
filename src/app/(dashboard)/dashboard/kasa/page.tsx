@@ -406,34 +406,8 @@ export default function KasaPage() {
                     ))}
                   </div>
                 )}
-                {/* Euro Karşılığı */}
-                {cashRows.length > 0 && exchangeRates?.rates && (() => {
-                  let totalEur = 0
-                  for (const { cur, net } of cashRows) {
-                    if (cur.value === "EUR") {
-                      totalEur += net
-                    } else {
-                      const converted = convertCurrency(Math.abs(net), cur.value, "EUR", exchangeRates.rates)
-                      if (converted !== null) {
-                        totalEur += net >= 0 ? converted : -converted
-                      }
-                    }
-                  }
-                  return (
-                    <div className="mt-4 pt-3 border-t border-dashed border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-blue-600">Euro Karşılığı</span>
-                        <span className={cn("text-lg font-bold", totalEur >= 0 ? "text-blue-700" : "text-red-600")}>
-                          {totalEur < 0 ? "-" : ""}€ {Math.abs(totalEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* Kasa Genel Toplam: Nakit EUR + KK + Genel Toplam EUR */}
+                {/* KK + Genel Toplam */}
                 {(cashRows.length > 0 || ccRows.length > 0) && exchangeRates?.rates && (() => {
-                  // Nakit net → EUR
                   let cashEur = 0
                   for (const { cur, net } of cashRows) {
                     if (cur.value === "EUR") { cashEur += net }
@@ -442,7 +416,8 @@ export default function KasaPage() {
                       if (c !== null) cashEur += net >= 0 ? c : -c
                     }
                   }
-                  // KK → EUR
+                  // KK sadece TRY destekli
+                  const ccTRY = ccRows.reduce((s, { cur, amount }) => cur.value === "TRY" ? s + amount : s, 0)
                   let ccEur = 0
                   for (const { cur, amount } of ccRows) {
                     if (cur.value === "EUR") { ccEur += amount }
@@ -452,34 +427,18 @@ export default function KasaPage() {
                     }
                   }
                   const grandEur = cashEur + ccEur
-
                   return (
-                    <div className="mt-4 pt-4 border-t-2 border-gray-300">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="h-2 w-2 rounded-full bg-gray-600" />
-                        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Kasa Genel Toplam</span>
-                        <span className="text-[10px] text-gray-400">(Nakit + KK)</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {cashRows.length > 0 && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">Nakit</span>
-                            <span className={cn("font-semibold", cashEur >= 0 ? "text-emerald-700" : "text-red-600")}>
-                              {cashEur < 0 ? "-" : ""}€ {Math.abs(cashEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        )}
-                        {ccRows.length > 0 && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">Kredi Kartı</span>
-                            <span className="font-semibold text-violet-700">
-                              € {ccEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-dashed border-blue-200">
-                        <span className="text-xs font-medium text-blue-600">Genel Toplam</span>
+                    <div className="mt-4 space-y-0">
+                      {ccRows.length > 0 && (
+                        <div className="flex items-center justify-between pt-3 border-t border-dashed border-violet-200">
+                          <span className="text-xs font-medium text-violet-600">Kredi Kartı (TL)</span>
+                          <span className="text-base font-bold text-violet-700">
+                            ₺ {ccTRY.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-3 border-t border-dashed border-blue-200 mt-2">
+                        <span className="text-xs font-medium text-blue-600">Genel Toplam (Nakit + KK)</span>
                         <span className={cn("text-lg font-bold", grandEur >= 0 ? "text-blue-700" : "text-red-600")}>
                           {grandEur < 0 ? "-" : ""}€ {Math.abs(grandEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
