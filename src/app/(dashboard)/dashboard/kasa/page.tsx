@@ -25,9 +25,6 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { usePermissions } from "@/hooks/use-permissions"
@@ -223,29 +220,6 @@ export default function KasaPage() {
   const creditCardEntries = kasaEntries.filter(e => !!e.creditCardAmount)
   const expenseEntries = kasaEntries.filter(e => !isIncomeEntry(e))
 
-  // Personel prim özeti (sadece o personelin staffIncome'undan)
-  const commissionData = (() => {
-    if (!staffList) return []
-    return staffList
-      .filter(s => s.isActive && s.commissionRate && s.commissionRate > 0)
-      .map(s => {
-        const rate = s.commissionRate!
-        const byCurrency: Record<string, number> = {}
-        for (const e of entries) {
-          if (e.staffId === s.id && e.staffIncomeAmount && e.staffIncomeCurrency) {
-            byCurrency[e.staffIncomeCurrency] = (byCurrency[e.staffIncomeCurrency] || 0) + e.staffIncomeAmount
-          }
-          if (e.staffId === s.id && e.creditCardAmount && e.creditCardCurrency) {
-            byCurrency[e.creditCardCurrency] = (byCurrency[e.creditCardCurrency] || 0) + e.creditCardAmount
-          }
-        }
-        const commissions = Object.entries(byCurrency)
-          .filter(([, total]) => total > 0)
-          .map(([currency, total]) => ({ currency, totalIncome: total, commission: total * rate / 100 }))
-        return { staff: s, rate, commissions }
-      })
-      .filter(d => d.commissions.length > 0)
-  })()
 
   const handleEdit = (entry: CashEntry) => {
     setEditingEntry(entry)
@@ -347,12 +321,11 @@ export default function KasaPage() {
       {summary && entries.length > 0 && (() => {
         const cashRows = CURRENCIES.map(cur => {
           const cashIn = summary.cashIncome[cur.value] || 0
-          const commExp = summary.commissionExpense[cur.value] || 0
-          const outgoing = (summary.credit[cur.value] || 0) + (summary.expense[cur.value] || 0) + commExp
+          const outgoing = (summary.credit[cur.value] || 0) + (summary.expense[cur.value] || 0)
           const net = cashIn - outgoing
           if (cashIn === 0 && outgoing === 0) return null
-          return { cur, cashIn, outgoing, net, commExp }
-        }).filter(Boolean) as { cur: typeof CURRENCIES[number]; cashIn: number; outgoing: number; net: number; commExp: number }[]
+          return { cur, cashIn, outgoing, net }
+        }).filter(Boolean) as { cur: typeof CURRENCIES[number]; cashIn: number; outgoing: number; net: number }[]
 
         const ccRows = CURRENCIES.map(cur => {
           const amount = summary.creditCardIncome[cur.value] || 0
@@ -391,7 +364,7 @@ export default function KasaPage() {
                   <p className="text-sm text-gray-400">Nakit işlem yok</p>
                 ) : (
                   <div className="space-y-3">
-                    {cashRows.map(({ cur, cashIn, outgoing, net, commExp }) => (
+                    {cashRows.map(({ cur, cashIn, outgoing, net }) => (
                       <div key={cur.value} className="flex items-center justify-between py-2 border-b last:border-b-0">
                         <div className="space-y-1">
                           <Badge className={cn("text-white text-xs", cur.bg)}>{cur.symbol} {cur.value}</Badge>
@@ -399,9 +372,6 @@ export default function KasaPage() {
                             <span className="text-emerald-600">+{cashIn.toLocaleString("tr-TR")}</span>
                             <span className="text-red-500">-{outgoing.toLocaleString("tr-TR")}</span>
                           </div>
-                          {commExp > 0 && (
-                            <div className="text-[10px] text-amber-600">Prim: {cur.symbol}{commExp.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                          )}
                         </div>
                         <div className={cn("text-xl font-bold", net >= 0 ? "text-emerald-700" : "text-red-600")}>
                           {net < 0 ? "-" : ""}{cur.symbol} {Math.abs(net).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
@@ -592,35 +562,10 @@ export default function KasaPage() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-red-500" />
-              <h2 className="font-semibold text-red-800">Giderler ({expenseEntries.length + commissionData.reduce((a, d) => a + d.commissions.length, 0)})</h2>
+              <h2 className="font-semibold text-red-800">Giderler ({expenseEntries.length})</h2>
             </div>
             {expenseEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)}
-            {/* Prim Giderleri — sanal, otomatik hesaplanır */}
-            {commissionData.map(({ staff: s, commissions }) =>
-              commissions.map(cm => {
-                const cur = CURRENCIES.find(c => c.value === cm.currency)
-                return (
-                  <Card key={`prim-${s.id}-${cm.currency}`} className="border-l-4 border-l-amber-400">
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <Badge variant="outline" className="text-[10px] shrink-0">Otomatik</Badge>
-                            <Badge className="text-[10px] shrink-0 bg-amber-100 text-amber-700">Prim Gideri</Badge>
-                            <span className="text-xs text-gray-600">{s.user.name}</span>
-                          </div>
-                          <p className="text-xs text-gray-500">%{s.commissionRate} prim · {cur?.symbol}{cm.totalIncome.toLocaleString("tr-TR")} gelir üzerinden</p>
-                        </div>
-                        <span className="text-lg font-bold text-red-600 shrink-0 ml-2">
-                          -{cur?.symbol} {cm.commission.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })
-            )}
-            {expenseEntries.length === 0 && commissionData.length === 0 && (
+            {expenseEntries.length === 0 && (
               <p className="text-sm text-gray-400 py-4 text-center">Gider girişi yok</p>
             )}
           </div>
@@ -641,49 +586,6 @@ export default function KasaPage() {
         </div>
       )}
 
-      {/* Personel Prim Özeti */}
-      {commissionData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Personel Prim Özeti</CardTitle>
-            <p className="text-xs text-gray-500">Prim tutarları otomatik olarak nakit kasa giderinden düşülmektedir</p>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Personel</TableHead>
-                  <TableHead>Pozisyon</TableHead>
-                  <TableHead>Prim %</TableHead>
-                  <TableHead className="text-right">Personel Geliri</TableHead>
-                  <TableHead className="text-right text-amber-700">Prim Tutarı (Gider)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {commissionData.map(({ staff: s, rate, commissions }) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.user.name}</TableCell>
-                    <TableCell>{s.position || "-"}</TableCell>
-                    <TableCell>%{rate}</TableCell>
-                    <TableCell className="text-right">
-                      {commissions.map(cm => {
-                        const cur = CURRENCIES.find(c => c.value === cm.currency)
-                        return <div key={cm.currency}>{cur?.symbol} {cm.totalIncome.toLocaleString("tr-TR")}</div>
-                      })}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold text-red-600">
-                      {commissions.map(cm => {
-                        const cur = CURRENCIES.find(c => c.value === cm.currency)
-                        return <div key={cm.currency}>{cur?.symbol} {cm.commission.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      })}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Income Form */}
       <IncomeFormDialog
