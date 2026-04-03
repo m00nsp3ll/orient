@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkPermission } from "@/lib/permissions"
+
+async function canWrite(session: any) {
+  if (!session) return false
+  if (session.user.role === "ADMIN") return true
+  return checkPermission(session.user.role, session.user.id, "operasyon_duzenleme")
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,8 +48,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+    if (!await canWrite(session)) {
+      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
     }
 
     const body = await req.json()
@@ -73,8 +80,8 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+    if (!await canWrite(session)) {
+      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
     }
 
     const body = await req.json()
@@ -127,8 +134,8 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+    if (!await canWrite(session)) {
+      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
     }
 
     const { searchParams } = new URL(req.url)
