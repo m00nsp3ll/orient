@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Minus, CalendarIcon, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Minus, CalendarIcon, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -668,100 +668,114 @@ export default function KasaPage() {
 function PrimTable({ primData }: {
   primData: { staff: StaffMember; rate: number; byCurrency: [string, { cash: number; cc: number }][]; entries: CashEntry[] }[]
 }) {
-  const [openStaff, setOpenStaff] = useState<string | null>(null)
+  const [detailStaff, setDetailStaff] = useState<typeof primData[number] | null>(null)
 
   return (
-    <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
-      <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border-b">
-        <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-        <h3 className="font-semibold text-amber-800 text-sm">Personel Prim Özeti</h3>
-        <span className="text-[10px] text-amber-600">(personel gelirinden hesaplanır)</span>
-      </div>
-      <div className="divide-y">
-        {primData.map(({ staff: s, rate, byCurrency, entries: staffEntries }) => {
-          const isOpen = openStaff === s.id
-          return (
-            <div key={s.id}>
-              {/* Satır — tıklanabilir */}
-              <button
-                type="button"
-                className="w-full flex items-center justify-between px-5 py-3 hover:bg-amber-50/60 transition-colors text-left"
-                onClick={() => setOpenStaff(isOpen ? null : s.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-sm text-gray-800">{s.user.name}</span>
-                    <span className="text-[10px] text-gray-400">{s.position || ""} · %{rate} prim</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-end gap-0.5">
-                    {byCurrency.map(([cur, { cash, cc }]) => {
+    <>
+      <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-b">
+          <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+          <h3 className="font-semibold text-amber-800 text-sm">Personel Prim Özeti</h3>
+          <span className="text-[10px] text-amber-600">(detay için personele tıklayın)</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Personel</th>
+                <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Pozisyon</th>
+                <th className="text-center px-4 py-2 text-xs font-medium text-gray-500">Prim %</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-gray-500">Toplam Gelir</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-amber-700">Prim Tutarı</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {primData.map((row) => (
+                <tr
+                  key={row.staff.id}
+                  className="hover:bg-amber-50/60 cursor-pointer transition-colors"
+                  onClick={() => setDetailStaff(row)}
+                >
+                  <td className="px-4 py-2.5 font-medium text-gray-800">{row.staff.user.name}</td>
+                  <td className="px-4 py-2.5 text-gray-500 text-xs">{row.staff.position || "—"}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <Badge className="bg-amber-100 text-amber-700 text-[10px]">%{row.rate}</Badge>
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-gray-700">
+                    {row.byCurrency.map(([cur, { cash, cc }]) => {
                       const c = CURRENCIES.find(x => x.value === cur)
-                      const total = cash + cc
-                      const prim = total * rate / 100
-                      return (
-                        <div key={cur} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{c?.symbol}{total.toLocaleString("tr-TR")} gelir</span>
-                          <span className="text-sm font-bold text-amber-700">→ {c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                      )
+                      return <div key={cur}>{c?.symbol}{(cash + cc).toLocaleString("tr-TR")}</div>
                     })}
-                  </div>
-                  {isOpen ? <ChevronUp className="h-4 w-4 text-gray-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />}
-                </div>
-              </button>
-
-              {/* Detay */}
-              {isOpen && (
-                <div className="bg-amber-50/40 px-5 pb-4 pt-2 space-y-2">
-                  <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide mb-2">İşlem Detayları</p>
-                  {staffEntries.map(e => {
-                    const isCash = !!e.staffIncomeAmount
-                    const amount = isCash ? e.staffIncomeAmount! : e.creditCardAmount!
-                    const cur = isCash ? e.staffIncomeCurrency! : e.creditCardCurrency!
-                    const c = CURRENCIES.find(x => x.value === cur)
-                    const prim = amount * rate / 100
-                    return (
-                      <div key={e.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-100">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">#{e.voucherNo}</Badge>
-                          <Badge className={cn("text-[10px]", isCash ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700")}>
-                            {isCash ? "Nakit" : "KK"}
-                          </Badge>
-                          {e.incomeSubCategory && (
-                            <span className="text-[10px] text-gray-500">{getIncomeSubCategoryLabel(e.incomeSubCategory)}</span>
-                          )}
-                          {e.description && <span className="text-[10px] text-gray-400 truncate max-w-[120px]">{e.description}</span>}
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-xs text-gray-500">{c?.symbol}{amount.toLocaleString("tr-TR")} × %{rate}</span>
-                          <span className="text-sm font-semibold text-amber-700">{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {/* Toplam */}
-                  {byCurrency.map(([cur, { cash, cc }]) => {
-                    const c = CURRENCIES.find(x => x.value === cur)
-                    const total = cash + cc
-                    const prim = total * rate / 100
-                    return (
-                      <div key={cur} className="flex justify-end pt-1">
-                        <div className="flex items-center gap-2 bg-amber-100 rounded-lg px-3 py-1.5">
-                          <span className="text-xs text-amber-700">Toplam Prim ({cur})</span>
-                          <span className="text-sm font-bold text-amber-800">{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-amber-700">
+                    {row.byCurrency.map(([cur, { cash, cc }]) => {
+                      const c = CURRENCIES.find(x => x.value === cur)
+                      const prim = (cash + cc) * row.rate / 100
+                      return <div key={cur}>{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      {/* Detay Modal */}
+      <Dialog open={!!detailStaff} onOpenChange={(v) => { if (!v) setDetailStaff(null) }}>
+        <DialogContent className="w-full !max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700">
+              {detailStaff?.staff.user.name} — Prim Detayı
+            </DialogTitle>
+          </DialogHeader>
+          {detailStaff && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {detailStaff.entries.map(e => {
+                  const isCash = !!e.staffIncomeAmount
+                  const amount = isCash ? e.staffIncomeAmount! : e.creditCardAmount!
+                  const cur = isCash ? e.staffIncomeCurrency! : e.creditCardCurrency!
+                  const c = CURRENCIES.find(x => x.value === cur)
+                  const prim = amount * detailStaff.rate / 100
+                  return (
+                    <div key={e.id} className="flex items-center justify-between bg-amber-50/50 rounded-lg px-3 py-2.5 border border-amber-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="outline" className="text-[10px] shrink-0">#{e.voucherNo}</Badge>
+                        <Badge className={cn("text-[10px] shrink-0", isCash ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700")}>
+                          {isCash ? "Nakit" : "KK"}
+                        </Badge>
+                        {e.incomeSubCategory && (
+                          <span className="text-[10px] text-gray-500 truncate">{getIncomeSubCategoryLabel(e.incomeSubCategory)}</span>
+                        )}
+                        {e.description && <span className="text-[10px] text-gray-400 truncate">{e.description}</span>}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <span className="text-xs text-gray-500">{c?.symbol}{amount.toLocaleString("tr-TR")} × %{detailStaff.rate}</span>
+                        <span className="text-sm font-bold text-amber-700">{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="border-t pt-3 space-y-1">
+                {detailStaff.byCurrency.map(([cur, { cash, cc }]) => {
+                  const c = CURRENCIES.find(x => x.value === cur)
+                  const total = cash + cc
+                  const prim = total * detailStaff.rate / 100
+                  return (
+                    <div key={cur} className="flex items-center justify-between bg-amber-100 rounded-lg px-4 py-2">
+                      <span className="text-sm text-amber-800 font-medium">Toplam Prim ({cur})</span>
+                      <span className="text-base font-bold text-amber-900">{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
