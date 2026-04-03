@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock, Search, Printer } from "lucide-react"
+import { Plus, Building2, CalendarDays, Calendar as CalendarIcon, Banknote, Users, XCircle, BarChart3, Clock, Search, Printer, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -66,6 +66,9 @@ export default function AppointmentsPage() {
   const [showAppointmentForm, setShowAppointmentForm] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [rescheduleAppointment, setRescheduleAppointment] = useState<Appointment | null>(null)
+  const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>(undefined)
+  const [rescheduleConfirm, setRescheduleConfirm] = useState(false)
   const [currentWeek] = useState(new Date())
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null)
   const [currentDay, setCurrentDay] = useState(new Date())
@@ -235,6 +238,37 @@ export default function AppointmentsPage() {
   const handleAppointmentClick = (appointment: Appointment) => {
     setSelectedAppointment(appointment)
   }
+
+  const rescheduleMutation = useMutation({
+    mutationFn: async ({ id, newDate }: { id: string; newDate: Date }) => {
+      const existing = appointments.find(a => a.id === id)
+      if (!existing) throw new Error("Randevu bulunamadı")
+      const oldTime = new Date(existing.startTime)
+      const newStart = new Date(newDate)
+      newStart.setHours(oldTime.getHours(), oldTime.getMinutes(), 0, 0)
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startTime: newStart.toISOString() }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Güncellenemedi")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] })
+      toast.success("Randevu tarihi güncellendi")
+      setRescheduleAppointment(null)
+      setRescheduleDate(undefined)
+      setRescheduleConfirm(false)
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+      setRescheduleConfirm(false)
+    },
+  })
 
   const cancelMutation = useMutation({
     mutationFn: async (appointmentId: string) => {
@@ -660,6 +694,20 @@ export default function AppointmentsPage() {
                             )}
                           </div>
                         </div>
+                        {canEditOps && !isAgency && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 ml-2"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setRescheduleAppointment(appointment)
+                              setRescheduleDate(new Date(appointment.startTime))
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-gray-400" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -673,6 +721,71 @@ export default function AppointmentsPage() {
         open={showAppointmentForm}
         onOpenChange={setShowAppointmentForm}
       />
+
+      {/* Tarih Değiştirme Modalı */}
+      <Dialog open={!!rescheduleAppointment} onOpenChange={(v) => { if (!v) { setRescheduleAppointment(null); setRescheduleDate(undefined) } }}>
+        <DialogContent className="w-auto">
+          <DialogHeader>
+            <DialogTitle>Randevu Tarihini Değiştir</DialogTitle>
+          </DialogHeader>
+          {rescheduleAppointment && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Mevcut tarih: <span className="font-medium text-gray-800">{format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy, HH:mm", { locale: tr })}</span>
+              </p>
+              <Calendar
+                mode="single"
+                selected={rescheduleDate}
+                onSelect={setRescheduleDate}
+                locale={tr}
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => { setRescheduleAppointment(null); setRescheduleDate(undefined) }}>İptal</Button>
+                <Button
+                  disabled={!rescheduleDate}
+                  onClick={() => setRescheduleConfirm(true)}
+                >
+                  Devam Et
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tarih Değiştirme Onay Dialogu */}
+      <AlertDialog open={rescheduleConfirm} onOpenChange={setRescheduleConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tarihi Değiştirmek İstediğinizden Emin Misiniz?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {rescheduleAppointment && rescheduleDate && (
+                <span>
+                  <span className="block">Randevu tarihi şu şekilde güncellenecek:</span>
+                  <span className="block mt-2 font-medium text-gray-800">
+                    {format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy", { locale: tr })}
+                    {" → "}
+                    {format(rescheduleDate, "dd MMMM yyyy", { locale: tr })}
+                  </span>
+                  <span className="block text-xs text-gray-500 mt-1">Saat değişmez: {format(new Date(rescheduleAppointment.startTime), "HH:mm")}</span>
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (rescheduleAppointment && rescheduleDate) {
+                  rescheduleMutation.mutate({ id: rescheduleAppointment.id, newDate: rescheduleDate })
+                }
+              }}
+            >
+              {rescheduleMutation.isPending ? "Güncelleniyor..." : "Evet, Güncelle"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Appointment Detail Dialog */}
       <Dialog
