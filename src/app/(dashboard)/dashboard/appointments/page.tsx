@@ -68,6 +68,7 @@ export default function AppointmentsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [rescheduleAppointment, setRescheduleAppointment] = useState<Appointment | null>(null)
   const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>(undefined)
+  const [rescheduleTime, setRescheduleTime] = useState<string>("")
   const [rescheduleConfirm, setRescheduleConfirm] = useState(false)
   const [currentWeek] = useState(new Date())
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null)
@@ -240,12 +241,12 @@ export default function AppointmentsPage() {
   }
 
   const rescheduleMutation = useMutation({
-    mutationFn: async ({ id, newDate }: { id: string; newDate: Date }) => {
+    mutationFn: async ({ id, newDate, newTime }: { id: string; newDate: Date; newTime: string }) => {
       const existing = appointments.find(a => a.id === id)
       if (!existing) throw new Error("Randevu bulunamadı")
-      const oldTime = new Date(existing.startTime)
+      const [hours, minutes] = newTime.split(":").map(Number)
       const newStart = new Date(newDate)
-      newStart.setHours(oldTime.getHours(), oldTime.getMinutes(), 0, 0)
+      newStart.setHours(hours, minutes, 0, 0)
       const res = await fetch(`/api/appointments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -262,6 +263,7 @@ export default function AppointmentsPage() {
       toast.success("Randevu tarihi güncellendi")
       setRescheduleAppointment(null)
       setRescheduleDate(undefined)
+      setRescheduleTime("")
       setRescheduleConfirm(false)
     },
     onError: (err: Error) => {
@@ -703,6 +705,7 @@ export default function AppointmentsPage() {
                               e.stopPropagation()
                               setRescheduleAppointment(appointment)
                               setRescheduleDate(new Date(appointment.startTime))
+                              setRescheduleTime(format(new Date(appointment.startTime), "HH:mm"))
                             }}
                           >
                             <Pencil className="h-3.5 w-3.5 text-gray-400" />
@@ -722,16 +725,16 @@ export default function AppointmentsPage() {
         onOpenChange={setShowAppointmentForm}
       />
 
-      {/* Tarih Değiştirme Modalı */}
-      <Dialog open={!!rescheduleAppointment} onOpenChange={(v) => { if (!v) { setRescheduleAppointment(null); setRescheduleDate(undefined) } }}>
+      {/* Tarih & Saat Değiştirme Modalı */}
+      <Dialog open={!!rescheduleAppointment} onOpenChange={(v) => { if (!v) { setRescheduleAppointment(null); setRescheduleDate(undefined); setRescheduleTime("") } }}>
         <DialogContent className="w-auto">
           <DialogHeader>
-            <DialogTitle>Randevu Tarihini Değiştir</DialogTitle>
+            <DialogTitle>Randevu Tarih / Saat Düzenle</DialogTitle>
           </DialogHeader>
           {rescheduleAppointment && (
             <div className="space-y-4">
               <p className="text-sm text-gray-500">
-                Mevcut tarih: <span className="font-medium text-gray-800">{format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy, HH:mm", { locale: tr })}</span>
+                Mevcut: <span className="font-medium text-gray-800">{format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy, HH:mm", { locale: tr })}</span>
               </p>
               <Calendar
                 mode="single"
@@ -739,10 +742,19 @@ export default function AppointmentsPage() {
                 onSelect={setRescheduleDate}
                 locale={tr}
               />
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700 shrink-0">Saat</label>
+                <input
+                  type="time"
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  className="border rounded-md px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => { setRescheduleAppointment(null); setRescheduleDate(undefined) }}>İptal</Button>
+                <Button variant="outline" onClick={() => { setRescheduleAppointment(null); setRescheduleDate(undefined); setRescheduleTime("") }}>İptal</Button>
                 <Button
-                  disabled={!rescheduleDate}
+                  disabled={!rescheduleDate || !rescheduleTime}
                   onClick={() => setRescheduleConfirm(true)}
                 >
                   Devam Et
@@ -753,21 +765,25 @@ export default function AppointmentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Tarih Değiştirme Onay Dialogu */}
+      {/* Tarih & Saat Onay Dialogu */}
       <AlertDialog open={rescheduleConfirm} onOpenChange={setRescheduleConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Tarihi Değiştirmek İstediğinizden Emin Misiniz?</AlertDialogTitle>
+            <AlertDialogTitle>Randevuyu Güncellemek İstediğinizden Emin Misiniz?</AlertDialogTitle>
             <AlertDialogDescription>
-              {rescheduleAppointment && rescheduleDate && (
+              {rescheduleAppointment && rescheduleDate && rescheduleTime && (
                 <span>
-                  <span className="block">Randevu tarihi şu şekilde güncellenecek:</span>
-                  <span className="block mt-2 font-medium text-gray-800">
-                    {format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy", { locale: tr })}
-                    {" → "}
-                    {format(rescheduleDate, "dd MMMM yyyy", { locale: tr })}
+                  <span className="block mb-2">Randevu şu şekilde güncellenecek:</span>
+                  <span className="block bg-gray-50 rounded-lg p-3 space-y-1">
+                    <span className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Eski</span>
+                      <span className="font-medium text-gray-700">{format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy, HH:mm", { locale: tr })}</span>
+                    </span>
+                    <span className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Yeni</span>
+                      <span className="font-semibold text-blue-700">{format(rescheduleDate, "dd MMMM yyyy", { locale: tr })}, {rescheduleTime}</span>
+                    </span>
                   </span>
-                  <span className="block text-xs text-gray-500 mt-1">Saat değişmez: {format(new Date(rescheduleAppointment.startTime), "HH:mm")}</span>
                 </span>
               )}
             </AlertDialogDescription>
@@ -776,8 +792,8 @@ export default function AppointmentsPage() {
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (rescheduleAppointment && rescheduleDate) {
-                  rescheduleMutation.mutate({ id: rescheduleAppointment.id, newDate: rescheduleDate })
+                if (rescheduleAppointment && rescheduleDate && rescheduleTime) {
+                  rescheduleMutation.mutate({ id: rescheduleAppointment.id, newDate: rescheduleDate, newTime: rescheduleTime })
                 }
               }}
             >
