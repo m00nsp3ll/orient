@@ -110,6 +110,7 @@ export async function GET(req: NextRequest) {
       agency: { select: { id: true, name: true, companyName: true } },
       hotel: { select: { id: true, name: true } },
       staff: { select: { id: true, position: true, commissionRate: true, user: { select: { name: true } } } },
+      createdByUser: { select: { name: true } },
     },
     orderBy: { voucherNo: "asc" },
   })

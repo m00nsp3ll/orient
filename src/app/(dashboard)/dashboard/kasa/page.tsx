@@ -60,9 +60,11 @@ interface CashEntry {
   info: string | null
   expenseCategory: string | null
   incomeSubCategory: string | null
+  createdAt: string
   agency: { id: string; name: string; companyName: string | null } | null
   hotel: { id: string; name: string } | null
   staff: { id: string; position: string | null; commissionRate: number | null; user: { name: string } } | null
+  createdByUser: { name: string } | null
 }
 
 interface Summary {
@@ -280,6 +282,10 @@ export default function KasaPage() {
               {entry.serviceName && <p className="text-xs text-gray-500">{entry.serviceName}{entry.pax ? ` • ${entry.pax} PAX` : ""}</p>}
               {entry.description && <p className="text-xs text-gray-600 mt-1">{entry.description}</p>}
               {entry.info && <p className="text-xs text-gray-400">{entry.info}</p>}
+              <p className="text-[10px] text-gray-400 mt-1">
+                {format(new Date(entry.createdAt), "HH:mm")}
+                {entry.createdByUser && ` · ${entry.createdByUser.name}`}
+              </p>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-2">
               <span className={cn("text-lg font-bold", isIncome ? "text-emerald-700" : "text-red-600")}>
