@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Minus, CalendarIcon, Pencil, Trash2 } from "lucide-react"
+import { Plus, Minus, CalendarIcon, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -220,6 +220,32 @@ export default function KasaPage() {
   const creditCardEntries = kasaEntries.filter(e => !!e.creditCardAmount)
   const expenseEntries = kasaEntries.filter(e => !isIncomeEntry(e))
 
+  const primData = (() => {
+    if (!staffList) return []
+    return staffList
+      .filter(s => s.isActive && s.commissionRate && s.commissionRate > 0)
+      .map(s => {
+        const rate = s.commissionRate!
+        const byCurrency: Record<string, { cash: number; cc: number }> = {}
+        for (const e of kasaEntries) {
+          if (e.staffId === s.id && e.staffIncomeAmount && e.staffIncomeCurrency) {
+            if (!byCurrency[e.staffIncomeCurrency]) byCurrency[e.staffIncomeCurrency] = { cash: 0, cc: 0 }
+            byCurrency[e.staffIncomeCurrency].cash += e.staffIncomeAmount
+          }
+          if (e.staffId === s.id && e.creditCardAmount && e.creditCardCurrency) {
+            if (!byCurrency[e.creditCardCurrency]) byCurrency[e.creditCardCurrency] = { cash: 0, cc: 0 }
+            byCurrency[e.creditCardCurrency].cc += e.creditCardAmount
+          }
+        }
+        const currencies = Object.entries(byCurrency).filter(([, v]) => v.cash + v.cc > 0)
+        if (currencies.length === 0) return null
+        return {
+          staff: s, rate, byCurrency: currencies,
+          entries: kasaEntries.filter(e => e.staffId === s.id && (e.staffIncomeAmount || e.creditCardAmount))
+        }
+      })
+      .filter(Boolean) as { staff: StaffMember; rate: number; byCurrency: [string, { cash: number; cc: number }][]; entries: CashEntry[] }[]
+  })()
 
   const handleEdit = (entry: CashEntry) => {
     setEditingEntry(entry)
@@ -524,6 +550,9 @@ export default function KasaPage() {
         )
       })()}
 
+      {/* Personel Prim Tablosu */}
+      {primData.length > 0 && <PrimTable primData={primData} />}
+
       {/* Entries */}
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Yükleniyor...</div>
@@ -631,6 +660,107 @@ export default function KasaPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  )
+}
+
+// ---- Prim Table ----
+function PrimTable({ primData }: {
+  primData: { staff: StaffMember; rate: number; byCurrency: [string, { cash: number; cc: number }][]; entries: CashEntry[] }[]
+}) {
+  const [openStaff, setOpenStaff] = useState<string | null>(null)
+
+  return (
+    <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
+      <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border-b">
+        <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+        <h3 className="font-semibold text-amber-800 text-sm">Personel Prim Özeti</h3>
+        <span className="text-[10px] text-amber-600">(personel gelirinden hesaplanır)</span>
+      </div>
+      <div className="divide-y">
+        {primData.map(({ staff: s, rate, byCurrency, entries: staffEntries }) => {
+          const isOpen = openStaff === s.id
+          return (
+            <div key={s.id}>
+              {/* Satır — tıklanabilir */}
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-amber-50/60 transition-colors text-left"
+                onClick={() => setOpenStaff(isOpen ? null : s.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-sm text-gray-800">{s.user.name}</span>
+                    <span className="text-[10px] text-gray-400">{s.position || ""} · %{rate} prim</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col items-end gap-0.5">
+                    {byCurrency.map(([cur, { cash, cc }]) => {
+                      const c = CURRENCIES.find(x => x.value === cur)
+                      const total = cash + cc
+                      const prim = total * rate / 100
+                      return (
+                        <div key={cur} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">{c?.symbol}{total.toLocaleString("tr-TR")} gelir</span>
+                          <span className="text-sm font-bold text-amber-700">→ {c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {isOpen ? <ChevronUp className="h-4 w-4 text-gray-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />}
+                </div>
+              </button>
+
+              {/* Detay */}
+              {isOpen && (
+                <div className="bg-amber-50/40 px-5 pb-4 pt-2 space-y-2">
+                  <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide mb-2">İşlem Detayları</p>
+                  {staffEntries.map(e => {
+                    const isCash = !!e.staffIncomeAmount
+                    const amount = isCash ? e.staffIncomeAmount! : e.creditCardAmount!
+                    const cur = isCash ? e.staffIncomeCurrency! : e.creditCardCurrency!
+                    const c = CURRENCIES.find(x => x.value === cur)
+                    const prim = amount * rate / 100
+                    return (
+                      <div key={e.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-100">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px]">#{e.voucherNo}</Badge>
+                          <Badge className={cn("text-[10px]", isCash ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700")}>
+                            {isCash ? "Nakit" : "KK"}
+                          </Badge>
+                          {e.incomeSubCategory && (
+                            <span className="text-[10px] text-gray-500">{getIncomeSubCategoryLabel(e.incomeSubCategory)}</span>
+                          )}
+                          {e.description && <span className="text-[10px] text-gray-400 truncate max-w-[120px]">{e.description}</span>}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs text-gray-500">{c?.symbol}{amount.toLocaleString("tr-TR")} × %{rate}</span>
+                          <span className="text-sm font-semibold text-amber-700">{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {/* Toplam */}
+                  {byCurrency.map(([cur, { cash, cc }]) => {
+                    const c = CURRENCIES.find(x => x.value === cur)
+                    const total = cash + cc
+                    const prim = total * rate / 100
+                    return (
+                      <div key={cur} className="flex justify-end pt-1">
+                        <div className="flex items-center gap-2 bg-amber-100 rounded-lg px-3 py-1.5">
+                          <span className="text-xs text-amber-700">Toplam Prim ({cur})</span>
+                          <span className="text-sm font-bold text-amber-800">{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
