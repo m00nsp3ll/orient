@@ -43,7 +43,7 @@ const navigation: { name: string; href: string; icon: any; roles: string[]; perm
   { name: "Muhasebe", href: "/dashboard/muhasebe", icon: BookOpen, roles: ["ADMIN", "STAFF"], permissionKey: "muhasebe_view" },
   { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"], permissionKey: "istatistik_view" },
   { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN", "STAFF"], permissionKey: "acentalar_view" },
-  { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN"] },
+  { name: "Ayarlar", href: "/dashboard/settings", icon: Settings, roles: ["ADMIN", "STAFF"] },
 ]
 
 export function Sidebar() {
