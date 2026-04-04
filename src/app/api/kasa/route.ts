@@ -8,6 +8,7 @@ import { syncAccountingEntries } from "@/lib/accounting-sync"
 
 const cashEntrySchema = z.object({
   date: z.string(),
+  voucherNo: z.number().int().optional().nullable(),
   agencyId: z.string().optional().nullable(),
   hotelId: z.string().optional().nullable(),
   roomNumber: z.string().optional().nullable(),
@@ -142,11 +143,16 @@ export async function POST(req: NextRequest) {
 
     const targetDate = startOfDay(new Date(data.date))
 
-    const maxVoucher = await prisma.cashEntry.aggregate({
-      where: { date: targetDate },
-      _max: { voucherNo: true },
-    })
-    const nextVoucher = (maxVoucher._max.voucherNo ?? 0) + 1
+    let nextVoucher: number
+    if (data.voucherNo) {
+      nextVoucher = data.voucherNo
+    } else {
+      const maxVoucher = await prisma.cashEntry.aggregate({
+        where: { date: targetDate },
+        _max: { voucherNo: true },
+      })
+      nextVoucher = (maxVoucher._max.voucherNo ?? 0) + 1
+    }
 
     const entry = await prisma.$transaction(async (tx) => {
       const created = await tx.cashEntry.create({
