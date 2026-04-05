@@ -246,52 +246,50 @@ function StaffDetailCards({
         )}
       </div>
 
-      {/* Cem'e özel toplam satış kutusu + 2000€ kota progress bar */}
+      {/* Tüm personelde: toplam satış kutusu */}
+      {isStaff && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Yaptığı Toplam Satış
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
+            {Object.entries(totalSalesByCur).map(([cur, v]) => (
+              <div key={cur} className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className={cn("text-[10px] font-semibold text-white px-1.5 py-0.5 rounded-full", CUR_META[cur]?.bg ?? "bg-gray-400")}>
+                    {CUR_META[cur]?.symbol}{cur}
+                  </span>
+                </div>
+                {v.cash > 0 && (
+                  <span className="text-sm font-bold text-gray-800">
+                    {fmtAmt(v.cash, cur)}
+                    <span className="text-[10px] text-gray-400 font-normal ml-1">nakit</span>
+                  </span>
+                )}
+                {v.cc > 0 && (
+                  <span className="text-sm font-bold text-violet-700">
+                    {fmtAmt(v.cc, cur)}
+                    <span className="text-[10px] text-violet-400 font-normal ml-1">KK</span>
+                  </span>
+                )}
+              </div>
+            ))}
+            {Object.keys(totalSalesByCur).length === 0 && (
+              <span className="text-sm text-gray-400">Satış yok</span>
+            )}
+          </div>
+          <div className="border-t border-gray-200 pt-2 flex items-center justify-between">
+            <span className="text-[11px] text-gray-500">Toplam Euro Karşılığı</span>
+            <span className="text-base font-bold text-emerald-700">
+              €{totalSalesEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Cem'e özel kota progress bar */}
       {isCem && (
         <>
-          {/* Toplam Satış Kutusu */}
-          <div className={cn(
-            "rounded-xl border p-4",
-            cemReached ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-amber-50"
-          )}>
-            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Yaptığı Toplam Satış
-            </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
-              {Object.entries(totalSalesByCur).map(([cur, v]) => (
-                <div key={cur} className="flex flex-col gap-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn("text-[10px] font-semibold text-white px-1.5 py-0.5 rounded-full", CUR_META[cur]?.bg ?? "bg-gray-400")}>
-                      {CUR_META[cur]?.symbol}{cur}
-                    </span>
-                  </div>
-                  {v.cash > 0 && (
-                    <span className="text-sm font-bold text-gray-800">
-                      {fmtAmt(v.cash, cur)}
-                      <span className="text-[10px] text-gray-400 font-normal ml-1">nakit</span>
-                    </span>
-                  )}
-                  {v.cc > 0 && (
-                    <span className="text-sm font-bold text-violet-700">
-                      {fmtAmt(v.cc, cur)}
-                      <span className="text-[10px] text-violet-400 font-normal ml-1">KK</span>
-                    </span>
-                  )}
-                </div>
-              ))}
-              {Object.keys(totalSalesByCur).length === 0 && (
-                <span className="text-sm text-gray-400">Satış yok</span>
-              )}
-            </div>
-            <div className="border-t border-gray-200 pt-2 flex items-center justify-between">
-              <span className="text-[11px] text-gray-500">Toplam Euro Karşılığı</span>
-              <span className="text-base font-bold text-emerald-700">
-                €{totalSalesEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
-
-          {/* Komisyon Kota Progress Bar */}
           <div className={cn(
             "rounded-xl border p-4",
             cemReached
