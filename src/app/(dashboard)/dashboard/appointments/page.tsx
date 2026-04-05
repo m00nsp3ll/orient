@@ -25,6 +25,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useSession } from "next-auth/react"
 import { usePermissions } from "@/hooks/use-permissions"
 import { toast } from "sonner"
@@ -69,6 +70,7 @@ export default function AppointmentsPage() {
   const [rescheduleAppointment, setRescheduleAppointment] = useState<Appointment | null>(null)
   const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>(undefined)
   const [rescheduleTime, setRescheduleTime] = useState<string>("")
+  const [rescheduleAgencyId, setRescheduleAgencyId] = useState<string>("__none__")
   const [rescheduleConfirm, setRescheduleConfirm] = useState(false)
   const [currentWeek] = useState(new Date())
   const [weekRange, setWeekRange] = useState<{ start: Date; end: Date } | null>(null)
@@ -117,6 +119,11 @@ export default function AppointmentsPage() {
       return Array.from(timeSet).sort()
     },
     enabled: showDensity,
+  })
+
+  const { data: agencies = [] } = useQuery<{ id: string; companyName: string; name: string }[]>({
+    queryKey: ["agencies-list"],
+    queryFn: async () => { const r = await fetch("/api/agencies"); return r.ok ? r.json() : [] },
   })
 
   const handlePrint = () => {
@@ -241,15 +248,18 @@ export default function AppointmentsPage() {
   }
 
   const rescheduleMutation = useMutation({
-    mutationFn: async ({ id, newDate, newTime }: { id: string; newDate: Date; newTime: string }) => {
+    mutationFn: async ({ id, newDate, newTime, newAgencyId }: { id: string; newDate: Date; newTime: string; newAgencyId: string }) => {
       const existing = appointments.find(a => a.id === id)
       if (!existing) throw new Error("Randevu bulunamadı")
       const [hours, minutes] = newTime.split(":").map(Number)
       const newStart = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), hours, minutes, 0, 0)
+      const body: Record<string, unknown> = { startTime: newStart.toISOString() }
+      if (newAgencyId === "__none__") body.agencyId = null
+      else if (newAgencyId) body.agencyId = newAgencyId
       const res = await fetch(`/api/appointments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startTime: newStart.toISOString() }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -259,10 +269,11 @@ export default function AppointmentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] })
-      toast.success("Randevu tarihi güncellendi")
+      toast.success("Randevu güncellendi")
       setRescheduleAppointment(null)
       setRescheduleDate(undefined)
       setRescheduleTime("")
+      setRescheduleAgencyId("__none__")
       setRescheduleConfirm(false)
     },
     onError: (err: Error) => {
@@ -705,6 +716,7 @@ export default function AppointmentsPage() {
                               setRescheduleAppointment(appointment)
                               setRescheduleDate(new Date(appointment.startTime))
                               setRescheduleTime(format(new Date(appointment.startTime), "HH:mm"))
+                              setRescheduleAgencyId(appointment.agency?.id ?? "__none__")
                             }}
                           >
                             <Pencil className="h-3.5 w-3.5 text-gray-400" />
@@ -728,7 +740,7 @@ export default function AppointmentsPage() {
       <Dialog open={!!rescheduleAppointment} onOpenChange={(v) => { if (!v) { setRescheduleAppointment(null); setRescheduleDate(undefined); setRescheduleTime("") } }}>
         <DialogContent className="w-auto">
           <DialogHeader>
-            <DialogTitle>Randevu Tarih / Saat Düzenle</DialogTitle>
+            <DialogTitle>Randevu Düzenle</DialogTitle>
           </DialogHeader>
           {rescheduleAppointment && (
             <div className="space-y-4">
@@ -750,8 +762,22 @@ export default function AppointmentsPage() {
                   className="border rounded-md px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Acenta</label>
+                <Select value={rescheduleAgencyId} onValueChange={setRescheduleAgencyId}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Acenta seçin (opsiyonel)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Acentasız —</SelectItem>
+                    {agencies.map(a => (
+                      <SelectItem key={a.id} value={a.id}>{a.companyName || a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => { setRescheduleAppointment(null); setRescheduleDate(undefined); setRescheduleTime("") }}>İptal</Button>
+                <Button variant="outline" onClick={() => { setRescheduleAppointment(null); setRescheduleDate(undefined); setRescheduleTime(""); setRescheduleAgencyId("__none__") }}>İptal</Button>
                 <Button
                   disabled={!rescheduleDate || !rescheduleTime}
                   onClick={() => setRescheduleConfirm(true)}
@@ -792,7 +818,7 @@ export default function AppointmentsPage() {
             <AlertDialogAction
               onClick={() => {
                 if (rescheduleAppointment && rescheduleDate && rescheduleTime) {
-                  rescheduleMutation.mutate({ id: rescheduleAppointment.id, newDate: rescheduleDate, newTime: rescheduleTime })
+                  rescheduleMutation.mutate({ id: rescheduleAppointment.id, newDate: rescheduleDate, newTime: rescheduleTime, newAgencyId: rescheduleAgencyId })
                 }
               }}
             >

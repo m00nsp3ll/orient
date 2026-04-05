@@ -12,6 +12,7 @@ const updateAppointmentSchema = z.object({
   status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"]).optional(),
   notes: z.string().optional(),
   childCount: z.number().optional().nullable(),
+  agencyId: z.string().nullable().optional(),
 })
 
 export async function GET(
