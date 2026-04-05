@@ -29,7 +29,7 @@ const STAFF_POSITIONS = [
   { value: "Operasyon", label: "Operasyon" },
   { value: "Müdür", label: "Müdür" },
   { value: "Resepsiyon", label: "Resepsiyon" },
-  { value: "İnfocu", label: "İnfocu" },
+  { value: "Infocu", label: "Infocu" },
 ]
 
 interface Staff {
@@ -337,14 +337,14 @@ function AddStaffDialog({ open, onOpenChange, onSuccess }: {
   const [commissionRate, setCommissionRate] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
-  const isInfocu = position === "İnfocu"
+  const isInfocu = position === "Infocu"
 
   const reset = () => { setName(""); setUsername(""); setPassword(""); setPhone(""); setPosition(""); setCommissionRate("") }
 
   const handleSubmit = async () => {
     if (!name || !username || !password) { toast.error("İsim, kullanıcı adı ve şifre zorunludur"); return }
     if (!position) { toast.error("Pozisyon seçiniz"); return }
-    if (isInfocu && !commissionRate) { toast.error("İnfocu için prim oranı zorunludur"); return }
+    if (isInfocu && !commissionRate) { toast.error("Infocu için prim oranı zorunludur"); return }
     setSubmitting(true)
     try {
       const userRes = await fetch("/api/auth/register", {
@@ -441,7 +441,7 @@ function EditStaffDialog({ open, onOpenChange, staff, onSave, saving }: {
   }
   if (!open && lastStaffId) setLastStaffId(null)
 
-  const isInfocu = position === "İnfocu"
+  const isInfocu = position === "Infocu"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

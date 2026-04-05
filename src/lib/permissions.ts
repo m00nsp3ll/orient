@@ -1,7 +1,7 @@
 import { prisma } from "./prisma"
 
 // ── Yetki Tanımları ──────────────────────────────────────────────────────────
-export const STAFF_POSITIONS = ["Admin", "Operasyon", "Müdür", "Resepsiyon", "İnfocu"] as const
+export const STAFF_POSITIONS = ["Admin", "Operasyon", "Müdür", "Resepsiyon", "Infocu"] as const
 export type StaffPosition = (typeof STAFF_POSITIONS)[number]
 
 export const PERMISSIONS = [
@@ -43,7 +43,7 @@ export const DEFAULT_STAFF_PERMISSIONS: Record<string, PermissionKey[]> = {
   Resepsiyon: [
     "dashboard_view", "randevu_view", "kasa_view",
   ],
-  "İnfocu": [
+  "Infocu": [
     "dashboard_view", "randevu_view",
   ],
 }

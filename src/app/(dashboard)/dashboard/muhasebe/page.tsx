@@ -280,7 +280,7 @@ function StaffDetailCards({
           )}>
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-semibold text-gray-700">
-                İnfocu Komisyon Kotası
+                Infocu Komisyon Kotası
                 {cemReached && (
                   <span className="ml-2 text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
                     %20 Aktif
