@@ -241,7 +241,7 @@ function StaffDetailCards({
             cemReached ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-amber-50"
           )}>
             <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Toplam Satış Geliri
+              Tüm Zamanlar Satış Geliri
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
               {Object.entries(totalSalesByCur).map(([cur, v]) => (
