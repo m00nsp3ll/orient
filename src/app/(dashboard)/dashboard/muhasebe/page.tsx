@@ -133,16 +133,12 @@ function StaffDetailCards({
   })
 
   // Tüm prim borç tutarlarını EUR'a çevir ve topla
-  const { totalPrimEur, primByCur } = useMemo(() => {
-    if (!isStaff) return { totalPrimEur: 0, primByCur: {} as Record<string, number> }
+  const { totalPrimEur, primByCur, totalSalesByCur, totalSalesEur } = useMemo(() => {
+    if (!isStaff) return { totalPrimEur: 0, primByCur: {} as Record<string, number>, totalSalesByCur: {} as Record<string, { cash: number; cc: number }>, totalSalesEur: 0 }
     const rates = ratesData?.rates ?? {}
 
-    const byCur: Record<string, number> = {}
-    for (const e of detailData.entries) {
-      if (e.debit > 0) {
-        byCur[e.currency] = (byCur[e.currency] ?? 0) + e.debit
-      }
-    }
+    const primByCur: Record<string, number> = {}
+    const salesByCur: Record<string, { cash: number; cc: number }> = {}
 
     const toEur = (amount: number, cur: string): number => {
       if (cur === "EUR") return amount
@@ -150,18 +146,42 @@ function StaffDetailCards({
         const eurRate = rates["EUR"]?.selling
         return eurRate ? amount / eurRate : 0
       }
-      // USD, GBP → TRY → EUR
       const fromRate = rates[cur]?.selling
       const eurRate = rates["EUR"]?.selling
       if (fromRate && eurRate) return (amount * fromRate) / eurRate
       return 0
     }
 
-    let total = 0
-    for (const [cur, amt] of Object.entries(byCur)) {
-      total += toEur(amt, cur)
+    // Prim = debit kayıtlar (cari hesapta borç = personele olan prim borcu)
+    for (const e of detailData.entries) {
+      if (e.debit > 0) {
+        primByCur[e.currency] = (primByCur[e.currency] ?? 0) + e.debit
+      }
     }
-    return { totalPrimEur: total, primByCur: byCur }
+
+    let totalPrim = 0
+    for (const [cur, amt] of Object.entries(primByCur)) {
+      totalPrim += toEur(amt, cur)
+    }
+
+    // Satış geliri: kasa entry'lerinden staffIncome + creditCard tutarları
+    // entries description'dan parse etmek yerine credit kayıtları kullanalım
+    // credit = gelir (personel adına yapılan satış)
+    for (const e of detailData.entries) {
+      if (e.credit > 0) {
+        const isCC = e.description?.includes("(KK)") || e.description?.includes("KK")
+        if (!salesByCur[e.currency]) salesByCur[e.currency] = { cash: 0, cc: 0 }
+        if (isCC) salesByCur[e.currency].cc += e.credit
+        else salesByCur[e.currency].cash += e.credit
+      }
+    }
+
+    let totalSales = 0
+    for (const [cur, v] of Object.entries(salesByCur)) {
+      totalSales += toEur(v.cash + v.cc, cur)
+    }
+
+    return { totalPrimEur: totalPrim, primByCur, totalSalesByCur: salesByCur, totalSalesEur: totalSales }
   }, [isStaff, detailData.entries, ratesData])
 
   const isCem = isStaff && detailAccount?.label?.toLowerCase().includes("cem")
@@ -206,46 +226,91 @@ function StaffDetailCards({
         )}
       </div>
 
-      {/* Cem'e özel 2000€ kota progress bar */}
+      {/* Cem'e özel toplam satış kutusu + 2000€ kota progress bar */}
       {isCem && (
-        <div className={cn(
-          "rounded-xl border p-4",
-          cemReached
-            ? "border-emerald-300 bg-emerald-50"
-            : "border-amber-200 bg-amber-50"
-        )}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-semibold text-gray-700">
-              İnfocu Komisyon Kotası
-              {cemReached && (
-                <span className="ml-2 text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
-                  %20 Aktif
-                </span>
+        <>
+          {/* Toplam Satış Kutusu */}
+          <div className={cn(
+            "rounded-xl border p-4",
+            cemReached ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-amber-50"
+          )}>
+            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Toplam Satış Geliri
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
+              {Object.entries(totalSalesByCur).map(([cur, v]) => (
+                <div key={cur} className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn("text-[10px] font-semibold text-white px-1.5 py-0.5 rounded-full", CUR_META[cur]?.bg ?? "bg-gray-400")}>
+                      {CUR_META[cur]?.symbol}{cur}
+                    </span>
+                  </div>
+                  {v.cash > 0 && (
+                    <span className="text-sm font-bold text-gray-800">
+                      {fmtAmt(v.cash, cur)}
+                      <span className="text-[10px] text-gray-400 font-normal ml-1">nakit</span>
+                    </span>
+                  )}
+                  {v.cc > 0 && (
+                    <span className="text-sm font-bold text-violet-700">
+                      {fmtAmt(v.cc, cur)}
+                      <span className="text-[10px] text-violet-400 font-normal ml-1">KK</span>
+                    </span>
+                  )}
+                </div>
+              ))}
+              {Object.keys(totalSalesByCur).length === 0 && (
+                <span className="text-sm text-gray-400">Satış yok</span>
               )}
             </div>
-            <div className="text-sm font-bold text-gray-700">
-              €{totalPrimEur.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              <span className="text-xs text-gray-400 font-normal"> / €{CEM_PRIM_QUOTA.toLocaleString("tr-TR")}</span>
+            <div className="border-t border-gray-200 pt-2 flex items-center justify-between">
+              <span className="text-[11px] text-gray-500">Toplam Euro Karşılığı</span>
+              <span className="text-base font-bold text-emerald-700">
+                €{totalSalesEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
-          <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all duration-500",
-                cemReached ? "bg-emerald-500" : "bg-amber-400"
-              )}
-              style={{ width: `${cemPct}%` }}
-            />
+
+          {/* Komisyon Kota Progress Bar */}
+          <div className={cn(
+            "rounded-xl border p-4",
+            cemReached
+              ? "border-emerald-300 bg-emerald-50"
+              : "border-amber-200 bg-amber-50"
+          )}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-semibold text-gray-700">
+                İnfocu Komisyon Kotası
+                {cemReached && (
+                  <span className="ml-2 text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                    %20 Aktif
+                  </span>
+                )}
+              </div>
+              <div className="text-sm font-bold text-gray-700">
+                €{totalPrimEur.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                <span className="text-xs text-gray-400 font-normal"> / €{CEM_PRIM_QUOTA.toLocaleString("tr-TR")}</span>
+              </div>
+            </div>
+            <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  cemReached ? "bg-emerald-500" : "bg-amber-400"
+                )}
+                style={{ width: `${cemPct}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-[11px] text-gray-500">%15 → %20 komisyon</span>
+              <span className={cn("text-[11px] font-semibold", cemReached ? "text-emerald-700" : "text-gray-400")}>
+                {cemReached
+                  ? "Kota doldu — fazla satıştan %20 uygulanıyor"
+                  : `€${(CEM_PRIM_QUOTA - totalPrimEur).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kaldı → %20`}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center justify-between mt-1.5">
-            <span className="text-[11px] text-gray-500">%15 → %20 komisyon</span>
-            <span className={cn("text-[11px] font-semibold", cemReached ? "text-emerald-700" : "text-gray-400")}>
-              {cemReached
-                ? "Kota doldu — fazla satıştan %20 uygulanıyor"
-                : `€${(CEM_PRIM_QUOTA - totalPrimEur).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kaldı → %20`}
-            </span>
-          </div>
-        </div>
+        </>
       )}
     </div>
   )
