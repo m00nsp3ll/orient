@@ -790,27 +790,64 @@ export default function AppointmentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Tarih & Saat Onay Dialogu */}
+      {/* Randevu Düzenle Onay Dialogu */}
       <AlertDialog open={rescheduleConfirm} onOpenChange={setRescheduleConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Randevuyu Güncellemek İstediğinizden Emin Misiniz?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {rescheduleAppointment && rescheduleDate && rescheduleTime && (
-                <span>
-                  <span className="block mb-2">Randevu şu şekilde güncellenecek:</span>
-                  <span className="block bg-gray-50 rounded-lg p-3 space-y-1">
-                    <span className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Eski</span>
-                      <span className="font-medium text-gray-700">{format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy, HH:mm", { locale: tr })}</span>
-                    </span>
-                    <span className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Yeni</span>
-                      <span className="font-semibold text-blue-700">{format(rescheduleDate, "dd MMMM yyyy", { locale: tr })}, {rescheduleTime}</span>
-                    </span>
-                  </span>
-                </span>
-              )}
+            <AlertDialogDescription asChild>
+              <div>
+                {rescheduleAppointment && rescheduleDate && rescheduleTime && (() => {
+                  const oldTime = format(new Date(rescheduleAppointment.startTime), "dd MMMM yyyy, HH:mm", { locale: tr })
+                  const newTime = `${format(rescheduleDate, "dd MMMM yyyy", { locale: tr })}, ${rescheduleTime}`
+                  const timeChanged = oldTime !== newTime
+
+                  const oldAgencyId = rescheduleAppointment.agency?.id ?? "__none__"
+                  const agencyChanged = rescheduleAgencyId !== oldAgencyId
+                  const newAgencyLabel = rescheduleAgencyId === "__none__"
+                    ? "— Acentasız —"
+                    : agencies.find(a => a.id === rescheduleAgencyId)?.companyName || agencies.find(a => a.id === rescheduleAgencyId)?.name || ""
+                  const oldAgencyLabel = rescheduleAppointment.agency
+                    ? (rescheduleAppointment.agency.companyName || rescheduleAppointment.agency.name)
+                    : "— Acentasız —"
+
+                  return (
+                    <div className="space-y-2 mt-1">
+                      <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                        {timeChanged && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide">Tarih / Saat</span>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-500">Eski</span>
+                              <span className="font-medium text-gray-700">{oldTime}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-500">Yeni</span>
+                              <span className="font-semibold text-blue-700">{newTime}</span>
+                            </div>
+                          </div>
+                        )}
+                        {agencyChanged && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-400 uppercase tracking-wide">Acenta</span>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-500">Eski</span>
+                              <span className="font-medium text-gray-700">{oldAgencyLabel}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-500">Yeni</span>
+                              <span className="font-semibold text-blue-700">{newAgencyLabel}</span>
+                            </div>
+                          </div>
+                        )}
+                        {!timeChanged && !agencyChanged && (
+                          <p className="text-sm text-gray-400">Değişiklik yok</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
