@@ -152,16 +152,21 @@ function StaffDetailCards({
       return 0
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10)
+    // Yerel tarih (timezone-safe)
+    const now = new Date()
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+
+    const toLocalDateStr = (dateStr: string) => {
+      const d = new Date(dateStr)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    }
 
     // Prim = debit kayıtlar; ayrıca bugünkü primi ayrı tut
     let todayPrim = 0
     for (const e of detailData.entries) {
       if (e.debit > 0) {
         primByCur[e.currency] = (primByCur[e.currency] ?? 0) + e.debit
-        // Bugünkü kayıt mı?
-        const entryDate = (e.date ?? "").slice(0, 10)
-        if (entryDate === todayStr) {
+        if (toLocalDateStr(e.date) === todayStr) {
           todayPrim += toEur(e.debit, e.currency)
         }
       }
