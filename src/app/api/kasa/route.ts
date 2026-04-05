@@ -116,9 +116,24 @@ export async function GET(req: NextRequest) {
     orderBy: { voucherNo: "asc" },
   })
 
+  // Aynı gün startTime'ı olan restAmount > 0 randevular
+  const restAppointments = await prisma.appointment.findMany({
+    where: {
+      startTime: { gte: targetDate, lt: nextDay },
+      restAmount: { gt: 0 },
+    },
+    include: {
+      agency: { select: { id: true, name: true, companyName: true } },
+      hotel: { select: { id: true, name: true } },
+      staff: { select: { id: true, user: { select: { name: true } } } },
+      service: { select: { id: true, name: true } },
+    },
+    orderBy: { startTime: "asc" },
+  })
+
   const summary = computeSummary(entries.filter(e => e.info !== "MUHASEBE"))
 
-  return NextResponse.json({ entries, summary })
+  return NextResponse.json({ entries, summary, restAppointments })
 }
 
 export async function POST(req: NextRequest) {

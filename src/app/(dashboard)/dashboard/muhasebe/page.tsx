@@ -53,7 +53,7 @@ type CariAccount = {
   agencyCurrency?: string
 }
 type DetailEntry = {
-  id: string; date: string; debit: number; credit: number; currency: string
+  id: string; date: string; createdAt: string | null; debit: number; credit: number; currency: string
   description: string | null; runningBalance: number; transferGroupId: string | null
   cashEntry: { voucherNo: number; date: string } | null
   staff: { name: string } | null
@@ -526,7 +526,7 @@ function AcentaCariDialog({
                           <TableRow key={e.id} className="hover:bg-blue-50/40">
                             <TableCell className="text-xs text-gray-600 whitespace-nowrap">
                               <div>{format(new Date(e.createdAt || e.date), "dd.MM.yyyy")}</div>
-                              <div className="text-[10px] text-gray-400">{format(new Date(e.createdAt || e.date), "HH:mm")}</div>
+                              <div className="text-[10px] text-gray-400">{e.createdAt ? format(new Date(e.createdAt), "HH:mm") : "—"}</div>
                             </TableCell>
                             <TableCell className="text-xs text-gray-700">
                               {e.description || "—"}
@@ -1641,7 +1641,7 @@ export default function MuhasebePage() {
                       <TableRow key={e.id} className={cn("hover:bg-gray-50/60", isSentinel && "opacity-40")}>
                         <TableCell className="text-xs text-gray-600 whitespace-nowrap">
                           <div>{format(entryDate, "dd.MM.yyyy")}</div>
-                          <div className="text-[10px] text-gray-400">{format(entryDate, "HH:mm")}</div>
+                          <div className="text-[10px] text-gray-400">{e.createdAt ? format(new Date(e.createdAt), "HH:mm") : "—"}</div>
                         </TableCell>
                         <TableCell className="text-xs max-w-[200px] truncate">
                           {e.description || "—"}

@@ -56,6 +56,7 @@ export async function GET(
     return {
       id: e.id,
       date: e.date,
+      createdAt: e.createdAt,
       debit: e.debit,
       credit: e.credit,
       currency: cur,

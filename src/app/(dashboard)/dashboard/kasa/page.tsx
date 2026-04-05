@@ -77,6 +77,23 @@ interface Summary {
   commissionExpense: Record<string, number>
 }
 
+interface RestAppointment {
+  id: string
+  customerName: string | null
+  voucherNo: string | null
+  pax: number | null
+  childCount: number | null
+  roomNumber: string | null
+  restAmount: number
+  restCurrency: string
+  startTime: string
+  notes: string | null
+  agency: { id: string; name: string; companyName: string | null } | null
+  hotel: { id: string; name: string } | null
+  staff: { id: string; user: { name: string } } | null
+  service: { id: string; name: string }
+}
+
 interface Agency { id: string; name: string; companyName: string | null }
 interface StaffMember {
   id: string; userId: string; position: string | null
@@ -168,7 +185,7 @@ export default function KasaPage() {
 
   const dateStr = format(selectedDate, "yyyy-MM-dd")
 
-  const { data, isLoading } = useQuery<{ entries: CashEntry[]; summary: Summary }>({
+  const { data, isLoading } = useQuery<{ entries: CashEntry[]; summary: Summary; restAppointments: RestAppointment[] }>({
     queryKey: ["kasa", dateStr],
     queryFn: async () => {
       const res = await fetch(`/api/kasa?date=${dateStr}`)
@@ -266,6 +283,7 @@ export default function KasaPage() {
 
   const entries = data?.entries || []
   const summary = data?.summary
+  const restAppointments = data?.restAppointments || []
 
   // Muhasebe girişlerini kasadan ayır
   const muhasebeEntries = entries.filter(e => e.info === "MUHASEBE")
@@ -456,7 +474,17 @@ export default function KasaPage() {
           return { cur, totalIn, totalCash, totalCC, totalOut }
         }).filter(Boolean) as { cur: typeof CURRENCIES[number]; totalIn: number; totalCash: number; totalCC: number; totalOut: number }[]
 
-        if (cashRows.length === 0 && ccRows.length === 0 && muhasebeRows.length === 0) return null
+        // Rest toplamları — kasa girişlerindeki GELIR_REST kayıtlarından
+        const restByCurrency: Record<string, number> = {}
+        for (const e of kasaEntries) {
+          if (e.incomeSubCategory === "GELIR_REST") {
+            const { amount, currency } = getEntryAmount(e)
+            if (amount > 0) restByCurrency[currency] = (restByCurrency[currency] || 0) + amount
+          }
+        }
+        const restRows = Object.entries(restByCurrency)
+
+        if (cashRows.length === 0 && ccRows.length === 0 && muhasebeRows.length === 0 && restRows.length === 0) return null
 
         return (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -530,9 +558,10 @@ export default function KasaPage() {
               </CardContent>
             </Card>
 
-            {/* Kredi Kartı */}
+            {/* Kredi Kartı + Toplam Rest */}
             <Card className="border shadow-sm">
               <CardContent className="p-5">
+                {/* Kredi Kartı */}
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2.5 w-2.5 rounded-full bg-violet-500" />
                   <h3 className="font-semibold text-gray-700">Kredi Kartı</h3>
@@ -552,6 +581,41 @@ export default function KasaPage() {
                     ))}
                   </div>
                 )}
+
+                {/* Toplam Rest — ayırıcıyla altında */}
+                <div className="border-t border-dashed border-rose-200 mt-4 pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                    <h3 className="font-semibold text-gray-700">Toplam Rest</h3>
+                    {restRows.length > 0 && (
+                      <span className="text-[10px] text-rose-400">({restRows.length} kalem)</span>
+                    )}
+                  </div>
+                  {restRows.length === 0 ? (
+                    <p className="text-sm text-gray-400">Rest işlemi yok</p>
+                  ) : (
+                    <div
+                      className="space-y-2 cursor-pointer"
+                      onClick={() => {
+                        // RestSummaryCard modalını tetiklemek için global event
+                        window.dispatchEvent(new CustomEvent("open-rest-modal"))
+                      }}
+                    >
+                      {restRows.map(([cur, amt]) => {
+                        const c = CURRENCIES.find(x => x.value === cur)
+                        return (
+                          <div key={cur} className="flex items-center justify-between py-1">
+                            <Badge className={cn("text-white text-xs", c?.bg ?? "bg-gray-500")}>{c?.symbol} {cur}</Badge>
+                            <div className="text-xl font-bold text-rose-700">
+                              {c?.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <p className="text-[10px] text-rose-400 text-right">Detay için tıklayın</p>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -819,6 +883,9 @@ export default function KasaPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Rest Summary Modal */}
+      <RestSummaryCard restEntries={kasaEntries.filter(e => e.incomeSubCategory === "GELIR_REST")} />
+
       {/* Print View — artık kullanılmıyor, iframe tabanlı yazdırma kullanılıyor */}
     </div>
   )
@@ -1075,6 +1142,74 @@ function printPrimReport(data: { staffName: string; rate: number; entries: CashE
     setTimeout(() => document.body.removeChild(iframe), 1000)
   }, 300)
 }
+
+// ---- Rest Summary Card (özet kartlar grid'inde kullanılır) ----
+function RestSummaryCard({ restEntries }: { restEntries: CashEntry[] }) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setOpen(true)
+    window.addEventListener("open-rest-modal", handler)
+    return () => window.removeEventListener("open-rest-modal", handler)
+  }, [])
+
+  const byCurrency: Record<string, number> = {}
+  for (const e of restEntries) {
+    const { amount, currency } = getEntryAmount(e)
+    if (amount > 0) byCurrency[currency] = (byCurrency[currency] || 0) + amount
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="w-full !max-w-[620px]">
+        <DialogHeader>
+          <DialogTitle className="text-rose-700">Günlük Rest Listesi</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          {restEntries.map(e => {
+            const { amount, currency } = getEntryAmount(e)
+            const c = CURRENCIES.find(x => x.value === currency)
+            return (
+              <div key={e.id} className="border border-rose-100 rounded-lg p-3 bg-rose-50/30">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-[10px]">#{e.voucherNo}</Badge>
+                      {e.agency && <span className="text-sm font-semibold text-gray-800">{e.agency.companyName || e.agency.name}</span>}
+                      {e.staff && <span className="text-xs text-gray-600">{e.staff.user.name}</span>}
+                      <span className="text-xs text-gray-400">{format(new Date(e.createdAt), "HH:mm")}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                      {e.hotel && <span>{e.hotel.name}{e.roomNumber ? ` · ${e.roomNumber}` : ""}</span>}
+                      {e.serviceName && <span>· {e.serviceName}</span>}
+                      {e.pax && <span>· {e.pax} PAX</span>}
+                    </div>
+                    {e.description && <p className="text-xs text-gray-400 mt-1">{e.description}</p>}
+                  </div>
+                  <div className="text-lg font-bold text-rose-700 shrink-0">
+                    {c?.symbol ?? currency} {amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div className="border-t pt-3 space-y-1">
+          {Object.entries(byCurrency).map(([cur, amt]) => {
+            const c = CURRENCIES.find(x => x.value === cur)
+            return (
+              <div key={cur} className="flex items-center justify-between bg-rose-100 rounded-lg px-4 py-2">
+                <span className="text-sm text-rose-800 font-medium">Toplam Rest ({cur})</span>
+                <span className="text-base font-bold text-rose-900">{c?.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 
 // ---- Prim Table ----
 function PrimTable({ primData }: {
