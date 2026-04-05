@@ -33,7 +33,7 @@ export const DEFAULT_STAFF_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   Operasyon: [
     "dashboard_view", "randevu_view", "operasyon_view", "soforer_view", "istatistik_view",
-    "operasyon_duzenleme",
+    "operasyon_duzenleme", "kasa_view", "kasa_yonetimi",
   ],
   "Müdür": [
     "dashboard_view", "randevu_view", "operasyon_view", "kasa_view",
