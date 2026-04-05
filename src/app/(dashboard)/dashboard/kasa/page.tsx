@@ -1369,7 +1369,8 @@ function buildPayload(item: BasketItem, dateStr: string, voucherNo?: number): Re
   if (item.paymentMethod === "creditCard") {
     payload.creditCardAmount = parseFloat(item.amount)
     payload.creditCardCurrency = "TRY"
-    if (item.incomeType === "staff") payload.staffId = item.staffId
+    if (item.incomeType === "staff" && item.staffId) payload.staffId = item.staffId
+    if (item.incomeType === "agency" && item.agencyId && item.agencyId !== "none") payload.agencyId = item.agencyId
     if (item.incomeType === "reception" && item.subCategory && item.subCategory !== "none") payload.incomeSubCategory = item.subCategory
   } else if (item.incomeType === "agency") {
     payload.agencyId = item.agencyId && item.agencyId !== "none" ? item.agencyId : null
@@ -1649,7 +1650,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
               <Select value={staffId} onValueChange={setStaffId}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Personel seçin" /></SelectTrigger>
                 <SelectContent>
-                  {staffList.filter(s => s.isActive && s.position?.toLowerCase() === "infocu").map(s => (
+                  {staffList.filter(s => s.isActive && s.position?.toLowerCase().includes("nfocu")).map(s => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.user.name}{s.position ? ` (${s.position})` : ""}
                       {s.commissionRate ? ` — %${s.commissionRate} prim` : ""}

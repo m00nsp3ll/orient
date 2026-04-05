@@ -109,6 +109,148 @@ function SortIcon({ dir }: { dir: SortDir }) {
   return <ArrowUpDown className="h-3 w-3 text-gray-400 inline ml-1" />
 }
 
+// ── Personel Prim Özet Kartları ──────────────────────────────────────────────
+const CEM_PRIM_QUOTA = 2000 // EUR
+
+function StaffDetailCards({
+  detailData,
+  detailAccount,
+}: {
+  detailData: DetailData
+  detailAccount: { code: string; label: string; type: string } | null
+}) {
+  const isStaff = detailAccount?.type === "staff"
+
+  // Exchange rates için
+  const { data: ratesData } = useQuery<{ rates: Record<string, { buying: number; selling: number }> }>({
+    queryKey: ["exchange-rates"],
+    queryFn: async () => {
+      const r = await fetch("/api/exchange-rates")
+      return r.ok ? r.json() : { rates: {} }
+    },
+    enabled: isStaff,
+    staleTime: 15 * 60 * 1000,
+  })
+
+  // Tüm prim borç tutarlarını EUR'a çevir ve topla
+  const { totalPrimEur, primByCur } = useMemo(() => {
+    if (!isStaff) return { totalPrimEur: 0, primByCur: {} as Record<string, number> }
+    const rates = ratesData?.rates ?? {}
+
+    const byCur: Record<string, number> = {}
+    for (const e of detailData.entries) {
+      if (e.debit > 0) {
+        byCur[e.currency] = (byCur[e.currency] ?? 0) + e.debit
+      }
+    }
+
+    const toEur = (amount: number, cur: string): number => {
+      if (cur === "EUR") return amount
+      if (cur === "TRY") {
+        const eurRate = rates["EUR"]?.selling
+        return eurRate ? amount / eurRate : 0
+      }
+      // USD, GBP → TRY → EUR
+      const fromRate = rates[cur]?.selling
+      const eurRate = rates["EUR"]?.selling
+      if (fromRate && eurRate) return (amount * fromRate) / eurRate
+      return 0
+    }
+
+    let total = 0
+    for (const [cur, amt] of Object.entries(byCur)) {
+      total += toEur(amt, cur)
+    }
+    return { totalPrimEur: total, primByCur: byCur }
+  }, [isStaff, detailData.entries, ratesData])
+
+  const isCem = isStaff && detailAccount?.label?.toLowerCase().includes("cem")
+  const cemPct = Math.min((totalPrimEur / CEM_PRIM_QUOTA) * 100, 100)
+  const cemReached = totalPrimEur >= CEM_PRIM_QUOTA
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Object.entries(detailData.summary).map(([cur, s]) => (
+          <Card key={cur} className="border-slate-200">
+            <CardContent className="p-3">
+              <div className={cn("inline-flex items-center gap-1 text-[10px] font-semibold text-white px-2 py-0.5 rounded-full mb-2", CUR_META[cur]?.bg ?? "bg-gray-500")}>
+                {CUR_META[cur]?.symbol}{cur}
+              </div>
+              <div className="text-xs text-gray-500">Borç: <span className="font-medium text-red-600">{fmtAmt(s.totalDebit, cur)}</span></div>
+              <div className="text-xs text-gray-500">Alacak: <span className="font-medium text-emerald-600">{fmtAmt(s.totalCredit, cur)}</span></div>
+              <div className={cn("text-sm font-bold mt-1", s.bakiye >= 0 ? "text-emerald-700" : "text-red-600")}>
+                {s.bakiye >= 0 ? "+" : ""}{fmtAmt(s.bakiye, cur)}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {/* Toplam Prim kutusu — sadece personel kartında */}
+        {isStaff && (
+          <Card className={cn("border-l-4", cemReached ? "border-l-emerald-500 bg-emerald-50" : "border-l-amber-400 bg-amber-50")}>
+            <CardContent className="p-3">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Toplam Prim
+              </div>
+              <div className={cn("text-lg font-bold", cemReached ? "text-emerald-700" : "text-amber-700")}>
+                €{totalPrimEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              {Object.keys(primByCur).length > 1 && (
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  {Object.entries(primByCur).map(([cur, amt]) => `${fmtAmt(amt, cur)}`).join(" · ")}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Cem'e özel 2000€ kota progress bar */}
+      {isCem && (
+        <div className={cn(
+          "rounded-xl border p-4",
+          cemReached
+            ? "border-emerald-300 bg-emerald-50"
+            : "border-amber-200 bg-amber-50"
+        )}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold text-gray-700">
+              İnfocu Komisyon Kotası
+              {cemReached && (
+                <span className="ml-2 text-[11px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                  %20 Aktif
+                </span>
+              )}
+            </div>
+            <div className="text-sm font-bold text-gray-700">
+              €{totalPrimEur.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              <span className="text-xs text-gray-400 font-normal"> / €{CEM_PRIM_QUOTA.toLocaleString("tr-TR")}</span>
+            </div>
+          </div>
+          <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                cemReached ? "bg-emerald-500" : "bg-amber-400"
+              )}
+              style={{ width: `${cemPct}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-[11px] text-gray-500">%15 → %20 komisyon</span>
+            <span className={cn("text-[11px] font-semibold", cemReached ? "text-emerald-700" : "text-gray-400")}>
+              {cemReached
+                ? "Kota doldu — fazla satıştan %20 uygulanıyor"
+                : `€${(CEM_PRIM_QUOTA - totalPrimEur).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kaldı → %20`}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── DatePicker mini ───────────────────────────────────────────────────────────
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -1604,22 +1746,7 @@ export default function MuhasebePage() {
             </div>
           ) : detailData ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(detailData.summary).map(([cur, s]) => (
-                  <Card key={cur} className="border-slate-200">
-                    <CardContent className="p-3">
-                      <div className={cn("inline-flex items-center gap-1 text-[10px] font-semibold text-white px-2 py-0.5 rounded-full mb-2", CUR_META[cur]?.bg ?? "bg-gray-500")}>
-                        {CUR_META[cur]?.symbol}{cur}
-                      </div>
-                      <div className="text-xs text-gray-500">Borç: <span className="font-medium text-red-600">{fmtAmt(s.totalDebit, cur)}</span></div>
-                      <div className="text-xs text-gray-500">Alacak: <span className="font-medium text-emerald-600">{fmtAmt(s.totalCredit, cur)}</span></div>
-                      <div className={cn("text-sm font-bold mt-1", s.bakiye >= 0 ? "text-emerald-700" : "text-red-600")}>
-                        {s.bakiye >= 0 ? "+" : ""}{fmtAmt(s.bakiye, cur)}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <StaffDetailCards detailData={detailData} detailAccount={detailAccount} />
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
