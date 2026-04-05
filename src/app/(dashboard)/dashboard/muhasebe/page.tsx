@@ -133,8 +133,8 @@ function StaffDetailCards({
   })
 
   // Tüm prim borç tutarlarını EUR'a çevir ve topla
-  const { totalPrimEur, primByCur, totalSalesByCur, totalSalesEur } = useMemo(() => {
-    if (!isStaff) return { totalPrimEur: 0, primByCur: {} as Record<string, number>, totalSalesByCur: {} as Record<string, { cash: number; cc: number }>, totalSalesEur: 0 }
+  const { totalPrimEur, primByCur, totalSalesByCur, totalSalesEur, todayPrimEur } = useMemo(() => {
+    if (!isStaff) return { totalPrimEur: 0, primByCur: {} as Record<string, number>, totalSalesByCur: {} as Record<string, { cash: number; cc: number }>, totalSalesEur: 0, todayPrimEur: 0 }
     const rates = ratesData?.rates ?? {}
 
     const primByCur: Record<string, number> = {}
@@ -152,10 +152,18 @@ function StaffDetailCards({
       return 0
     }
 
-    // Prim = debit kayıtlar (cari hesapta borç = personele olan prim borcu)
+    const todayStr = new Date().toISOString().slice(0, 10)
+
+    // Prim = debit kayıtlar; ayrıca bugünkü primi ayrı tut
+    let todayPrim = 0
     for (const e of detailData.entries) {
       if (e.debit > 0) {
         primByCur[e.currency] = (primByCur[e.currency] ?? 0) + e.debit
+        // Bugünkü kayıt mı?
+        const entryDate = (e.date ?? "").slice(0, 10)
+        if (entryDate === todayStr) {
+          todayPrim += toEur(e.debit, e.currency)
+        }
       }
     }
 
@@ -164,7 +172,7 @@ function StaffDetailCards({
       totalPrim += toEur(amt, cur)
     }
 
-    // Satış geliri: prim description'ından orijinal satış tutarını parse et
+    // Satış geliri (tüm zamanlar): prim description'ından orijinal satış tutarını parse et
     // Format: "Prim: %15 (kota altı) × 1.200 TRY (Cem)" veya "Prim (KK): %15 × 7.100 TRY (Cem)"
     for (const e of detailData.entries) {
       if (e.debit > 0 && e.description) {
@@ -187,12 +195,13 @@ function StaffDetailCards({
       totalSales += toEur(v.cash + v.cc, cur)
     }
 
-    return { totalPrimEur: totalPrim, primByCur, totalSalesByCur: salesByCur, totalSalesEur: totalSales }
+    return { totalPrimEur: totalPrim, primByCur, totalSalesByCur: salesByCur, totalSalesEur: totalSales, todayPrimEur: todayPrim }
   }, [isStaff, detailData.entries, ratesData])
 
   const isCem = isStaff && detailAccount?.label?.toLowerCase().includes("cem")
-  const cemPct = Math.min((totalPrimEur / CEM_PRIM_QUOTA) * 100, 100)
-  const cemReached = totalPrimEur >= CEM_PRIM_QUOTA
+  // Kota günlük: sadece bugünkü prim 2000€'yu geçince %20 aktif
+  const cemPct = Math.min((todayPrimEur / CEM_PRIM_QUOTA) * 100, 100)
+  const cemReached = todayPrimEur >= CEM_PRIM_QUOTA
 
   return (
     <div className="space-y-3">
@@ -241,7 +250,7 @@ function StaffDetailCards({
             cemReached ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-amber-50"
           )}>
             <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Tüm Zamanlar Satış Geliri
+              Yaptığı Toplam Satış
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
               {Object.entries(totalSalesByCur).map(([cur, v]) => (
@@ -294,7 +303,7 @@ function StaffDetailCards({
                 )}
               </div>
               <div className="text-sm font-bold text-gray-700">
-                €{totalPrimEur.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                €{todayPrimEur.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 <span className="text-xs text-gray-400 font-normal"> / €{CEM_PRIM_QUOTA.toLocaleString("tr-TR")}</span>
               </div>
             </div>
@@ -308,11 +317,11 @@ function StaffDetailCards({
               />
             </div>
             <div className="flex items-center justify-between mt-1.5">
-              <span className="text-[11px] text-gray-500">%15 → %20 komisyon</span>
+              <span className="text-[11px] text-gray-500">%15 → %20 komisyon (günlük)</span>
               <span className={cn("text-[11px] font-semibold", cemReached ? "text-emerald-700" : "text-gray-400")}>
                 {cemReached
-                  ? "Kota doldu — fazla satıştan %20 uygulanıyor"
-                  : `€${(CEM_PRIM_QUOTA - totalPrimEur).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kaldı → %20`}
+                  ? "Bugün kota doldu — fazla satıştan %20 uygulanıyor"
+                  : `€${(CEM_PRIM_QUOTA - todayPrimEur).toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kaldı → %20`}
               </span>
             </div>
           </div>
