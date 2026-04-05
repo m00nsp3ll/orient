@@ -119,7 +119,7 @@ function StaffDetailCards({
   detailData: DetailData
   detailAccount: { code: string; label: string; type: string } | null
 }) {
-  const isStaff = detailAccount?.type === "staff"
+  const isStaff = detailAccount?.type === "staff" || detailAccount?.code?.startsWith("CARI_PERSONEL_")
 
   // Exchange rates için
   const { data: ratesData } = useQuery<{ rates: Record<string, { buying: number; selling: number }> }>({

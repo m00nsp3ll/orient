@@ -1650,7 +1650,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
               <Select value={staffId} onValueChange={setStaffId}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Personel seçin" /></SelectTrigger>
                 <SelectContent>
-                  {staffList.filter(s => s.isActive && s.position?.toLowerCase().includes("nfocu")).map(s => (
+                  {staffList.filter(s => s.isActive && s.commissionRate).map(s => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.user.name}{s.position ? ` (${s.position})` : ""}
                       {s.commissionRate ? ` — %${s.commissionRate} prim` : ""}
