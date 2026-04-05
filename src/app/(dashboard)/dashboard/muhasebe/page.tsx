@@ -164,15 +164,21 @@ function StaffDetailCards({
       totalPrim += toEur(amt, cur)
     }
 
-    // Satış geliri: kasa entry'lerinden staffIncome + creditCard tutarları
-    // entries description'dan parse etmek yerine credit kayıtları kullanalım
-    // credit = gelir (personel adına yapılan satış)
+    // Satış geliri: prim description'ından orijinal satış tutarını parse et
+    // Format: "Prim: %15 (kota altı) × 1.200 TRY (Cem)" veya "Prim (KK): %15 × 7.100 TRY (Cem)"
     for (const e of detailData.entries) {
-      if (e.credit > 0) {
-        const isCC = e.description?.includes("(KK)") || e.description?.includes("KK")
-        if (!salesByCur[e.currency]) salesByCur[e.currency] = { cash: 0, cc: 0 }
-        if (isCC) salesByCur[e.currency].cc += e.credit
-        else salesByCur[e.currency].cash += e.credit
+      if (e.debit > 0 && e.description) {
+        const isCC = e.description.includes("(KK)")
+        const match = e.description.match(/×\s*([\d.,]+)\s+([A-Z]{3})/)
+        if (match) {
+          const saleAmt = parseFloat(match[1].replace(/\./g, "").replace(",", "."))
+          const saleCur = match[2]
+          if (!isNaN(saleAmt) && saleAmt > 0) {
+            if (!salesByCur[saleCur]) salesByCur[saleCur] = { cash: 0, cc: 0 }
+            if (isCC) salesByCur[saleCur].cc += saleAmt
+            else salesByCur[saleCur].cash += saleAmt
+          }
+        }
       }
     }
 
