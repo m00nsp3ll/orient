@@ -1489,6 +1489,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   }
 
   const handleSubmit = async () => {
+    if (submitting) return
     // Edit modunda sepet yok, direkt kaydet
     if (isEditing) {
       if (!validateRow()) return
