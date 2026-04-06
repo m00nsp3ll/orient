@@ -66,7 +66,6 @@ export async function PUT(req: NextRequest) {
     // Sadece cashEntryId'si olmayan (manuel) kayıtlar düzenlenebilir
     const existing = await prisma.accountingEntry.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 })
-    if (existing.cashEntryId) return NextResponse.json({ error: "Kasa kaynaklı hareket düzenlenemez" }, { status: 400 })
 
     const [y, m, d] = (rest.date as string).split("-").map(Number)
     const date = new Date(y, m - 1, d, 12, 0, 0, 0)
@@ -102,7 +101,6 @@ export async function DELETE(req: NextRequest) {
 
   const existing = await prisma.accountingEntry.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 })
-  if (existing.cashEntryId) return NextResponse.json({ error: "Kasa kaynaklı hareket silinemez" }, { status: 400 })
 
   await prisma.accountingEntry.delete({ where: { id } })
   return NextResponse.json({ success: true })

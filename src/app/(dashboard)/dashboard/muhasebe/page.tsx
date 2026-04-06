@@ -1041,6 +1041,21 @@ function GelirGiderDialog({
     queryFn: async () => { const r = await fetch("/api/staff"); return r.ok ? r.json() : [] },
     enabled: open && mode === "income",
   })
+  const { data: customCats } = useQuery<{ code: string; label: string; type: "income" | "expense" }[]>({
+    queryKey: ["muhasebe-custom-cats"],
+    queryFn: async () => { const r = await fetch("/api/muhasebe/kategori"); return r.ok ? r.json() : [] },
+    enabled: open,
+  })
+
+  const allExpenseCategories = [
+    ...EXPENSE_CATEGORIES,
+    ...(customCats ?? []).filter(c => c.type === "expense").map(c => ({ code: c.code, label: c.label })),
+  ]
+  const allIncomeSubCategories = [
+    ...INCOME_SUB_CATEGORIES,
+    ...(customCats ?? []).filter(c => c.type === "income").map(c => ({ code: c.code, label: c.label })),
+  ]
+  void allExpenseCategories; void allIncomeSubCategories
 
   const selectedStaff = staffList?.find(s => s.id === staffId)
   const commissionRate = selectedStaff?.commissionRate ?? 0
@@ -1113,7 +1128,7 @@ function GelirGiderDialog({
               <Label className="text-xs font-medium text-gray-600">Alt Kategori *</Label>
               <Select value={incomeSubCat} onValueChange={setIncomeSubCat}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Kategori seçin" /></SelectTrigger>
-                <SelectContent>{INCOME_SUB_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{INCOME_SUB_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}{(customCats ?? []).filter(c => c.type === "income").map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}
@@ -1153,7 +1168,7 @@ function GelirGiderDialog({
                 <Label className="text-xs font-medium text-gray-600">Alt Kategori *</Label>
                 <Select value={incomeSubCat} onValueChange={setIncomeSubCat}>
                   <SelectTrigger className="h-9"><SelectValue placeholder="Kategori seçin" /></SelectTrigger>
-                  <SelectContent>{INCOME_SUB_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{INCOME_SUB_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}{(customCats ?? []).filter(c => c.type === "income").map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -1181,7 +1196,7 @@ function GelirGiderDialog({
               <Label className="text-xs font-medium text-gray-600">Kategori *</Label>
               <Select value={expenseCategory} onValueChange={setExpenseCategory}>
                 <SelectTrigger className="h-9"><SelectValue placeholder="Kategori seçin" /></SelectTrigger>
-                <SelectContent>{EXPENSE_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{EXPENSE_CATEGORIES.map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}{(customCats ?? []).filter(c => c.type === "expense").map(c => <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}
@@ -1250,6 +1265,7 @@ export default function MuhasebePage() {
   // Silme onay modalları
   const [deleteEntryId,   setDeleteEntryId]   = useState<string | null>(null)
   const [deleteVirmanId,  setDeleteVirmanId]  = useState<string | null>(null)
+  const [deleteCariCode,  setDeleteCariCode]  = useState<string | null>(null)
   const [deleting,        setDeleting]        = useState(false)
 
   // Acenta cari detay
@@ -1393,6 +1409,20 @@ export default function MuhasebePage() {
       queryClient.invalidateQueries({ queryKey: ["muhasebe-virman"] })
     } catch (error: any) { toast.error(error.message) }
     finally { setDeleting(false); setDeleteVirmanId(null) }
+  }
+
+  const handleDeleteCari = async () => {
+    if (!deleteCariCode) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/muhasebe/kategori?code=${encodeURIComponent(deleteCariCode)}`, { method: "DELETE" })
+      if (!res.ok) throw new Error((await res.json()).error)
+      toast.success("Kategori silindi")
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-cari"] })
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-ozet"] })
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-custom-cats"] })
+    } catch (error: any) { toast.error(error.message) }
+    finally { setDeleting(false); setDeleteCariCode(null) }
   }
 
   const isStaticCategory = (code: string) =>
@@ -1745,6 +1775,16 @@ export default function MuhasebePage() {
                             <PenLine className="h-4 w-4" />
                           </button>
                         )}
+                        {/* Silme ikonu: sadece özel (custom) kategorilerde */}
+                        {(acc as any).isCustom && (
+                          <button
+                            className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-600 transition-colors shrink-0 mt-0.5"
+                            title="Kategoriyi Sil"
+                            onClick={e => { e.stopPropagation(); setDeleteCariCode(acc.accountCode) }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                         {/* Acenta ikonu */}
                         {isAgency && (
                           <div className="p-1 text-blue-300 shrink-0 mt-0.5">
@@ -1918,15 +1958,17 @@ export default function MuhasebePage() {
                           {(e as any).createdByName ?? "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {!isSentinel && isManuel && (
+                          {!isSentinel && (
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                className="p-1 rounded hover:bg-blue-50 text-gray-300 hover:text-blue-600 transition-colors"
-                                title="Düzenle"
-                                onClick={() => { setEditEntry(e); setManuelDialog(true) }}
-                              >
-                                <PenLine className="h-3.5 w-3.5" />
-                              </button>
+                              {isManuel && (
+                                <button
+                                  className="p-1 rounded hover:bg-blue-50 text-gray-300 hover:text-blue-600 transition-colors"
+                                  title="Düzenle"
+                                  onClick={() => { setEditEntry(e); setManuelDialog(true) }}
+                                >
+                                  <PenLine className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-600 transition-colors"
                                 title="Sil"
@@ -1935,15 +1977,6 @@ export default function MuhasebePage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
-                          )}
-                          {!isSentinel && !isManuel && (e.cashEntry || e.transferGroupId) && (
-                            <button
-                              className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-600 transition-colors"
-                              title="Sil"
-                              onClick={() => setDeleteEntryId(e.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
                           )}
                         </TableCell>
                       </TableRow>
@@ -2038,6 +2071,24 @@ export default function MuhasebePage() {
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" className="h-9" onClick={() => setDeleteVirmanId(null)} disabled={deleting}>İptal</Button>
             <Button size="sm" className="h-9 bg-red-600 hover:bg-red-700" onClick={handleDeleteVirman} disabled={deleting}>
+              {deleting ? "Siliniyor..." : "Evet, Sil"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cari Kategori Silme Onay Modalı */}
+      <Dialog open={!!deleteCariCode} onOpenChange={v => { if (!v) setDeleteCariCode(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Kategoriyi Sil
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">Bu kategoriyi silmek istediğinize emin misiniz? Kategoriye ait muhasebe kayıtları silinmez, sadece kategori listeden kaldırılır.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setDeleteCariCode(null)} disabled={deleting}>İptal</Button>
+            <Button size="sm" className="h-9 bg-red-600 hover:bg-red-700" onClick={handleDeleteCari} disabled={deleting}>
               {deleting ? "Siliniyor..." : "Evet, Sil"}
             </Button>
           </div>
