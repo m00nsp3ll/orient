@@ -58,6 +58,28 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(result)
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {
+    return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  if (session.user.role === "STAFF") {
+    const hasPerm = await checkPermission(session.user.role, session.user.id, "muhasebe_view")
+    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
+  }
+
+  const transferGroupId = req.nextUrl.searchParams.get("transferGroupId")
+  if (!transferGroupId) return NextResponse.json({ error: "transferGroupId gerekli" }, { status: 400 })
+
+  try {
+    await prisma.accountingEntry.deleteMany({ where: { transferGroupId } })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Virman delete error:", error)
+    return NextResponse.json({ error: "Silme işlemi başarısız" }, { status: 500 })
+  }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || !["ADMIN", "STAFF"].includes(session.user.role)) {

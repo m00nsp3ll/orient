@@ -1247,6 +1247,11 @@ export default function MuhasebePage() {
 
   const [kategoriDialog, setKategoriDialog] = useState(false)
 
+  // Silme onay modalları
+  const [deleteEntryId,   setDeleteEntryId]   = useState<string | null>(null)
+  const [deleteVirmanId,  setDeleteVirmanId]  = useState<string | null>(null)
+  const [deleting,        setDeleting]        = useState(false)
+
   // Acenta cari detay
   const [acentaDetay, setAcentaDetay] = useState<{
     agencyId: string; agencyName: string; agencyCurrency: string
@@ -1334,6 +1339,12 @@ export default function MuhasebePage() {
   const allAccountOptions = [
     ...EXPENSE_CATEGORIES.map(c => ({ code: c.code, label: labelOverrides[c.code] ?? c.label })),
     ...INCOME_SUB_CATEGORIES.map(c => ({ code: c.code, label: labelOverrides[c.code] ?? c.label })),
+    // Özel eklenen gelir/gider kategorileri (accounting-constants'ta olmayan)
+    ...accounts.filter(a =>
+      (a.type === "expense" || a.type === "income") &&
+      !EXPENSE_CATEGORIES.some(c => c.code === a.accountCode) &&
+      !INCOME_SUB_CATEGORIES.some(c => c.code === a.accountCode)
+    ).map(a => ({ code: a.accountCode, label: labelOverrides[a.accountCode] ?? a.label })),
     { code: "GELIR_RESEPSIYON",  label: "Resepsiyon Geliri" },
     { code: "GELIR_ACENTA",      label: "Acenta Geliri" },
     { code: "GELIR_PERSONEL",    label: "Personel Geliri" },
@@ -1358,18 +1369,36 @@ export default function MuhasebePage() {
     if (detailAccount) queryClient.invalidateQueries({ queryKey: ["muhasebe-cari-detail", detailAccount.code] })
   }
 
-  const handleDeleteEntry = async (entryId: string) => {
-    if (!confirm("Bu hareketi silmek istediğinize emin misiniz?")) return
+  const handleDeleteEntry = async () => {
+    if (!deleteEntryId) return
+    setDeleting(true)
     try {
-      const res = await fetch(`/api/muhasebe/cari/entry?id=${entryId}`, { method: "DELETE" })
+      const res = await fetch(`/api/muhasebe/cari/entry?id=${deleteEntryId}`, { method: "DELETE" })
       if (!res.ok) throw new Error((await res.json()).error)
       toast.success("Hareket silindi")
       invalidateAll()
     } catch (error: any) { toast.error(error.message) }
+    finally { setDeleting(false); setDeleteEntryId(null) }
+  }
+
+  const handleDeleteVirman = async () => {
+    if (!deleteVirmanId) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/muhasebe/virman?transferGroupId=${deleteVirmanId}`, { method: "DELETE" })
+      if (!res.ok) throw new Error((await res.json()).error)
+      toast.success("Virman silindi")
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-cari"] })
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-ozet"] })
+      queryClient.invalidateQueries({ queryKey: ["muhasebe-virman"] })
+    } catch (error: any) { toast.error(error.message) }
+    finally { setDeleting(false); setDeleteVirmanId(null) }
   }
 
   const isStaticCategory = (code: string) =>
-    EXPENSE_CATEGORIES.some(c => c.code === code) || INCOME_SUB_CATEGORIES.some(c => c.code === code)
+    EXPENSE_CATEGORIES.some(c => c.code === code) ||
+    INCOME_SUB_CATEGORIES.some(c => c.code === code) ||
+    accounts.some(a => a.accountCode === code && (a.type === "expense" || a.type === "income"))
 
   const openLabelDialog = (acc: CariAccount) => {
     setLabelAccount({ code: acc.accountCode, label: labelOverrides[acc.accountCode] ?? acc.label })
@@ -1793,6 +1822,7 @@ export default function MuhasebePage() {
                       <TableHead className="text-xs">Hedef</TableHead>
                       <TableHead className="text-right text-xs">Tutar</TableHead>
                       <TableHead className="text-xs">Açıklama</TableHead>
+                      <TableHead className="text-xs w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1806,6 +1836,15 @@ export default function MuhasebePage() {
                           <span className="text-xs text-gray-400 ml-1">{v.currency}</span>
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">{v.description || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <button
+                            className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-600 transition-colors"
+                            title="Sil"
+                            onClick={() => setDeleteVirmanId(v.transferGroupId)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1840,6 +1879,7 @@ export default function MuhasebePage() {
                     <TableHead className="text-right text-xs">Bakiye</TableHead>
                     <TableHead className="text-xs">Döviz</TableHead>
                     <TableHead className="text-xs">Kullancı</TableHead>
+                    <TableHead className="text-xs w-16"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1876,6 +1916,35 @@ export default function MuhasebePage() {
                         </TableCell>
                         <TableCell className="text-xs text-gray-500 whitespace-nowrap">
                           {(e as any).createdByName ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {!isSentinel && isManuel && (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                className="p-1 rounded hover:bg-blue-50 text-gray-300 hover:text-blue-600 transition-colors"
+                                title="Düzenle"
+                                onClick={() => { setEditEntry(e); setManuelDialog(true) }}
+                              >
+                                <PenLine className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-600 transition-colors"
+                                title="Sil"
+                                onClick={() => setDeleteEntryId(e.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                          {!isSentinel && !isManuel && (e.cashEntry || e.transferGroupId) && (
+                            <button
+                              className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-600 transition-colors"
+                              title="Sil"
+                              onClick={() => setDeleteEntryId(e.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -1938,6 +2007,42 @@ export default function MuhasebePage() {
           }}
         />
       )}
+
+      {/* Hareket Silme Onay Modalı */}
+      <Dialog open={!!deleteEntryId} onOpenChange={v => { if (!v) setDeleteEntryId(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Hareketi Sil
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">Bu hareketi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setDeleteEntryId(null)} disabled={deleting}>İptal</Button>
+            <Button size="sm" className="h-9 bg-red-600 hover:bg-red-700" onClick={handleDeleteEntry} disabled={deleting}>
+              {deleting ? "Siliniyor..." : "Evet, Sil"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Virman Silme Onay Modalı */}
+      <Dialog open={!!deleteVirmanId} onOpenChange={v => { if (!v) setDeleteVirmanId(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Virmani Sil
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">Bu virman işlemini silmek istediğinize emin misiniz? İki taraflı kayıt da silinecektir.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" className="h-9" onClick={() => setDeleteVirmanId(null)} disabled={deleting}>İptal</Button>
+            <Button size="sm" className="h-9 bg-red-600 hover:bg-red-700" onClick={handleDeleteVirman} disabled={deleting}>
+              {deleting ? "Siliniyor..." : "Evet, Sil"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
