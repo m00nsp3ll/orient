@@ -368,6 +368,200 @@ export default function KasaPage() {
     setFormMode(isIncomeEntry(entry) ? "income" : "expense")
   }
 
+
+  const CURS = ["TRY", "EUR", "USD", "GBP"] as const
+  const CUR_SYM: Record<string, string> = { TRY: "₺", EUR: "€", USD: "$", GBP: "£" }
+
+  function KasaTable({ entries, summary, onEdit, onDelete, onPayment, canManageKasa, canKasa }: {
+    entries: CashEntry[]
+    summary: Summary
+    onEdit: (e: CashEntry) => void
+    onDelete: (id: string) => void
+    onPayment: (e: CashEntry) => void
+    canManageKasa: boolean
+    canKasa: boolean
+  }) {
+    const amt = (v: number | null) => v && v > 0 ? v.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ""
+
+    // Toplam satırı için summary değerleri (muhasebe hariç zaten)
+    const totAgency   = (cur: string) => summary.agencyIncome[cur] || 0
+    const totRecep    = (cur: string) => summary.receptionIncome[cur] || 0
+    const totStaff    = (cur: string) => summary.staffIncome[cur] || 0
+    const totCC       = (cur: string) => summary.creditCardIncome[cur] || 0
+    const totCredit   = (cur: string) => summary.credit[cur] || 0
+    const totExpense  = (cur: string) => summary.expense[cur] || 0
+    const netCash     = (cur: string) => (summary.cashIncome[cur] || 0) - (summary.credit[cur] || 0) - (summary.expense[cur] || 0)
+
+    const thBase = "px-1.5 py-1 text-center text-[10px] font-bold border border-gray-300 whitespace-nowrap"
+    const tdBase = "px-1.5 py-1 text-right text-[11px] border border-gray-200 tabular-nums"
+    const tdInfo = "px-1.5 py-1 text-[11px] border border-gray-200"
+
+    return (
+      <div className="overflow-x-auto rounded-lg border border-gray-300 shadow-sm">
+        <table className="w-full border-collapse text-[11px]" style={{ minWidth: 1100 }}>
+          <thead>
+            {/* Grup başlıkları */}
+            <tr>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-7")}>#</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-20")}>TÜR</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-24")}>ACENTA / PERSONEL</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-24")}>OTEL · ODA</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-28")}>HİZMET · PAX</th>
+              <th colSpan={4} className={cn(thBase, "bg-blue-100 text-blue-800")}>GELİR ACENTA</th>
+              <th colSpan={4} className={cn(thBase, "bg-emerald-100 text-emerald-800")}>GELİR RESEPSİYON</th>
+              <th colSpan={4} className={cn(thBase, "bg-amber-100 text-amber-800")}>GELİR PERSONEL</th>
+              <th colSpan={1} className={cn(thBase, "bg-violet-100 text-violet-800")}>KREDİ KARTI</th>
+              <th colSpan={1} className={cn(thBase, "bg-sky-100 text-sky-800")}>KREDİ</th>
+              <th colSpan={4} className={cn(thBase, "bg-red-100 text-red-800")}>GİDER</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-28")}>AÇIKLAMA</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-16")}></th>
+            </tr>
+            <tr>
+              {/* Acenta */}
+              {CURS.map(c => <th key={`ag-${c}`} className={cn(thBase, "bg-blue-50 text-blue-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {/* Resepsiyon */}
+              {CURS.map(c => <th key={`re-${c}`} className={cn(thBase, "bg-emerald-50 text-emerald-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {/* Personel */}
+              {CURS.map(c => <th key={`st-${c}`} className={cn(thBase, "bg-amber-50 text-amber-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {/* KK */}
+              <th className={cn(thBase, "bg-violet-50 text-violet-700 w-16")}>₺</th>
+              {/* Kredi */}
+              <th className={cn(thBase, "bg-sky-50 text-sky-700 w-14")}>₺</th>
+              {/* Gider */}
+              {CURS.map(c => <th key={`ex-${c}`} className={cn(thBase, "bg-red-50 text-red-700 w-14")}>{CUR_SYM[c]}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e, idx) => {
+              const isIncome = isIncomeEntry(e)
+              const isPending = isIncome && e.isPaid === false
+              const rowBg = isPending ? "bg-yellow-50" : idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"
+              return (
+                <tr key={e.id} className={cn(rowBg, "hover:bg-blue-50/30 transition-colors")}>
+                  <td className={cn(tdInfo, "text-gray-400 text-center")}>{e.voucherNo}</td>
+                  <td className={cn(tdInfo, "text-center")}>
+                    <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold", KIND_META[getEntryKind(e)].badgeClass)}>
+                      {KIND_META[getEntryKind(e)].label}
+                    </span>
+                    {isPending && <span className="block text-[9px] text-yellow-600 mt-0.5">⏳ Bekliyor</span>}
+                  </td>
+                  <td className={cn(tdInfo, "text-gray-700 truncate max-w-[90px]")}>
+                    {e.agency ? (e.agency.companyName || e.agency.name) : e.staff ? e.staff.user.name : ""}
+                  </td>
+                  <td className={cn(tdInfo, "text-gray-600 truncate max-w-[90px]")}>
+                    {e.hotel ? `${e.hotel.name}${e.roomNumber ? ` · ${e.roomNumber}` : ""}` : ""}
+                  </td>
+                  <td className={cn(tdInfo, "text-gray-600 truncate max-w-[100px]")}>
+                    {e.serviceName ? `${e.serviceName}${e.pax ? ` · ${e.pax}pax` : ""}` : ""}
+                  </td>
+                  {/* GELİR ACENTA */}
+                  {CURS.map(c => (
+                    <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-50/30 text-blue-700")}>
+                      {e.agencyIncomeCurrency === c ? amt(e.agencyIncomeAmount) : ""}
+                    </td>
+                  ))}
+                  {/* GELİR RESEPSİYON */}
+                  {CURS.map(c => (
+                    <td key={`re-${c}`} className={cn(tdBase, "bg-emerald-50/30 text-emerald-700")}>
+                      {e.receptionIncomeCurrency === c ? amt(e.receptionIncomeAmount) : ""}
+                    </td>
+                  ))}
+                  {/* GELİR PERSONEL */}
+                  {CURS.map(c => (
+                    <td key={`st-${c}`} className={cn(tdBase, "bg-amber-50/30 text-amber-700")}>
+                      {e.staffIncomeCurrency === c ? amt(e.staffIncomeAmount) : ""}
+                    </td>
+                  ))}
+                  {/* KREDİ KARTI */}
+                  <td className={cn(tdBase, "bg-violet-50/30 text-violet-700")}>
+                    {e.creditCardCurrency === "TRY" ? amt(e.creditCardAmount) : ""}
+                  </td>
+                  {/* KREDİ */}
+                  <td className={cn(tdBase, "bg-sky-50/30 text-sky-700")}>
+                    {amt(e.creditAmount)}
+                  </td>
+                  {/* GİDER */}
+                  {CURS.map(c => (
+                    <td key={`ex-${c}`} className={cn(tdBase, "bg-red-50/30 text-red-600")}>
+                      {e.expenseCurrency === c ? amt(e.expenseAmount) : ""}
+                    </td>
+                  ))}
+                  {/* Açıklama */}
+                  <td className={cn(tdInfo, "text-gray-500 truncate max-w-[100px]")}>
+                    {e.description || ""}
+                    {isPending && e.pendingAmount ? (
+                      <span className="block text-[9px] text-yellow-600">Kalan: {CUR_SYM[e.pendingCurrency || "TRY"]}{e.pendingAmount.toLocaleString("tr-TR")}</span>
+                    ) : null}
+                  </td>
+                  {/* İşlemler */}
+                  <td className={cn(tdInfo, "text-center")}>
+                    <div className="flex items-center justify-center gap-0.5">
+                      {isPending && (canManageKasa || canKasa) && (
+                        <button onClick={() => onPayment(e)} className="p-0.5 rounded hover:bg-emerald-100 text-yellow-600 hover:text-emerald-700" title="Ödeme alındı">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {canManageKasa && (
+                        <>
+                          <button onClick={() => onEdit(e)} className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button onClick={() => onDelete(e.id)} className="p-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            {/* Toplam */}
+            <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
+              <td colSpan={5} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-100")}>TOPLAM</td>
+              {CURS.map(c => <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-100 text-blue-800 font-bold")}>{totAgency(c) > 0 ? `${CUR_SYM[c]}${totAgency(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              {CURS.map(c => <td key={`re-${c}`} className={cn(tdBase, "bg-emerald-100 text-emerald-800 font-bold")}>{totRecep(c) > 0 ? `${CUR_SYM[c]}${totRecep(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              {CURS.map(c => <td key={`st-${c}`} className={cn(tdBase, "bg-amber-100 text-amber-800 font-bold")}>{totStaff(c) > 0 ? `${CUR_SYM[c]}${totStaff(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              <td className={cn(tdBase, "bg-violet-100 text-violet-800 font-bold")}>{totCC("TRY") > 0 ? `₺${totCC("TRY").toLocaleString("tr-TR")}` : ""}</td>
+              <td className={cn(tdBase, "bg-sky-100 text-sky-800 font-bold")}>{totCredit("TRY") > 0 ? `₺${totCredit("TRY").toLocaleString("tr-TR")}` : ""}</td>
+              {CURS.map(c => <td key={`ex-${c}`} className={cn(tdBase, "bg-red-100 text-red-700 font-bold")}>{totExpense(c) > 0 ? `${CUR_SYM[c]}${totExpense(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              <td colSpan={2} className={cn(tdInfo, "bg-gray-100")}></td>
+            </tr>
+            {/* Kalan (Net nakit) */}
+            <tr className="bg-gray-200 font-bold">
+              <td colSpan={5} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-200")}>KALAN</td>
+              {/* Acenta toplam (gelir) */}
+              {CURS.map(c => <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-50 text-blue-900 font-bold")}>{totAgency(c) > 0 ? `${CUR_SYM[c]}${totAgency(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              {/* Resepsiyon toplam */}
+              {CURS.map(c => <td key={`re-${c}`} className={cn(tdBase, "bg-emerald-50 text-emerald-900 font-bold")}>{totRecep(c) > 0 ? `${CUR_SYM[c]}${totRecep(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              {/* Personel toplam */}
+              {CURS.map(c => <td key={`st-${c}`} className={cn(tdBase, "bg-amber-50 text-amber-900 font-bold")}>{totStaff(c) > 0 ? `${CUR_SYM[c]}${totStaff(c).toLocaleString("tr-TR")}` : ""}</td>)}
+              {/* KK */}
+              <td className={cn(tdBase, "bg-violet-50 text-violet-900 font-bold")}>{totCC("TRY") > 0 ? `₺${totCC("TRY").toLocaleString("tr-TR")}` : ""}</td>
+              {/* Net nakit (cashIncome - kredi - gider) */}
+              <td colSpan={5} className={cn(tdInfo, "bg-gray-200")}>
+                <div className="flex gap-2 justify-end flex-wrap">
+                  {CURS.map(c => {
+                    const net = netCash(c)
+                    if (net === 0) return null
+                    return (
+                      <span key={c} className={cn("text-xs font-bold", net >= 0 ? "text-emerald-700" : "text-red-600")}>
+                        {net < 0 ? "-" : ""}{CUR_SYM[c]}{Math.abs(net).toLocaleString("tr-TR")}
+                      </span>
+                    )
+                  })}
+                </div>
+              </td>
+              <td colSpan={2} className={cn(tdInfo, "bg-gray-200")}></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )
+  }
+
   function EntryCard({ entry }: { entry: CashEntry }) {
     const kind = getEntryKind(entry)
     const meta = KIND_META[kind]
@@ -780,60 +974,99 @@ export default function KasaPage() {
       ) : entries.length === 0 ? (
         <div className="text-center py-12 text-gray-500">Bu tarihte kasa girişi yok</div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Nakit Gelirler */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-emerald-500" />
-              <h2 className="font-semibold text-emerald-800">Nakit Gelirler ({cashIncomeEntries.length})</h2>
-            </div>
-            {cashIncomeEntries.length === 0 ? (
-              <p className="text-sm text-gray-400 py-4 text-center">Nakit gelir girişi yok</p>
-            ) : (
-              cashIncomeEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
-            )}
+        <>
+          {/* Desktop: Excel tablo görünümü */}
+          <div className="hidden lg:block">
+            <KasaTable
+              entries={kasaEntries}
+              summary={summary!}
+              onEdit={handleEdit}
+              onDelete={(id) => setDeletingId(id)}
+              onPayment={(entry) => setPaymentConfirmEntry(entry)}
+              canManageKasa={canManageKasa}
+              canKasa={canKasa}
+            />
           </div>
 
-          {/* Kredi Kartı Gelirleri */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-violet-500" />
-              <h2 className="font-semibold text-violet-800">Kredi Kartı ({creditCardEntries.length})</h2>
-              <span className="text-xs text-gray-400">(nakit dışı)</span>
+          {/* Mobil: Kart görünümü */}
+          <div className="lg:hidden grid grid-cols-1 gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-emerald-500" />
+                <h2 className="font-semibold text-emerald-800">Nakit Gelirler ({cashIncomeEntries.length})</h2>
+              </div>
+              {cashIncomeEntries.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">Nakit gelir girişi yok</p>
+              ) : (
+                cashIncomeEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
+              )}
             </div>
-            {creditCardEntries.length === 0 ? (
-              <p className="text-sm text-gray-400 py-4 text-center">Kredi kartı girişi yok</p>
-            ) : (
-              creditCardEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
-            )}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-violet-500" />
+                <h2 className="font-semibold text-violet-800">Kredi Kartı ({creditCardEntries.length})</h2>
+              </div>
+              {creditCardEntries.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">Kredi kartı girişi yok</p>
+              ) : (
+                creditCardEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-red-500" />
+                <h2 className="font-semibold text-red-800">Giderler ({expenseEntries.length})</h2>
+              </div>
+              {expenseEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)}
+              {expenseEntries.length === 0 && (
+                <p className="text-sm text-gray-400 py-4 text-center">Gider girişi yok</p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-blue-500" />
+                <h2 className="font-semibold text-blue-800">Muhasebe ({muhasebeEntries.length})</h2>
+                <span className="text-xs text-gray-400">(kasaya dahil değil)</span>
+              </div>
+              {muhasebeEntries.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">Muhasebe girişi yok</p>
+              ) : (
+                muhasebeEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
+              )}
+            </div>
           </div>
 
-          {/* Giderler */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-red-500" />
-              <h2 className="font-semibold text-red-800">Giderler ({expenseEntries.length})</h2>
+          {/* Muhasebe girişleri — desktop'ta tablo altında ayrı */}
+          {muhasebeEntries.length > 0 && (
+            <div className="hidden lg:block space-y-2 mt-2">
+              <div className="flex items-center gap-2">
+                <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                <h2 className="font-semibold text-blue-800 text-sm">Muhasebe ({muhasebeEntries.length})</h2>
+                <span className="text-xs text-gray-400">(kasaya dahil değil)</span>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-blue-100">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {muhasebeEntries.map(entry => {
+                      const { amount, currency } = getEntryAmount(entry)
+                      const isIncome = isIncomeEntry(entry)
+                      return (
+                        <tr key={entry.id} className="border-b border-blue-50 hover:bg-blue-50/30">
+                          <td className="px-2 py-1.5 text-gray-400 w-8">#{entry.voucherNo}</td>
+                          <td className="px-2 py-1.5 text-gray-600">{entry.agency?.companyName || entry.agency?.name || entry.description || "—"}</td>
+                          <td className={cn("px-2 py-1.5 font-semibold text-right", isIncome ? "text-blue-700" : "text-red-600")}>
+                            {getCurrencySymbol(currency)}{amount.toLocaleString("tr-TR")}
+                          </td>
+                          <td className="px-2 py-1.5 text-gray-400 text-right">{currency}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            {expenseEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)}
-            {expenseEntries.length === 0 && (
-              <p className="text-sm text-gray-400 py-4 text-center">Gider girişi yok</p>
-            )}
-          </div>
-
-          {/* Muhasebe Girişleri */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-blue-500" />
-              <h2 className="font-semibold text-blue-800">Muhasebe ({muhasebeEntries.length})</h2>
-              <span className="text-xs text-gray-400">(kasaya dahil değil)</span>
-            </div>
-            {muhasebeEntries.length === 0 ? (
-              <p className="text-sm text-gray-400 py-4 text-center">Muhasebe girişi yok</p>
-            ) : (
-              muhasebeEntries.map(entry => <EntryCard key={entry.id} entry={entry} />)
-            )}
-          </div>
-        </div>
+          )}
+        </>
       )}
 
 
