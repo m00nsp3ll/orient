@@ -1253,6 +1253,12 @@ export default function MuhasebePage() {
   const [manuelDialog,  setManuelDialog]  = useState(false)
   const [editEntry,     setEditEntry]     = useState<DetailEntry | null>(null)
 
+  const [detailPreset,      setDetailPreset]      = useState<"today" | "week" | "month" | "all" | "custom">("all")
+  const [detailCustomStart, setDetailCustomStart] = useState(format(new Date(), "yyyy-MM-dd"))
+  const [detailCustomEnd,   setDetailCustomEnd]   = useState(format(new Date(), "yyyy-MM-dd"))
+  const [detailStartOpen,   setDetailStartOpen]   = useState(false)
+  const [detailEndOpen,     setDetailEndOpen]     = useState(false)
+
   const [gelirDialog, setGelirDialog] = useState(false)
   const [giderDialog, setGiderDialog] = useState(false)
 
@@ -1293,10 +1299,13 @@ export default function MuhasebePage() {
     },
   })
 
+  const { startStr: detailStartStr, endStr: detailEndStr } = localDateRange(detailPreset, detailCustomStart, detailCustomEnd)
+
   const { data: detailData, isLoading: detailLoading } = useQuery<DetailData>({
-    queryKey: ["muhasebe-cari-detail", detailAccount?.code],
+    queryKey: ["muhasebe-cari-detail", detailAccount?.code, detailStartStr, detailEndStr],
     queryFn: async () => {
-      const res = await fetch(`/api/muhasebe/cari/${encodeURIComponent(detailAccount!.code)}`)
+      const params = new URLSearchParams({ startDate: detailStartStr, endDate: detailEndStr })
+      const res = await fetch(`/api/muhasebe/cari/${encodeURIComponent(detailAccount!.code)}?${params}`)
       if (!res.ok) throw new Error("Failed")
       return res.json()
     },
@@ -1899,7 +1908,70 @@ export default function MuhasebePage() {
       <Dialog open={!!detailAccount && !manuelDialog} onOpenChange={v => { if (!v) { setDetailAccount(null); setEditEntry(null) } }}>
         <DialogContent className="w-full !max-w-[960px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">{detailAccount?.label}</DialogTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pr-8">
+              <DialogTitle className="text-base font-bold">{detailAccount?.label}</DialogTitle>
+              {/* Tarih Filtresi */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {(["today", "week", "month", "all"] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setDetailPreset(p)}
+                    className={cn(
+                      "px-2 py-1 rounded text-xs font-medium border transition-colors",
+                      detailPreset === p
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                    )}
+                  >
+                    {p === "today" ? "Bugün" : p === "week" ? "Bu Hafta" : p === "month" ? "Bu Ay" : "Tümü"}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setDetailPreset("custom")}
+                  className={cn(
+                    "px-2 py-1 rounded text-xs font-medium border transition-colors",
+                    detailPreset === "custom"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  )}
+                >
+                  Özel
+                </button>
+                {detailPreset === "custom" && (
+                  <div className="flex items-center gap-1">
+                    <Popover open={detailStartOpen} onOpenChange={setDetailStartOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="px-2 py-1 rounded text-xs border border-gray-200 bg-white hover:bg-gray-50 flex items-center gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {detailCustomStart}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" locale={tr}
+                          selected={new Date(detailCustomStart)}
+                          onSelect={d => { if (d) { setDetailCustomStart(format(d, "yyyy-MM-dd")); setDetailStartOpen(false) } }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <span className="text-xs text-gray-400">—</span>
+                    <Popover open={detailEndOpen} onOpenChange={setDetailEndOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="px-2 py-1 rounded text-xs border border-gray-200 bg-white hover:bg-gray-50 flex items-center gap-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          {detailCustomEnd}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" locale={tr}
+                          selected={new Date(detailCustomEnd)}
+                          onSelect={d => { if (d) { setDetailCustomEnd(format(d, "yyyy-MM-dd")); setDetailEndOpen(false) } }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+              </div>
+            </div>
           </DialogHeader>
           {detailLoading ? (
             <div className="flex items-center justify-center py-12 gap-3 text-gray-400">
