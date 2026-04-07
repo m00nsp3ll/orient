@@ -407,6 +407,9 @@ model CashEntry {
   info              String?
   expenseCategory   String?
   incomeSubCategory String?
+  pendingAmount     Float?
+  pendingCurrency   String?
+  isPaid            Boolean  @default(true)
   createdBy   String
   createdByUser User?    @relation("CashEntryCreatedBy", fields: [createdBy], references: [id])
   createdAt   DateTime @default(now())

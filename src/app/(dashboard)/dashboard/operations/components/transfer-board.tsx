@@ -81,6 +81,8 @@ interface TransferBoardProps {
   onDriverChange?: (transferId: string, driverId: string | null) => void
   onStartDropoff?: (transferId: string) => void
   onCancelAppointment?: (appointmentId: string) => void
+  showCompletedModal?: boolean
+  onCompletedModalChange?: (open: boolean) => void
 }
 
 const columns = [
@@ -140,6 +142,8 @@ export function TransferBoard({
   onDriverChange,
   onStartDropoff,
   onCancelAppointment,
+  showCompletedModal: showCompletedModalProp,
+  onCompletedModalChange,
 }: TransferBoardProps) {
   const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = useState("PENDING")
@@ -149,7 +153,9 @@ export function TransferBoard({
   })
   const [routeModalOpen, setRouteModalOpen] = useState(false)
   const [routeMode, setRouteMode] = useState<"pickup" | "dropoff">("pickup")
-  const [showCompletedModal, setShowCompletedModal] = useState(false)
+
+  const showCompletedModal = showCompletedModalProp ?? false
+  const setShowCompletedModal = onCompletedModalChange ?? (() => {})
 
   const getTransfersByStatus = (status: string) => {
     const filtered = transfers.filter((t) => t.status === status)
@@ -384,18 +390,6 @@ export function TransferBoard({
 
   return (
     <div className="space-y-4">
-      {/* Tamamlananlar Butonu */}
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          onClick={() => setShowCompletedModal(true)}
-          className="gap-2"
-        >
-          <Badge variant="secondary">{completedTransfers.length}</Badge>
-          Tamamlananlar
-        </Button>
-      </div>
-
       {/* Mobil: Tab Sistemi */}
       {isMobile ? (
         <div>

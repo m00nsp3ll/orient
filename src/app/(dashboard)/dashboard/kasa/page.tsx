@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
-import { Plus, Minus, CalendarIcon, Pencil, Trash2, HandCoins, Printer } from "lucide-react"
+import { Plus, Minus, CalendarIcon, Pencil, Trash2, HandCoins, Printer, CheckCircle, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -58,6 +58,9 @@ interface CashEntry {
   info: string | null
   expenseCategory: string | null
   incomeSubCategory: string | null
+  pendingAmount: number | null
+  pendingCurrency: string | null
+  isPaid: boolean
   createdAt: string
   agency: { id: string; name: string; companyName: string | null } | null
   hotel: { id: string; name: string } | null
@@ -170,6 +173,7 @@ export default function KasaPage() {
   const { has } = usePermissions()
   const { data: session } = useSession()
   const canManageKasa = has("kasa_yonetimi")
+  const canKasa = has("kasa_view")
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [formMode, setFormMode] = useState<"income" | "expense" | null>(null)
@@ -178,10 +182,8 @@ export default function KasaPage() {
   const [kasaTeslimOpen, setKasaTeslimOpen] = useState(false)
   const [kasaTeslimConfirm, setKasaTeslimConfirm] = useState(false)
   const [kasaTeslimAmounts, setKasaTeslimAmounts] = useState<Record<string, string>>({})
-  const [printData, setPrintData] = useState<{
-    dateLabel: string; printedAt: string; userName: string
-    entries: CashEntry[]; summary: Summary
-  } | null>(null)
+  const [kasaTeslimInfo, setKasaTeslimInfo] = useState<{ items: { currency: string; amount: number }[]; userName: string; time: string } | null>(null)
+  const [paymentConfirmEntry, setPaymentConfirmEntry] = useState<CashEntry | null>(null)
 
   const dateStr = format(selectedDate, "yyyy-MM-dd")
 
@@ -255,9 +257,14 @@ export default function KasaPage() {
       }))
       return results
     },
-    onSuccess: () => {
+    onSuccess: (_, items) => {
       queryClient.invalidateQueries({ queryKey: ["kasa", dateStr] })
       toast.success("Kasa teslimi gerçekleştirildi")
+      setKasaTeslimInfo({
+        items,
+        userName: session?.user?.name || "—",
+        time: format(new Date(), "HH:mm"),
+      })
       setKasaTeslimOpen(false)
       setKasaTeslimConfirm(false)
       setKasaTeslimAmounts({})
@@ -279,6 +286,41 @@ export default function KasaPage() {
       setDeletingId(null)
     },
     onError: () => toast.error("Silinemedi"),
+  })
+
+  const paymentMutation = useMutation({
+    mutationFn: async (entry: CashEntry) => {
+      const { amount: currentAmount, currency } = getEntryAmount(entry)
+      const fullAmount = currentAmount + (entry.pendingAmount || 0)
+      const updatePayload: Record<string, unknown> = {
+        isPaid: true,
+        pendingAmount: null,
+        pendingCurrency: null,
+      }
+      if (entry.agencyIncomeAmount) {
+        updatePayload.agencyIncomeAmount = fullAmount
+        updatePayload.agencyIncomeCurrency = currency
+      } else if (entry.staffIncomeAmount) {
+        updatePayload.staffIncomeAmount = fullAmount
+        updatePayload.staffIncomeCurrency = currency
+      } else {
+        updatePayload.receptionIncomeAmount = fullAmount
+        updatePayload.receptionIncomeCurrency = currency
+      }
+      const res = await fetch(`/api/kasa/${entry.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatePayload),
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Güncellenemedi") }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["kasa", dateStr] })
+      toast.success("Ödeme alındı, kayıt güncellendi")
+      setPaymentConfirmEntry(null)
+    },
+    onError: (err: Error) => toast.error(err.message),
   })
 
   const entries = data?.entries || []
@@ -331,14 +373,31 @@ export default function KasaPage() {
     const meta = KIND_META[kind]
     const { amount, currency } = getEntryAmount(entry)
     const isIncome = isIncomeEntry(entry)
+    const isPending = isIncome && entry.isPaid === false
+    const hasPaid = isIncome && entry.isPaid === true && entry.pendingAmount
+
+    const cardBorderClass = isPending ? "border-l-yellow-400" : meta.borderClass
+
     return (
-      <Card className={cn("border-l-4", meta.borderClass)}>
-        <CardContent className="p-3">
+      <Card className={cn("border-l-4", cardBorderClass)}>
+        <CardContent className={cn("p-3", isPending && "bg-yellow-50/40")}>
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <Badge variant="outline" className="text-[10px] shrink-0">#{entry.voucherNo}</Badge>
                 <Badge className={cn("text-[10px] shrink-0", meta.badgeClass)}>{meta.label}</Badge>
+                {isPending && (
+                  <Badge className="text-[10px] shrink-0 bg-yellow-100 text-yellow-800 border border-yellow-300">
+                    <Clock className="h-2.5 w-2.5 mr-1" />
+                    Bekleyen Ödeme
+                  </Badge>
+                )}
+                {hasPaid && (
+                  <Badge className="text-[10px] shrink-0 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle className="h-2.5 w-2.5 mr-1" />
+                    Ödendi
+                  </Badge>
+                )}
                 {entry.agency && <span className="text-xs text-gray-600 truncate">{entry.agency.companyName || entry.agency.name}</span>}
                 {entry.staff && <span className="text-xs text-gray-600 truncate">{entry.staff.user.name}</span>}
                 {entry.expenseCategory && (
@@ -355,7 +414,11 @@ export default function KasaPage() {
               {entry.hotel && <p className="text-xs text-gray-500">{entry.hotel.name}{entry.roomNumber ? ` • Oda ${entry.roomNumber}` : ""}</p>}
               {entry.serviceName && <p className="text-xs text-gray-500">{entry.serviceName}{entry.pax ? ` • ${entry.pax} PAX` : ""}</p>}
               {entry.description && <p className="text-xs text-gray-600 mt-1">{entry.description}</p>}
-              {entry.info && <p className="text-xs text-gray-400">{entry.info}</p>}
+              {isPending && entry.pendingAmount && entry.pendingCurrency && (
+                <p className="text-xs text-yellow-700 font-medium mt-1">
+                  Kalan: {getCurrencySymbol(entry.pendingCurrency)} {entry.pendingAmount.toLocaleString("tr-TR")}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-2">
               <div className="flex flex-col items-end gap-1">
@@ -368,6 +431,17 @@ export default function KasaPage() {
                 </span>
               </div>
               <div className="flex gap-0.5">
+                {isPending && (canManageKasa || canKasa) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-yellow-600 hover:text-emerald-600 hover:bg-emerald-50"
+                    onClick={() => setPaymentConfirmEntry(entry)}
+                    title="Ödeme alındı"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                  </Button>
+                )}
                 {canManageKasa && (
                 <>
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEdit(entry)}>
@@ -413,7 +487,7 @@ export default function KasaPage() {
             <Button className="bg-red-500 hover:bg-red-600 flex-1 md:flex-none" onClick={() => { setEditingEntry(null); setFormMode("expense") }}>
               <Minus className="h-4 w-4 mr-2" /> Gider Ekle
             </Button>
-            {canManageKasa && (
+            {(canManageKasa || canKasa) && (
               <Button
                 className="bg-amber-600 hover:bg-amber-700 flex-1 md:flex-none"
                 onClick={() => {
@@ -552,6 +626,26 @@ export default function KasaPage() {
                           {grandEur < 0 ? "-" : ""}€ {Math.abs(grandEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
+                      {(() => {
+                        // RESTSİZ: rest tutarlarını EUR'a çevir ve grandEur'dan çıkar
+                        let restEur = 0
+                        for (const [cur, amt] of restRows) {
+                          if (cur === "EUR") { restEur += amt }
+                          else {
+                            const c = convertCurrency(amt, cur, "EUR", exchangeRates.rates)
+                            if (c !== null) restEur += c
+                          }
+                        }
+                        const restlessEur = grandEur - restEur
+                        return (
+                          <div className="flex items-center justify-between pt-2 border-t border-dashed border-gray-300 mt-1">
+                            <span className="text-[11px] font-semibold text-gray-500">Restsiz Genel Toplam</span>
+                            <span className={cn("text-base font-bold", restlessEur >= 0 ? "text-gray-700" : "text-red-600")}>
+                              {restlessEur < 0 ? "-" : ""}€ {Math.abs(restlessEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </div>
                   )
                 })()}
@@ -654,8 +748,31 @@ export default function KasaPage() {
         )
       })()}
 
-      {/* Personel Prim Tablosu */}
-      {primData.length > 0 && <PrimTable primData={primData} />}
+      {/* Kasa Teslim Bilgi Kutusu */}
+      {kasaTeslimInfo && (
+        <div className="border border-emerald-300 rounded-xl bg-emerald-50 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-3 w-3 rounded-full bg-emerald-500 shrink-0" />
+            <div>
+              <p className="font-semibold text-emerald-800 text-sm">Kasa Teslim Edildi</p>
+              <p className="text-xs text-emerald-600">{kasaTeslimInfo.userName} · {kasaTeslimInfo.time}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {kasaTeslimInfo.items.map(({ currency, amount }) => {
+              const c = CURRENCIES.find(x => x.value === currency)
+              return (
+                <span key={currency} className={cn("text-sm font-bold px-3 py-1 rounded-full text-white", c?.bg ?? "bg-gray-500")}>
+                  {c?.symbol} {amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* İnfocu Prim Tablosu */}
+      {primData.length > 0 && <PrimTable primData={primData} exchangeRates={exchangeRates?.rates} />}
 
       {/* Entries */}
       {isLoading ? (
@@ -878,6 +995,53 @@ export default function KasaPage() {
             <AlertDialogCancel>İptal</AlertDialogCancel>
             <AlertDialogAction className="bg-red-500 hover:bg-red-600" onClick={() => deletingId && deleteMutation.mutate(deletingId)}>
               Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Ödeme Onay Dialogu */}
+      <AlertDialog open={!!paymentConfirmEntry} onOpenChange={(v) => { if (!v) setPaymentConfirmEntry(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ödeme Alındı mı?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {paymentConfirmEntry && (() => {
+                  const { amount: paid, currency } = getEntryAmount(paymentConfirmEntry)
+                  const pending = paymentConfirmEntry.pendingAmount || 0
+                  const full = paid + pending
+                  const sym = getCurrencySymbol(currency)
+                  return (
+                    <div className="space-y-3 mt-1">
+                      <p>Kalan tutar tahsil edildiğinde kayıt <strong>{sym} {full.toLocaleString("tr-TR")}</strong> olarak güncellenecektir.</p>
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Alınan:</span>
+                          <span className="font-semibold text-emerald-700">{sym} {paid.toLocaleString("tr-TR")}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Kalan:</span>
+                          <span className="font-semibold text-yellow-700">{sym} {pending.toLocaleString("tr-TR")}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-yellow-300 pt-1 mt-1">
+                          <span className="text-gray-700 font-medium">Toplam:</span>
+                          <span className="font-bold text-gray-900">{sym} {full.toLocaleString("tr-TR")}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => paymentConfirmEntry && paymentMutation.mutate(paymentConfirmEntry)}
+            >
+              {paymentMutation.isPending ? "İşleniyor..." : "Evet, Ödeme Alındı"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1211,9 +1375,32 @@ function RestSummaryCard({ restEntries }: { restEntries: CashEntry[] }) {
 }
 
 
+// ---- Prim Euro Cell ----
+function PrimEuroCell({ row, exchangeRates }: {
+  row: { rate: number; byCurrency: [string, { cash: number; cc: number }][] }
+  exchangeRates: ExchangeRates | undefined
+}) {
+  if (!exchangeRates) return <span className="text-xs text-gray-400">—</span>
+  let totalEur = 0
+  for (const [cur, { cash, cc }] of row.byCurrency) {
+    const prim = (cash + cc) * row.rate / 100
+    if (cur === "EUR") { totalEur += prim }
+    else {
+      const converted = convertCurrency(prim, cur, "EUR", exchangeRates)
+      if (converted !== null) totalEur += converted
+    }
+  }
+  return (
+    <span className="font-bold text-blue-700 text-sm">
+      € {totalEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    </span>
+  )
+}
+
 // ---- Prim Table ----
-function PrimTable({ primData }: {
+function PrimTable({ primData, exchangeRates }: {
   primData: { staff: StaffMember; rate: number; byCurrency: [string, { cash: number; cc: number }][]; entries: CashEntry[] }[]
+  exchangeRates: ExchangeRates | undefined
 }) {
   const [detailStaff, setDetailStaff] = useState<typeof primData[number] | null>(null)
 
@@ -1222,18 +1409,19 @@ function PrimTable({ primData }: {
       <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-b">
           <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-          <h3 className="font-semibold text-amber-800 text-sm">Personel Prim Özeti</h3>
-          <span className="text-[10px] text-amber-600">(detay için personele tıklayın)</span>
+          <h3 className="font-semibold text-amber-800 text-sm">İnfocu Prim Özeti</h3>
+          <span className="text-[10px] text-amber-600">(detay için infocuya tıklayın)</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-gray-50">
-                <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Personel</th>
+                <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">İnfocu</th>
                 <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Pozisyon</th>
                 <th className="text-center px-4 py-2 text-xs font-medium text-gray-500">Prim %</th>
                 <th className="text-right px-4 py-2 text-xs font-medium text-gray-500">Toplam Gelir</th>
                 <th className="text-right px-4 py-2 text-xs font-medium text-amber-700">Prim Tutarı</th>
+                <th className="text-right px-4 py-2 text-xs font-medium text-blue-600">Toplam € Karşılığı</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -1260,6 +1448,9 @@ function PrimTable({ primData }: {
                       const prim = (cash + cc) * row.rate / 100
                       return <div key={cur}>{c?.symbol}{prim.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                     })}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <PrimEuroCell row={row} exchangeRates={exchangeRates} />
                   </td>
                 </tr>
               ))}
@@ -1358,31 +1549,42 @@ interface BasketItem {
   currency: string
   description: string
   subCategory: string
+  slipNo: string
+  hasPending: boolean
+  pendingAmount: string
 }
 
 function buildPayload(item: BasketItem, dateStr: string, voucherNo?: number): Record<string, unknown> {
+  const isPending = item.hasPending && item.paymentMethod === "cash" && parseFloat(item.pendingAmount) > 0
+  const parsedAmount = parseFloat(item.amount) || 0
   const payload: Record<string, unknown> = {
     date: dateStr,
     description: item.description || null,
     ...(voucherNo ? { voucherNo } : {}),
+    ...(isPending ? {
+      isPaid: false,
+      pendingAmount: parseFloat(item.pendingAmount),
+      pendingCurrency: item.currency,
+    } : {}),
   }
   if (item.paymentMethod === "creditCard") {
-    payload.creditCardAmount = parseFloat(item.amount)
+    payload.creditCardAmount = parsedAmount
     payload.creditCardCurrency = "TRY"
+    if (item.slipNo) payload.slipNo = item.slipNo
     if (item.incomeType === "staff" && item.staffId) payload.staffId = item.staffId
     if (item.incomeType === "agency" && item.agencyId && item.agencyId !== "none") payload.agencyId = item.agencyId
     if (item.incomeType === "reception" && item.subCategory && item.subCategory !== "none") payload.incomeSubCategory = item.subCategory
   } else if (item.incomeType === "agency") {
     payload.agencyId = item.agencyId && item.agencyId !== "none" ? item.agencyId : null
-    payload.agencyIncomeAmount = parseFloat(item.amount)
+    payload.agencyIncomeAmount = parsedAmount
     payload.agencyIncomeCurrency = item.currency
   } else if (item.incomeType === "staff") {
     payload.staffId = item.staffId
-    payload.staffIncomeAmount = parseFloat(item.amount)
+    payload.staffIncomeAmount = parsedAmount
     payload.staffIncomeCurrency = item.currency
     if (item.subCategory) payload.incomeSubCategory = item.subCategory
   } else {
-    payload.receptionIncomeAmount = parseFloat(item.amount)
+    payload.receptionIncomeAmount = parsedAmount
     payload.receptionIncomeCurrency = item.currency
     if (item.subCategory && item.subCategory !== "none") payload.incomeSubCategory = item.subCategory
   }
@@ -1419,11 +1621,15 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   const [currency, setCurrency] = useState("EUR")
   const [description, setDescription] = useState("")
   const [subCategory, setSubCategory] = useState("")
+  const [slipNo, setSlipNo] = useState("")
+  const [hasPending, setHasPending] = useState(false)
+  const [pendingAmount, setPendingAmount] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   const resetRow = () => {
     setIncomeType("reception"); setPaymentMethod("cash")
-    setAgencyId(""); setStaffId(""); setAmount(""); setCurrency("EUR"); setDescription(""); setSubCategory("")
+    setAgencyId(""); setStaffId(""); setAmount(""); setCurrency("EUR"); setDescription(""); setSubCategory(""); setSlipNo("")
+    setHasPending(false); setPendingAmount("")
   }
 
   useEffect(() => {
@@ -1448,6 +1654,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
           setAmount(editingEntry.creditCardAmount?.toString() || "")
           setCurrency("TRY")
           setSubCategory(editingEntry.incomeSubCategory || "")
+          setSlipNo((editingEntry as any).slipNo || "")
         } else {
           setIncomeType("reception"); setPaymentMethod("cash")
           setAgencyId(""); setStaffId("")
@@ -1471,9 +1678,14 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   }, [paymentMethod])
 
   const validateRow = (): boolean => {
-    if (!amount || parseFloat(amount) <= 0) { toast.error("Miktar giriniz"); return false }
+    const isPartialWithZero = hasPending && paymentMethod === "cash" && (!amount || parseFloat(amount) === 0)
+    if (!isPartialWithZero && (!amount || parseFloat(amount) <= 0)) { toast.error("Miktar giriniz"); return false }
     if (incomeType === "staff" && !staffId) { toast.error("Personel seçiniz"); return false }
     if (incomeType === "staff" && !subCategory) { toast.error("Alt kategori seçiniz"); return false }
+    if (paymentMethod === "creditCard" && !slipNo.trim()) { toast.error("Slip No giriniz"); return false }
+    if (hasPending && paymentMethod === "cash") {
+      if (!pendingAmount || parseFloat(pendingAmount) <= 0) { toast.error("Kalan tutar giriniz"); return false }
+    }
     return true
   }
 
@@ -1481,11 +1693,13 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     if (!validateRow()) return
     const item: BasketItem = {
       id: crypto.randomUUID(),
-      incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory,
+      incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory, slipNo,
+      hasPending, pendingAmount,
     }
     setBasket(prev => [...prev, item])
     // Satırı sıfırla ama tipi koru
-    setAmount(""); setDescription(""); setSubCategory("")
+    setAmount(""); setDescription(""); setSlipNo("")
+    setHasPending(false); setPendingAmount("")
   }
 
   const handleSubmit = async () => {
@@ -1495,7 +1709,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
       if (!validateRow()) return
       setSubmitting(true)
       try {
-        const payload = buildPayload({ id: "", incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory }, dateStr)
+        const payload = buildPayload({ id: "", incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory, slipNo, hasPending, pendingAmount }, dateStr)
         const res = await fetch(`/api/kasa/${editingEntry!.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
         })
@@ -1514,7 +1728,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     const currentFilled = amount && parseFloat(amount) > 0
     const allItems: BasketItem[] = [
       ...basket,
-      ...(currentFilled ? [{ id: "current", incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory }] : [])
+      ...(currentFilled ? [{ id: "current", incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory, slipNo, hasPending, pendingAmount }] : [])
     ]
     if (allItems.length === 0) { toast.error("En az bir kalem giriniz"); return }
     if (currentFilled && !validateRow()) return
@@ -1662,21 +1876,46 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             </div>
           )}
 
-          {/* Alt kategori */}
+          {/* Alt kategori + Slip No (KK için) */}
           {(incomeType === "reception" || incomeType === "staff") && (
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-gray-600">Alt Kategori{incomeType === "staff" ? " *" : ""}</Label>
-              <Select value={subCategory || undefined} onValueChange={(v) => setSubCategory(v)}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Seçiniz" /></SelectTrigger>
-                <SelectContent>
-                  {incomeType === "reception" && (
-                    <SelectItem value="none">Genel Resepsiyon Geliri</SelectItem>
-                  )}
-                  {INCOME_SUB_CATEGORIES.map(c => (
-                    <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs font-medium text-gray-600">Alt Kategori{incomeType === "staff" ? " *" : ""}</Label>
+                <Select value={subCategory || undefined} onValueChange={(v) => setSubCategory(v)}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Seçiniz" /></SelectTrigger>
+                  <SelectContent>
+                    {incomeType === "reception" && (
+                      <SelectItem value="none">Genel Resepsiyon Geliri</SelectItem>
+                    )}
+                    {INCOME_SUB_CATEGORIES.map(c => (
+                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {paymentMethod === "creditCard" && (
+                <div className="w-36 space-y-2">
+                  <Label className="text-xs font-medium text-violet-700">Slip No *</Label>
+                  <Input
+                    placeholder="Slip no..."
+                    value={slipNo}
+                    onChange={(e) => setSlipNo(e.target.value)}
+                    className="h-10 border-violet-300 focus-visible:ring-violet-400"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {/* Slip No — agency veya staff + creditCard (alt kategori gösterilmiyorsa) */}
+          {incomeType === "agency" && paymentMethod === "creditCard" && (
+            <div className="w-full space-y-2">
+              <Label className="text-xs font-medium text-violet-700">Slip No *</Label>
+              <Input
+                placeholder="Slip no..."
+                value={slipNo}
+                onChange={(e) => setSlipNo(e.target.value)}
+                className="h-10 border-violet-300 focus-visible:ring-violet-400"
+              />
             </div>
           )}
 
@@ -1696,6 +1935,41 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
               )}
             </div>
           </div>
+
+          {/* Kısmi Ödeme — sadece nakit */}
+          {paymentMethod === "cash" && !isEditing && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+                  checked={hasPending}
+                  onChange={(e) => { setHasPending(e.target.checked); if (!e.target.checked) setPendingAmount("") }}
+                />
+                <span className="text-xs font-medium text-yellow-700">Kısmi Ödeme (müşteri kalan tutarı sonra ödeyecek)</span>
+              </label>
+              {hasPending && (
+                <div className="border border-yellow-200 rounded-lg p-3 bg-yellow-50/50 space-y-1.5">
+                  <Label className="text-xs font-semibold text-yellow-700">Kalan Tutar *</Label>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={pendingAmount}
+                      onChange={(e) => setPendingAmount(e.target.value)}
+                      className="flex-1 h-10 border-yellow-300 focus-visible:ring-yellow-400"
+                    />
+                    <div className="h-8 px-2 text-xs font-bold rounded bg-yellow-200 text-yellow-800 flex items-center">
+                      {CURRENCIES.find(c => c.value === currency)?.symbol} {currency}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-yellow-600">
+                    Alınan: {amount || "0"} + Kalan: {pendingAmount || "0"} = Toplam: {((parseFloat(amount) || 0) + (parseFloat(pendingAmount) || 0)).toLocaleString("tr-TR")} {currency}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Açıklama */}
           <div className="space-y-2">

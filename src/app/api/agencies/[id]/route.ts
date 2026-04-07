@@ -6,8 +6,10 @@ import { z } from "zod"
 import bcrypt from "bcryptjs"
 
 const updateAgencySchema = z.object({
-  companyName: z.string().min(2).optional(),
+  name: z.string().min(1).optional(),
+  companyName: z.string().optional(),
   address: z.string().optional(),
+  phone: z.string().optional(),
   isActive: z.boolean().optional(),
   currency: z.enum(["EUR", "USD", "GBP", "TRY"]).optional(),
   password: z.string().min(6, "Şifre en az 6 karakter olmalıdır").optional(),
@@ -79,8 +81,10 @@ export async function PATCH(
 
     // Agency alanlarını güncelle (varsa)
     const agencyUpdateData: Record<string, unknown> = {}
+    if (agencyData.name !== undefined) agencyUpdateData.name = agencyData.name
     if (agencyData.companyName !== undefined) agencyUpdateData.companyName = agencyData.companyName
     if (agencyData.address !== undefined) agencyUpdateData.address = agencyData.address
+    if (agencyData.phone !== undefined) agencyUpdateData.phone = agencyData.phone
     if (agencyData.isActive !== undefined) agencyUpdateData.isActive = agencyData.isActive
     if (agencyData.currency !== undefined) agencyUpdateData.currency = agencyData.currency
     if (password) agencyUpdateData.plainPassword = password

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { TransferBoard } from "./components/transfer-board"
 import { ActiveDriversBar } from "./components/active-drivers-bar"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import {
   Popover,
@@ -81,6 +82,7 @@ export default function OperationsPage() {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [loading, setLoading] = useState(true)
+  const [showCompletedModal, setShowCompletedModal] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -266,6 +268,23 @@ export default function OperationsPage() {
             Günlük transfer takibi ve şoför yönetimi
           </p>
         </div>
+
+        {/* Orta: Tamamlananlar */}
+        <div className="flex flex-1 justify-center">
+          {!loading && transfers.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCompletedModal(true)}
+              className="gap-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800"
+            >
+              <Badge className="bg-emerald-500 text-white">
+                {transfers.filter(t => t.status === "COMPLETED").length}
+              </Badge>
+              Tamamlananlar
+            </Button>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
@@ -325,6 +344,8 @@ export default function OperationsPage() {
           onDriverChange={canEditOps ? handleDriverChange : undefined}
           onStartDropoff={canEditOps ? handleStartDropoff : undefined}
           onCancelAppointment={canEditOps ? handleCancelAppointment : undefined}
+          showCompletedModal={showCompletedModal}
+          onCompletedModalChange={setShowCompletedModal}
         />
       )}
     </div>

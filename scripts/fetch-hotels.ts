@@ -31,7 +31,7 @@ const input = {
                 [31.70, 36.46],  // Batı-Güney (Çenger)
                 [32.13, 36.46],  // Doğu-Güney (Kargıcak)
                 [32.13, 36.66],  // Doğu-Kuzey
-                [31.70, 36.66],  // Batı-Kuzey
+                [31.70, 36.66],  // Batı-Kuzeya2
                 [31.70, 36.46]   // Kapatma (ilk nokta ile aynı)
             ]
         ]

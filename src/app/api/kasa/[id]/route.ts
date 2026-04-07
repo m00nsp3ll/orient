@@ -29,6 +29,9 @@ const updateSchema = z.object({
   creditCardCurrency: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   info: z.string().optional().nullable(),
+  pendingAmount: z.number().optional().nullable(),
+  pendingCurrency: z.string().optional().nullable(),
+  isPaid: z.boolean().optional(),
 })
 
 export async function PUT(
@@ -85,6 +88,9 @@ export async function PUT(
           creditCardCurrency: data.creditCardCurrency ?? undefined,
           description: data.description ?? undefined,
           info: data.info ?? undefined,
+          pendingAmount: data.pendingAmount ?? undefined,
+          pendingCurrency: data.pendingCurrency ?? undefined,
+          isPaid: data.isPaid ?? undefined,
         },
         include: {
           agency: { select: { id: true, name: true, companyName: true } },

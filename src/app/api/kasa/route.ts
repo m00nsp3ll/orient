@@ -31,6 +31,9 @@ const cashEntrySchema = z.object({
   creditCardCurrency: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   info: z.string().optional().nullable(),
+  pendingAmount: z.number().optional().nullable(),
+  pendingCurrency: z.string().optional().nullable(),
+  isPaid: z.boolean().optional(),
 })
 
 function computeSummary(entries: any[]) {
@@ -196,6 +199,9 @@ export async function POST(req: NextRequest) {
           creditCardCurrency: data.creditCardCurrency || null,
           description: data.description || null,
           info: data.info || null,
+          pendingAmount: data.pendingAmount || null,
+          pendingCurrency: data.pendingCurrency || null,
+          isPaid: data.isPaid ?? true,
           createdBy: session.user.id,
         },
         include: {

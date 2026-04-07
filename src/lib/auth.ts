@@ -18,16 +18,19 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Kullanıcı adı ve şifre gerekli")
         }
 
-        // Kullanıcı adı (username), görünen ad (name) veya email ile ara
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { username: credentials.username },
-              { name: credentials.username },
-              { email: credentials.username },
-            ],
-          },
-        })
+        // Önce username ile kesin eşleşme dene (en yüksek öncelik)
+        // Bulamazsan name veya email ile ara
+        const user =
+          (await prisma.user.findUnique({ where: { username: credentials.username } })) ??
+          (await prisma.user.findFirst({
+            where: {
+              OR: [
+                { name: credentials.username },
+                { email: credentials.username },
+              ],
+            },
+            orderBy: { createdAt: "asc" }, // en eski kaydı al (tutarlılık için)
+          }))
 
         if (!user) {
           throw new Error("Kullanıcı bulunamadı")

@@ -75,6 +75,9 @@ export default function AgenciesPage() {
   const [showForm, setShowForm] = useState(false)
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingAgency, setEditingAgency] = useState<Agency | null>(null)
+  const [editFormData, setEditFormData] = useState({ name: "", companyName: "", phone: "", address: "" })
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteAgencyTarget, setDeleteAgencyTarget] = useState<Agency | null>(null)
@@ -265,6 +268,36 @@ export default function AgenciesPage() {
     setShowSettingsModal(true)
   }
 
+  const handleOpenEditModal = (agency: Agency) => {
+    setEditingAgency(agency)
+    setEditFormData({
+      name: agency.name || "",
+      companyName: agency.companyName || "",
+      phone: agency.phone || agency.user?.phone || "",
+      address: agency.address || "",
+    })
+    setShowEditModal(true)
+  }
+
+  const updateAgencyInfo = useMutation({
+    mutationFn: async ({ agencyId, data }: { agencyId: string; data: typeof editFormData }) => {
+      const res = await fetch(`/api/agencies/${agencyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Güncellenemedi") }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agencies"] })
+      toast.success("Acenta bilgileri güncellendi")
+      setShowEditModal(false)
+      setEditingAgency(null)
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const handleSaveSettings = () => {
     if (!settingsAgency) return
     if (!settingsPassword) {
@@ -439,6 +472,9 @@ export default function AgenciesPage() {
                       </Button>
                       {canManage && (
                       <>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditModal(agency)}>
+                        <Pencil className="h-4 w-4 text-blue-500" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenSettingsModal(agency)}>
                         <KeyRound className="h-4 w-4" />
                       </Button>
@@ -496,6 +532,14 @@ export default function AgenciesPage() {
                         </Button>
                         {canManage && (
                         <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Düzenle"
+                          onClick={() => handleOpenEditModal(agency)}
+                        >
+                          <Pencil className="h-4 w-4 text-blue-500" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -871,6 +915,42 @@ export default function AgenciesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Acenta Düzenle Modal */}
+      <Dialog open={showEditModal} onOpenChange={(v) => { if (!v) { setShowEditModal(false); setEditingAgency(null) } }}>
+        <DialogContent className="w-full !max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Acenta Düzenle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Acenta Adı (Yetkili) *</Label>
+              <Input value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} placeholder="Acenta adı" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Şirket Adı</Label>
+              <Input value={editFormData.companyName} onChange={(e) => setEditFormData({ ...editFormData, companyName: e.target.value })} placeholder="Şirket adı" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Telefon</Label>
+              <Input value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Telefon" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Adres</Label>
+              <Input value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Adres" />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setShowEditModal(false); setEditingAgency(null) }}>İptal</Button>
+              <Button
+                disabled={updateAgencyInfo.isPending || !editFormData.name.trim()}
+                onClick={() => editingAgency && updateAgencyInfo.mutate({ agencyId: editingAgency.id, data: editFormData })}
+              >
+                {updateAgencyInfo.isPending ? "Kaydediliyor..." : "Kaydet"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Acenta Silme Onay */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
