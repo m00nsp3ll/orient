@@ -1253,7 +1253,7 @@ export default function MuhasebePage() {
   const [manuelDialog,  setManuelDialog]  = useState(false)
   const [editEntry,     setEditEntry]     = useState<DetailEntry | null>(null)
 
-  const [detailPreset,      setDetailPreset]      = useState<"today" | "week" | "month" | "all" | "custom">("all")
+  const [detailPreset,      setDetailPreset]      = useState<"today" | "week" | "month" | "all" | "custom">("today")
   const [detailCustomStart, setDetailCustomStart] = useState(format(new Date(), "yyyy-MM-dd"))
   const [detailCustomEnd,   setDetailCustomEnd]   = useState(format(new Date(), "yyyy-MM-dd"))
   const [detailStartOpen,   setDetailStartOpen]   = useState(false)
