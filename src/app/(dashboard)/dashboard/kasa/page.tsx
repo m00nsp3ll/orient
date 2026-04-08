@@ -61,6 +61,7 @@ interface CashEntry {
   pendingAmount: number | null
   pendingCurrency: string | null
   isPaid: boolean
+  slipNo: string | null
   createdAt: string
   agency: { id: string; name: string; companyName: string | null } | null
   hotel: { id: string; name: string } | null
@@ -393,42 +394,42 @@ export default function KasaPage() {
     const totExpense  = (cur: string) => summary.expense[cur] || 0
     const netCash     = (cur: string) => (summary.cashIncome[cur] || 0) - (summary.credit[cur] || 0) - (summary.expense[cur] || 0)
 
-    const thBase = "px-1.5 py-1 text-center text-[10px] font-bold border border-gray-300 whitespace-nowrap"
-    const tdBase = "px-1.5 py-1 text-right text-[11px] border border-gray-200 tabular-nums"
-    const tdInfo = "px-1.5 py-1 text-[11px] border border-gray-200"
+    const thBase = "px-1 py-1 text-center text-[10px] font-bold border border-gray-300 whitespace-nowrap"
+    const tdBase = "px-1 py-1 text-right text-[11px] border border-gray-200 tabular-nums"
+    const tdInfo = "px-1 py-1 text-[11px] border border-gray-200"
 
     return (
       <>
       <div className="overflow-x-auto rounded-lg border border-gray-300 shadow-sm">
-        <table className="w-full border-collapse text-[11px]" style={{ minWidth: 1100 }}>
+        <table className="w-full border-collapse text-[11px]" style={{ minWidth: 900 }}>
           <thead>
             {/* Grup başlıkları */}
             <tr>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-7")}>#</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-20")}>TÜR</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-24")}>ACENTA / PERSONEL</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-6")}>#</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-18")}>TÜR</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-20")}>ACENTA / PERSONEL</th>
               <th colSpan={4} className={cn(thBase, "bg-blue-100 text-blue-800")}>GELİR ACENTA</th>
               <th colSpan={4} className={cn(thBase, "bg-emerald-100 text-emerald-800")}>GELİR RESEPSİYON</th>
               <th colSpan={4} className={cn(thBase, "bg-amber-100 text-amber-800")}>GELİR PERSONEL</th>
               <th colSpan={1} className={cn(thBase, "bg-violet-100 text-violet-800")}>KREDİ KARTI</th>
               <th colSpan={1} className={cn(thBase, "bg-sky-100 text-sky-800")}>KREDİ</th>
               <th colSpan={4} className={cn(thBase, "bg-red-100 text-red-800")}>GİDER</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-28")}>AÇIKLAMA</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-16")}></th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>AÇIKLAMA</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-12")}></th>
             </tr>
             <tr>
               {/* Acenta */}
-              {CURS.map(c => <th key={`ag-${c}`} className={cn(thBase, "bg-blue-50 text-blue-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`ag-${c}`} className={cn(thBase, "bg-blue-50 text-blue-700 w-12")}>{CUR_SYM[c]}</th>)}
               {/* Resepsiyon */}
-              {CURS.map(c => <th key={`re-${c}`} className={cn(thBase, "bg-emerald-50 text-emerald-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`re-${c}`} className={cn(thBase, "bg-emerald-50 text-emerald-700 w-12")}>{CUR_SYM[c]}</th>)}
               {/* Personel */}
-              {CURS.map(c => <th key={`st-${c}`} className={cn(thBase, "bg-amber-50 text-amber-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`st-${c}`} className={cn(thBase, "bg-amber-50 text-amber-700 w-12")}>{CUR_SYM[c]}</th>)}
               {/* KK */}
-              <th className={cn(thBase, "bg-violet-50 text-violet-700 w-16")}>₺</th>
+              <th className={cn(thBase, "bg-violet-50 text-violet-700 w-14")}>₺</th>
               {/* Kredi */}
-              <th className={cn(thBase, "bg-sky-50 text-sky-700 w-14")}>₺</th>
+              <th className={cn(thBase, "bg-sky-50 text-sky-700 w-12")}>₺</th>
               {/* Gider */}
-              {CURS.map(c => <th key={`ex-${c}`} className={cn(thBase, "bg-red-50 text-red-700 w-14")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`ex-${c}`} className={cn(thBase, "bg-red-50 text-red-700 w-12")}>{CUR_SYM[c]}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -436,6 +437,8 @@ export default function KasaPage() {
               const isIncome = isIncomeEntry(e)
               const isPending = isIncome && e.isPaid === false
               const rowBg = isPending ? "bg-yellow-50" : idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"
+              const { amount, currency } = getEntryAmount(e)
+              const kind = getEntryKind(e)
               return (
                 <tr key={e.id} className={cn(rowBg, "hover:bg-blue-50/30 transition-colors")}>
                   <td className={cn(tdInfo, "text-gray-400 text-center")}>{e.voucherNo}</td>
@@ -443,9 +446,9 @@ export default function KasaPage() {
                     <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold", KIND_META[getEntryKind(e)].badgeClass)}>
                       {KIND_META[getEntryKind(e)].label}
                     </span>
-                    {isPending && <span className="block text-[9px] text-yellow-600 mt-0.5">⏳ Bekliyor</span>}
+                    {isPending && <span className="block text-[9px] text-yellow-600 mt-0.5">⏳</span>}
                   </td>
-                  <td className={cn(tdInfo, "text-gray-700 truncate max-w-[90px]")}>
+                  <td className={cn(tdInfo, "text-gray-700 truncate max-w-[80px]")}>
                     {e.incomeSubCategory === "GELIR_REST" && (
                       <span className="inline-block mr-1 px-1 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-200">REST</span>
                     )}
@@ -483,13 +486,13 @@ export default function KasaPage() {
                       {e.expenseCurrency === c ? amt(e.expenseAmount) : ""}
                     </td>
                   ))}
-                  {/* Açıklama */}
+                  {/* Açıklama — tüm satır bilgisi modalda */}
                   <td
-                    className={cn(tdInfo, "text-gray-500 truncate max-w-[120px] cursor-pointer hover:bg-blue-50/50")}
+                    className={cn(tdInfo, "text-gray-500 truncate cursor-pointer hover:bg-blue-50/50 hover:text-blue-700")}
                     onClick={() => setDescEntry(e)}
-                    title={e.description || ""}
+                    title="Detay için tıklayın"
                   >
-                    {e.description || ""}
+                    {e.description || <span className="text-gray-300 text-[10px]">detay</span>}
                     {isPending && e.pendingAmount ? (
                       <span className="block text-[9px] text-yellow-600">Kalan: {CUR_SYM[e.pendingCurrency || "TRY"]}{e.pendingAmount.toLocaleString("tr-TR")}</span>
                     ) : null}
@@ -561,26 +564,123 @@ export default function KasaPage() {
         </table>
       </div>
 
-      {/* Açıklama Detay Modalı */}
+      {/* İşlem Detay Modalı */}
       <Dialog open={!!descEntry} onOpenChange={(v) => { if (!v) setDescEntry(null) }}>
-        <DialogContent className="w-full !max-w-[420px]">
+        <DialogContent className="w-full !max-w-[460px]">
           <DialogHeader>
-            <DialogTitle className="text-gray-700">Açıklama — #{descEntry?.voucherNo}</DialogTitle>
-          </DialogHeader>
-          {descEntry && (
-            <div className="space-y-3 text-sm">
-              {descEntry.agency && <div><span className="text-xs text-gray-400">Acenta:</span><p className="font-medium">{descEntry.agency.companyName || descEntry.agency.name}</p></div>}
-              {descEntry.staff && <div><span className="text-xs text-gray-400">Personel:</span><p className="font-medium">{descEntry.staff.user.name}</p></div>}
-              {descEntry.hotel && <div><span className="text-xs text-gray-400">Otel · Oda:</span><p className="font-medium">{descEntry.hotel.name}{descEntry.roomNumber ? ` · ${descEntry.roomNumber}` : ""}</p></div>}
-              {descEntry.serviceName && <div><span className="text-xs text-gray-400">Hizmet · PAX:</span><p className="font-medium">{descEntry.serviceName}{descEntry.pax ? ` · ${descEntry.pax} PAX` : ""}</p></div>}
-              {descEntry.description && <div><span className="text-xs text-gray-400">Açıklama:</span><p className="text-gray-700 mt-0.5">{descEntry.description}</p></div>}
-              {descEntry.isPaid === false && descEntry.pendingAmount && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-                  <p className="text-xs text-yellow-700 font-medium">Kalan Ödeme: {CUR_SYM[descEntry.pendingCurrency || "TRY"]} {descEntry.pendingAmount.toLocaleString("tr-TR")}</p>
-                </div>
+            <DialogTitle className="flex items-center gap-2 text-gray-700">
+              <span>#{descEntry?.voucherNo}</span>
+              {descEntry && (
+                <span className={cn("px-2 py-0.5 rounded text-[11px] font-semibold", KIND_META[getEntryKind(descEntry)].badgeClass)}>
+                  {KIND_META[getEntryKind(descEntry)].label}
+                </span>
               )}
-            </div>
-          )}
+            </DialogTitle>
+          </DialogHeader>
+          {descEntry && (() => {
+            const { amount, currency } = getEntryAmount(descEntry)
+            const isIncome = isIncomeEntry(descEntry)
+            const isPending = isIncome && descEntry.isPaid === false
+            return (
+              <div className="space-y-3">
+                {/* Tutar */}
+                <div className={cn("rounded-lg px-4 py-3 flex items-center justify-between", isIncome ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200")}>
+                  <span className="text-xs font-medium text-gray-500">Tutar</span>
+                  <span className={cn("text-xl font-bold", isIncome ? "text-emerald-700" : "text-red-600")}>
+                    {getCurrencySymbol(currency)} {amount.toLocaleString("tr-TR")}
+                  </span>
+                </div>
+
+                {/* Kısmi ödeme */}
+                {isPending && descEntry.pendingAmount && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Alınan:</span>
+                      <span className="font-semibold text-emerald-700">{getCurrencySymbol(currency)} {amount.toLocaleString("tr-TR")}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Kalan:</span>
+                      <span className="font-semibold text-yellow-700">{getCurrencySymbol(descEntry.pendingCurrency || currency)} {descEntry.pendingAmount.toLocaleString("tr-TR")}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t border-yellow-300 pt-1">
+                      <span className="text-gray-600 font-medium">Toplam:</span>
+                      <span className="font-bold">{getCurrencySymbol(currency)} {(amount + descEntry.pendingAmount).toLocaleString("tr-TR")}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {/* Saat */}
+                  <div className="bg-gray-50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-gray-400 mb-0.5">Saat</p>
+                    <p className="font-medium text-gray-700">{format(new Date(descEntry.createdAt), "HH:mm")}</p>
+                  </div>
+                  {/* İşlemi yapan */}
+                  <div className="bg-gray-50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-gray-400 mb-0.5">İşlemi Yapan</p>
+                    <p className="font-medium text-gray-700">{descEntry.createdByUser?.name || "—"}</p>
+                  </div>
+                  {/* Acenta */}
+                  {descEntry.agency && (
+                    <div className="bg-blue-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-blue-400 mb-0.5">Acenta</p>
+                      <p className="font-medium text-blue-700">{descEntry.agency.companyName || descEntry.agency.name}</p>
+                    </div>
+                  )}
+                  {/* Personel */}
+                  {descEntry.staff && (
+                    <div className="bg-amber-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-amber-400 mb-0.5">Personel</p>
+                      <p className="font-medium text-amber-700">{descEntry.staff.user.name}</p>
+                    </div>
+                  )}
+                  {/* Otel */}
+                  {descEntry.hotel && (
+                    <div className="bg-gray-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-gray-400 mb-0.5">Otel{descEntry.roomNumber ? " · Oda" : ""}</p>
+                      <p className="font-medium text-gray-700">{descEntry.hotel.name}{descEntry.roomNumber ? ` · ${descEntry.roomNumber}` : ""}</p>
+                    </div>
+                  )}
+                  {/* Hizmet */}
+                  {descEntry.serviceName && (
+                    <div className="bg-gray-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-gray-400 mb-0.5">Hizmet{descEntry.pax ? " · PAX" : ""}</p>
+                      <p className="font-medium text-gray-700">{descEntry.serviceName}{descEntry.pax ? ` · ${descEntry.pax} PAX` : ""}</p>
+                    </div>
+                  )}
+                  {/* Gider kategorisi */}
+                  {descEntry.expenseCategory && (
+                    <div className="bg-red-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-red-400 mb-0.5">Gider Kategorisi</p>
+                      <p className="font-medium text-red-700">{getExpenseCategoryLabel(descEntry.expenseCategory)}</p>
+                    </div>
+                  )}
+                  {/* Alt kategori */}
+                  {descEntry.incomeSubCategory && (
+                    <div className="bg-emerald-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-emerald-400 mb-0.5">Kategori</p>
+                      <p className="font-medium text-emerald-700">{getIncomeSubCategoryLabel(descEntry.incomeSubCategory)}</p>
+                    </div>
+                  )}
+                  {/* Slip No — sadece KK */}
+                  {descEntry.creditCardAmount && descEntry.slipNo && (
+                    <div className="bg-violet-50 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-violet-400 mb-0.5">Slip No</p>
+                      <p className="font-medium text-violet-700">{descEntry.slipNo}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Açıklama */}
+                {descEntry.description && (
+                  <div className="bg-gray-50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-gray-400 mb-0.5">Açıklama</p>
+                    <p className="text-sm text-gray-700">{descEntry.description}</p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </DialogContent>
       </Dialog>
       </>
