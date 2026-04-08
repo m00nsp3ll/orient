@@ -381,6 +381,7 @@ export default function KasaPage() {
     canManageKasa: boolean
     canKasa: boolean
   }) {
+    const [descEntry, setDescEntry] = useState<CashEntry | null>(null)
     const amt = (v: number | null) => v && v > 0 ? v.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ""
 
     // Toplam satırı için summary değerleri (muhasebe hariç zaten)
@@ -397,6 +398,7 @@ export default function KasaPage() {
     const tdInfo = "px-1.5 py-1 text-[11px] border border-gray-200"
 
     return (
+      <>
       <div className="overflow-x-auto rounded-lg border border-gray-300 shadow-sm">
         <table className="w-full border-collapse text-[11px]" style={{ minWidth: 1100 }}>
           <thead>
@@ -405,8 +407,6 @@ export default function KasaPage() {
               <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-7")}>#</th>
               <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-20")}>TÜR</th>
               <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-24")}>ACENTA / PERSONEL</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-24")}>OTEL · ODA</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-28")}>HİZMET · PAX</th>
               <th colSpan={4} className={cn(thBase, "bg-blue-100 text-blue-800")}>GELİR ACENTA</th>
               <th colSpan={4} className={cn(thBase, "bg-emerald-100 text-emerald-800")}>GELİR RESEPSİYON</th>
               <th colSpan={4} className={cn(thBase, "bg-amber-100 text-amber-800")}>GELİR PERSONEL</th>
@@ -448,12 +448,6 @@ export default function KasaPage() {
                   <td className={cn(tdInfo, "text-gray-700 truncate max-w-[90px]")}>
                     {e.agency ? (e.agency.companyName || e.agency.name) : e.staff ? e.staff.user.name : ""}
                   </td>
-                  <td className={cn(tdInfo, "text-gray-600 truncate max-w-[90px]")}>
-                    {e.hotel ? `${e.hotel.name}${e.roomNumber ? ` · ${e.roomNumber}` : ""}` : ""}
-                  </td>
-                  <td className={cn(tdInfo, "text-gray-600 truncate max-w-[100px]")}>
-                    {e.serviceName ? `${e.serviceName}${e.pax ? ` · ${e.pax}pax` : ""}` : ""}
-                  </td>
                   {/* GELİR ACENTA */}
                   {CURS.map(c => (
                     <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-50/30 text-blue-700")}>
@@ -487,7 +481,11 @@ export default function KasaPage() {
                     </td>
                   ))}
                   {/* Açıklama */}
-                  <td className={cn(tdInfo, "text-gray-500 truncate max-w-[100px]")}>
+                  <td
+                    className={cn(tdInfo, "text-gray-500 truncate max-w-[120px] cursor-pointer hover:bg-blue-50/50")}
+                    onClick={() => setDescEntry(e)}
+                    title={e.description || ""}
+                  >
                     {e.description || ""}
                     {isPending && e.pendingAmount ? (
                       <span className="block text-[9px] text-yellow-600">Kalan: {CUR_SYM[e.pendingCurrency || "TRY"]}{e.pendingAmount.toLocaleString("tr-TR")}</span>
@@ -520,7 +518,7 @@ export default function KasaPage() {
           <tfoot>
             {/* Toplam */}
             <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
-              <td colSpan={5} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-100")}>TOPLAM</td>
+              <td colSpan={3} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-100")}>TOPLAM</td>
               {CURS.map(c => <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-100 text-blue-800 font-bold")}>{totAgency(c) > 0 ? `${CUR_SYM[c]}${totAgency(c).toLocaleString("tr-TR")}` : ""}</td>)}
               {CURS.map(c => <td key={`re-${c}`} className={cn(tdBase, "bg-emerald-100 text-emerald-800 font-bold")}>{totRecep(c) > 0 ? `${CUR_SYM[c]}${totRecep(c).toLocaleString("tr-TR")}` : ""}</td>)}
               {CURS.map(c => <td key={`st-${c}`} className={cn(tdBase, "bg-amber-100 text-amber-800 font-bold")}>{totStaff(c) > 0 ? `${CUR_SYM[c]}${totStaff(c).toLocaleString("tr-TR")}` : ""}</td>)}
@@ -531,7 +529,7 @@ export default function KasaPage() {
             </tr>
             {/* Kalan (Net nakit) */}
             <tr className="bg-gray-200 font-bold">
-              <td colSpan={5} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-200")}>KALAN</td>
+              <td colSpan={3} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-200")}>KALAN</td>
               {/* Acenta toplam (gelir) */}
               {CURS.map(c => <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-50 text-blue-900 font-bold")}>{totAgency(c) > 0 ? `${CUR_SYM[c]}${totAgency(c).toLocaleString("tr-TR")}` : ""}</td>)}
               {/* Resepsiyon toplam */}
@@ -559,6 +557,30 @@ export default function KasaPage() {
           </tfoot>
         </table>
       </div>
+
+      {/* Açıklama Detay Modalı */}
+      <Dialog open={!!descEntry} onOpenChange={(v) => { if (!v) setDescEntry(null) }}>
+        <DialogContent className="w-full !max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-gray-700">Açıklama — #{descEntry?.voucherNo}</DialogTitle>
+          </DialogHeader>
+          {descEntry && (
+            <div className="space-y-3 text-sm">
+              {descEntry.agency && <div><span className="text-xs text-gray-400">Acenta:</span><p className="font-medium">{descEntry.agency.companyName || descEntry.agency.name}</p></div>}
+              {descEntry.staff && <div><span className="text-xs text-gray-400">Personel:</span><p className="font-medium">{descEntry.staff.user.name}</p></div>}
+              {descEntry.hotel && <div><span className="text-xs text-gray-400">Otel · Oda:</span><p className="font-medium">{descEntry.hotel.name}{descEntry.roomNumber ? ` · ${descEntry.roomNumber}` : ""}</p></div>}
+              {descEntry.serviceName && <div><span className="text-xs text-gray-400">Hizmet · PAX:</span><p className="font-medium">{descEntry.serviceName}{descEntry.pax ? ` · ${descEntry.pax} PAX` : ""}</p></div>}
+              {descEntry.description && <div><span className="text-xs text-gray-400">Açıklama:</span><p className="text-gray-700 mt-0.5">{descEntry.description}</p></div>}
+              {descEntry.isPaid === false && descEntry.pendingAmount && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                  <p className="text-xs text-yellow-700 font-medium">Kalan Ödeme: {CUR_SYM[descEntry.pendingCurrency || "TRY"]} {descEntry.pendingAmount.toLocaleString("tr-TR")}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      </>
     )
   }
 
