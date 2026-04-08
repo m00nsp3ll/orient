@@ -440,6 +440,9 @@ export function ActiveDriversBar({
                                     {transfer.appointment.hotel?.name}
                                     {transfer.appointment.pax && ` • ${transfer.appointment.pax}${transfer.appointment.childCount ? `+${transfer.appointment.childCount}` : ""} kişi`}
                                   </div>
+                                  <div className="text-xs font-semibold text-blue-700 mt-0.5">
+                                    {format(new Date(transfer.appointment.startTime), "HH:mm")}
+                                  </div>
                                 </div>
                               ))}
                             </div>

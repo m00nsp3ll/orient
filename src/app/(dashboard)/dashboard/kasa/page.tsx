@@ -825,7 +825,7 @@ export default function KasaPage() {
                   const dateLabel = format(selectedDate, "d MMMM yyyy, EEEE", { locale: tr })
                   const printedAt = format(new Date(), "dd.MM.yyyy HH:mm", { locale: tr })
                   const userName = session?.user?.name || "—"
-                  printKasaReport({ dateLabel, printedAt, userName, entries: kasaEntries, summary: summary! })
+                  printKasaReport({ dateLabel, printedAt, userName, entries: kasaEntries, summary: summary!, exchangeRates: exchangeRates?.rates })
                 }}
               >
                 <Printer className="h-4 w-4 mr-2" /> Yazdır
@@ -1414,9 +1414,9 @@ export default function KasaPage() {
 }
 
 // ---- Kasa Print View ----
-function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary }: {
+function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary, exchangeRates }: {
   dateLabel: string; printedAt: string; userName: string
-  entries: CashEntry[]; summary: Summary
+  entries: CashEntry[]; summary: Summary; exchangeRates?: ExchangeRates
 }): string {
   const incomeEntries = entries.filter(e => !!(e.agencyIncomeAmount || e.receptionIncomeAmount || e.staffIncomeAmount || e.creditCardAmount))
   const expenseEntries = entries.filter(e => !!(e.expenseAmount) && !e.agencyIncomeAmount && !e.receptionIncomeAmount && !e.staffIncomeAmount && !e.creditCardAmount)
@@ -1493,6 +1493,75 @@ function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary }: {
       </div>`
   }).join("")
 
+  // Grand total block: KK toplam + EUR karşılıkları + Toplam (nakit+KK)
+  const grandTotalBlock = (() => {
+    // KK toplamları (per currency)
+    const ccTotals = CURRENCIES.map(cur => {
+      const ccIn = summary.creditCardIncome[cur.value] || 0
+      if (ccIn === 0) return ""
+      return `<div class="summary-row"><span>KK ${cur.value}</span><span>${fmtAmt(ccIn, cur.value)}</span></div>`
+    }).join("")
+
+    if (!exchangeRates) {
+      if (!ccTotals) return ""
+      return `
+        <div class="summary-block" style="border-color:#7c3aed;margin-top:8px">
+          <div class="summary-cur" style="color:#7c3aed">KREDİ KARTI TOPLAM</div>
+          ${ccTotals}
+        </div>`
+    }
+
+    // KK toplam EUR
+    let ccEur = 0
+    for (const cur of CURRENCIES) {
+      const ccIn = summary.creditCardIncome[cur.value] || 0
+      if (ccIn === 0) continue
+      if (cur.value === "EUR") { ccEur += ccIn }
+      else {
+        const c = convertCurrency(ccIn, cur.value, "EUR", exchangeRates)
+        if (c !== null) ccEur += c
+      }
+    }
+
+    // Nakit toplam EUR
+    let cashEur = 0
+    for (const cur of CURRENCIES) {
+      const net = (summary.cashIncome[cur.value] || 0) - (summary.credit[cur.value] || 0) - (summary.expense[cur.value] || 0)
+      if (cur.value === "EUR") { cashEur += net }
+      else {
+        const c = convertCurrency(Math.abs(net), cur.value, "EUR", exchangeRates)
+        if (c !== null) cashEur += net >= 0 ? c : -c
+      }
+    }
+
+    // Nakit + KK toplam TRY
+    const cashTRY = (summary.cashIncome["TRY"] || 0) - (summary.credit["TRY"] || 0) - (summary.expense["TRY"] || 0)
+    const ccTRY = summary.creditCardIncome["TRY"] || 0
+    const grandTRY = cashTRY + ccTRY
+
+    const grandEur = cashEur + ccEur
+    const hasCc = CURRENCIES.some(cur => (summary.creditCardIncome[cur.value] || 0) > 0)
+    if (!hasCc) return ""
+
+    return `
+      <div class="summary-block" style="border-color:#7c3aed;margin-top:8px">
+        <div class="summary-cur" style="color:#7c3aed">KREDİ KARTI TOPLAM</div>
+        ${ccTotals}
+        <div class="summary-row" style="border-top:1px solid #ccc;margin-top:4px;padding-top:4px;font-weight:bold">
+          <span>KK Toplam (€ karşılığı)</span>
+          <span style="color:#7c3aed">€ ${ccEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+      <div class="summary-block" style="border-color:#1d4ed8;margin-top:6px">
+        <div class="summary-cur" style="color:#1d4ed8">GENEL TOPLAM (NAKİT + KK)</div>
+        <div class="summary-row"><span>Toplam TL (Nakit + KK)</span><span style="font-weight:600">₺ ${grandTRY.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+        <div class="summary-row" style="font-weight:bold;border-top:1px solid #ccc;margin-top:4px;padding-top:4px">
+          <span>Toplam € Karşılığı (Nakit + KK)</span>
+          <span style="color:#1d4ed8">€ ${grandEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+      </div>`
+  })()
+
   return `<!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1554,13 +1623,14 @@ function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary }: {
   <hr/>
   <div class="section-title">GENEL ÖZET</div>
   ${currencyBlocks}
+  ${grandTotalBlock}
 
   <div class="footer">Orient SPA &amp; Orient Turizm &nbsp;|&nbsp; ${dateLabel} &nbsp;|&nbsp; Yazdırma: ${printedAt}</div>
 </body>
 </html>`
 }
 
-function printKasaReport(data: { dateLabel: string; printedAt: string; userName: string; entries: CashEntry[]; summary: Summary }) {
+function printKasaReport(data: { dateLabel: string; printedAt: string; userName: string; entries: CashEntry[]; summary: Summary; exchangeRates?: ExchangeRates }) {
   const html = buildPrintHTML(data)
   const iframe = document.createElement("iframe")
   iframe.style.position = "fixed"
