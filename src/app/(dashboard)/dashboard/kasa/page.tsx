@@ -446,6 +446,9 @@ export default function KasaPage() {
                     {isPending && <span className="block text-[9px] text-yellow-600 mt-0.5">⏳ Bekliyor</span>}
                   </td>
                   <td className={cn(tdInfo, "text-gray-700 truncate max-w-[90px]")}>
+                    {e.incomeSubCategory === "GELIR_REST" && (
+                      <span className="inline-block mr-1 px-1 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-200">REST</span>
+                    )}
                     {e.agency ? (e.agency.companyName || e.agency.name) : e.staff ? e.staff.user.name : ""}
                   </td>
                   {/* GELİR ACENTA */}

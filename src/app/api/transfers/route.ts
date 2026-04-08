@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
               id: true,
               name: true,
               code: true,
+              companyName: true,
             },
           },
           customer: {

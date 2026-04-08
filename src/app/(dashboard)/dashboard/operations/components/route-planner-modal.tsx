@@ -79,6 +79,12 @@ interface Transfer {
         name: string
       }
     } | null
+    agency: {
+      id: string
+      name: string
+      companyName?: string | null
+      code?: string
+    } | null
   }
   driver: {
     id: string
@@ -295,7 +301,8 @@ export function RoutePlannerModal({
       const hotel = t.appointment.hotel?.name || "-"
       const name = t.appointment.customerName || "Misafir"
       const pax = (t.appointment.pax || 1) + (t.appointment.childCount || 0)
-      return `${idx + 1}. ${time} | ${hotel} | ${name} | ${pax} kişi`
+      const agency = t.appointment.agency ? (t.appointment.agency.companyName || t.appointment.agency.name) : "-"
+      return `${idx + 1}. ${time} | ${hotel} | ${name} | ${pax} kişi | ${agency}`
     })
     const text = `🚐 ${driverName}\n\n${lines.join("\n")}`
     setWhatsappText(text)
