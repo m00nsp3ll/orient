@@ -24,8 +24,10 @@ import {
   Wallet,
   BookOpen,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { usePermissions } from "@/hooks/use-permissions"
 import type { PermissionKey } from "@/lib/permissions"
 
@@ -50,14 +52,21 @@ export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
   const { has } = usePermissions()
 
+  // CSS variable ile layout'u senkronize et
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      collapsed ? "4rem" : "16rem"
+    )
+  }, [collapsed])
+
   const filteredNav = navigation.filter((item) => {
     const userRole = session?.user.role || ""
-    // Rol listesinde yoksa hiç gösterme
     if (!item.roles.includes(userRole)) return false
-    // STAFF kullanıcılar için permission kontrolü
     if (userRole === "STAFF" && item.permissionKey) {
       return has(item.permissionKey)
     }
@@ -82,16 +91,32 @@ export function Sidebar() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-white border-r transform transition-transform lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-40 bg-white border-r transform transition-all duration-300 lg:translate-x-0",
+          collapsed ? "w-16" : "w-64",
+          mobileOpen ? "translate-x-0 w-64" : "-translate-x-full lg:translate-x-0"
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b">
-            <Link href="/dashboard" className="text-xl font-bold text-primary">
-              Orient SPA
-            </Link>
+          {/* Logo + Desktop toggle */}
+          <div className={cn("flex items-center h-16 border-b", collapsed ? "justify-center px-2" : "justify-between px-6")}>
+            {!collapsed && (
+              <Link href="/dashboard" className="text-xl font-bold text-primary truncate">
+                Orient SPA
+              </Link>
+            )}
+            {/* Desktop collapse toggle */}
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              className="hidden lg:flex items-center justify-center h-8 w-8 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+              title={collapsed ? "Menüyü Aç" : "Menüyü Kapat"}
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </button>
+            {/* Mobile close button */}
             <Button
               variant="ghost"
               size="icon"
@@ -103,7 +128,7 @@ export function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+          <nav className={cn("flex-1 py-4 space-y-1 overflow-y-auto", collapsed ? "px-2" : "px-4")}>
             {filteredNav.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
               return (
@@ -111,39 +136,56 @@ export function Sidebar() {
                   key={item.name}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
+                  title={collapsed ? item.name : undefined}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    "flex items-center rounded-lg text-sm font-medium transition-colors",
+                    collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2.5",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "text-gray-700 hover:bg-gray-100"
                   )}
                 >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  {!collapsed && item.name}
                 </Link>
               )
             })}
           </nav>
 
           {/* User menu */}
-          <div className="p-4 border-t space-y-1">
-            <div className="flex items-center gap-3 px-3 py-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback>
-                  {session?.user?.name?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col text-sm min-w-0">
-                <span className="font-medium truncate">{session?.user?.name}</span>
-                <span className="text-xs text-gray-500">{session?.user?.role}</span>
+          <div className={cn("border-t space-y-1", collapsed ? "p-2" : "p-4")}>
+            {!collapsed && (
+              <div className="flex items-center gap-3 px-3 py-2">
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarFallback>
+                    {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col text-sm min-w-0">
+                  <span className="font-medium truncate">{session?.user?.name}</span>
+                  <span className="text-xs text-gray-500">{session?.user?.role}</span>
+                </div>
               </div>
-            </div>
+            )}
+            {collapsed && (
+              <div className="flex justify-center py-1">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>
+                    {session?.user?.name?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              title={collapsed ? "Çıkış Yap" : undefined}
+              className={cn(
+                "flex items-center w-full rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors",
+                collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2"
+              )}
             >
-              <LogOut className="h-4 w-4" />
-              Çıkış Yap
+              <LogOut className="h-4 w-4 shrink-0" />
+              {!collapsed && "Çıkış Yap"}
             </button>
           </div>
         </div>

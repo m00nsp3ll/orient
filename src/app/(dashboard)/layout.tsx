@@ -18,7 +18,10 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
-      <div className="lg:pl-64">
+      <div
+        className="transition-all duration-300"
+        style={{ paddingLeft: "var(--sidebar-width, 16rem)" } as React.CSSProperties}
+      >
         <header className="sticky top-0 z-30 h-12 bg-white/80 backdrop-blur border-b pl-16 pr-4 lg:px-6 flex items-center justify-end">
           <CurrencyTicker />
         </header>
