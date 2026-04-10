@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getExpenseCategoryLabel, getIncomeSubCategoryLabel, EXPENSE_CATEGORIES, INCOME_SUB_CATEGORIES, ACCOUNT_LABELS } from "@/lib/accounting-constants"
+import { startOfDay, endOfDay } from "date-fns"
 
 function getAccountLabel(code: string): string {
   const exp = EXPENSE_CATEGORIES.find(c => c.code === code)
@@ -30,9 +31,11 @@ export async function GET(
 
   const where: any = { accountCode: decoded }
   if (startDateStr && endDateStr) {
+    // Kasa POST startOfDay kullanarak server-local gün başlangıcına göre kaydediyor,
+    // o yüzden filtrede de aynı mantığı kullanmak gerekiyor (timezone tutarlılığı).
     where.date = {
-      gte: new Date(startDateStr),
-      lte: new Date(endDateStr + "T23:59:59.999Z"),
+      gte: startOfDay(new Date(startDateStr)),
+      lte: endOfDay(new Date(endDateStr)),
     }
   }
 
