@@ -29,6 +29,8 @@ const updateSchema = z.object({
   creditCardCurrency: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   info: z.string().optional().nullable(),
+  slipNo: z.string().optional().nullable(),
+  voucherDesc: z.string().optional().nullable(),
   pendingAmount: z.number().optional().nullable(),
   pendingCurrency: z.string().optional().nullable(),
   isPaid: z.boolean().optional(),
@@ -43,18 +45,43 @@ export async function PUT(
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
-  // STAFF kullanıcılar için kasa_yonetimi yetkisi kontrolü
+  const { id } = await params
+
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 })
+  }
+
+  // STAFF kullanıcılar için yetki kontrolü:
+  // Sadece ödeme onayı (isPaid=true) ise kasa_view yeterli, tam düzenleme için kasa_yonetimi gerekir
   if (session.user.role === "STAFF") {
-    const hasPerm = await checkPermission(session.user.role, session.user.id, "kasa_yonetimi")
-    if (!hasPerm) {
-      return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+    const PAYMENT_CONFIRM_KEYS = new Set([
+      "isPaid", "pendingAmount", "pendingCurrency",
+      "agencyIncomeAmount", "agencyIncomeCurrency",
+      "receptionIncomeAmount", "receptionIncomeCurrency",
+      "staffIncomeAmount", "staffIncomeCurrency",
+    ])
+    const bodyKeys = Object.keys(body as object)
+    const isPaymentConfirmOnly =
+      (body as any).isPaid === true &&
+      bodyKeys.every((k) => PAYMENT_CONFIRM_KEYS.has(k))
+
+    if (isPaymentConfirmOnly) {
+      const hasPerm = await checkPermission(session.user.role, session.user.id, "kasa_view")
+      if (!hasPerm) {
+        return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+      }
+    } else {
+      const hasPerm = await checkPermission(session.user.role, session.user.id, "kasa_yonetimi")
+      if (!hasPerm) {
+        return NextResponse.json({ error: "Bu işlem için yetkiniz yok" }, { status: 403 })
+      }
     }
   }
 
-  const { id } = await params
-
   try {
-    const body = await req.json()
     const data = updateSchema.parse(body)
 
     // Kredi kartı sadece TRY
@@ -62,35 +89,39 @@ export async function PUT(
       return NextResponse.json({ error: "Kredi kartı sadece TRY destekler" }, { status: 400 })
     }
 
+    // PUT semantiği: body'de yok → undefined (Prisma atlar); body'de explicit null → null set edilir; value → set.
+    // Bu sayede frontend buildPayload tipi değiştirdiğinde eski tipin amount/id alanlarını null'a çekerek temizleyebilir.
     const entry = await prisma.$transaction(async (tx) => {
       const updated = await tx.cashEntry.update({
         where: { id },
         data: {
-          agencyId: data.agencyId ?? undefined,
-          hotelId: data.hotelId ?? undefined,
-          roomNumber: data.roomNumber ?? undefined,
-          serviceName: data.serviceName ?? undefined,
-          pax: data.pax ?? undefined,
-          agencyIncomeAmount: data.agencyIncomeAmount ?? undefined,
-          agencyIncomeCurrency: data.agencyIncomeCurrency ?? undefined,
-          receptionIncomeAmount: data.receptionIncomeAmount ?? undefined,
-          receptionIncomeCurrency: data.receptionIncomeCurrency ?? undefined,
-          creditAmount: data.creditAmount ?? undefined,
-          creditCurrency: data.creditCurrency ?? undefined,
-          expenseAmount: data.expenseAmount ?? undefined,
-          expenseCurrency: data.expenseCurrency ?? undefined,
-          expenseCategory: data.expenseCategory ?? undefined,
-          incomeSubCategory: data.incomeSubCategory ?? undefined,
-          staffId: data.staffId ?? undefined,
-          staffIncomeAmount: data.staffIncomeAmount ?? undefined,
-          staffIncomeCurrency: data.staffIncomeCurrency ?? undefined,
-          creditCardAmount: data.creditCardAmount ?? undefined,
-          creditCardCurrency: data.creditCardCurrency ?? undefined,
-          description: data.description ?? undefined,
-          info: data.info ?? undefined,
-          pendingAmount: data.pendingAmount ?? undefined,
-          pendingCurrency: data.pendingCurrency ?? undefined,
-          isPaid: data.isPaid ?? undefined,
+          agencyId: data.agencyId,
+          hotelId: data.hotelId,
+          roomNumber: data.roomNumber,
+          serviceName: data.serviceName,
+          pax: data.pax,
+          agencyIncomeAmount: data.agencyIncomeAmount,
+          agencyIncomeCurrency: data.agencyIncomeCurrency,
+          receptionIncomeAmount: data.receptionIncomeAmount,
+          receptionIncomeCurrency: data.receptionIncomeCurrency,
+          creditAmount: data.creditAmount,
+          creditCurrency: data.creditCurrency,
+          expenseAmount: data.expenseAmount,
+          expenseCurrency: data.expenseCurrency,
+          expenseCategory: data.expenseCategory,
+          incomeSubCategory: data.incomeSubCategory,
+          staffId: data.staffId,
+          staffIncomeAmount: data.staffIncomeAmount,
+          staffIncomeCurrency: data.staffIncomeCurrency,
+          creditCardAmount: data.creditCardAmount,
+          creditCardCurrency: data.creditCardCurrency,
+          description: data.description,
+          info: data.info,
+          slipNo: data.slipNo,
+          voucherDesc: data.voucherDesc,
+          pendingAmount: data.pendingAmount,
+          pendingCurrency: data.pendingCurrency,
+          isPaid: data.isPaid,
         },
         include: {
           agency: { select: { id: true, name: true, companyName: true } },

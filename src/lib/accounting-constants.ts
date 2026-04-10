@@ -23,11 +23,13 @@ export const EXPENSE_CATEGORIES = [
 export type ExpenseCategoryCode = typeof EXPENSE_CATEGORIES[number]["code"]
 
 export const INCOME_SUB_CATEGORIES = [
-  { code: "GELIR_CILT_BAKIMI", label: "Cilt Bakımı Geliri" },
-  { code: "GELIR_EXTRA_PAKET", label: "Extra Paket Satışı" },
-  { code: "GELIR_MASAJ",       label: "Masaj Satışı" },
-  { code: "GELIR_MARKET",      label: "Market Geliri" },
-  { code: "GELIR_REST",        label: "Rest Geliri" },
+  { code: "GELIR_CILT_BAKIMI",  label: "Cilt Bakımı Geliri" },
+  { code: "GELIR_EXTRA_PAKET",  label: "Extra Paket Satışı" },
+  { code: "GELIR_MASAJ",        label: "Masaj Satışı" },
+  { code: "GELIR_MARKET",       label: "Market Geliri" },
+  { code: "GELIR_GOLD_PAKET",   label: "Gold Paket" },
+  { code: "GELIR_GOLD_UZATMA",  label: "Gold Uzatma" },
+  { code: "GELIR_REST",         label: "Rest Geliri" },
 ] as const
 
 export type IncomeSubCategoryCode = typeof INCOME_SUB_CATEGORIES[number]["code"]

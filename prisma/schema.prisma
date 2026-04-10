@@ -403,6 +403,8 @@ model CashEntry {
   creditCardAmount      Float?
   creditCardCurrency    String?
 
+  slipNo            String?
+  voucherDesc       String?
   description       String?
   info              String?
   expenseCategory   String?

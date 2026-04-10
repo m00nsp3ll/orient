@@ -23,8 +23,11 @@ export async function GET() {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
   if (session.user.role === "STAFF") {
-    const hasPerm = await checkPermission(session.user.role, session.user.id, "acentalar_view")
-    if (!hasPerm) return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
+    const hasAgencyPerm = await checkPermission(session.user.role, session.user.id, "acentalar_view")
+    const hasKasaPerm = await checkPermission(session.user.role, session.user.id, "kasa_view")
+    if (!hasAgencyPerm && !hasKasaPerm) {
+      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 403 })
+    }
   }
 
   const agencies = await prisma.agency.findMany({

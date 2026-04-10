@@ -131,21 +131,24 @@ export async function syncAccountingEntries(
   if (cashEntry.agencyIncomeAmount && cashEntry.agencyIncomeCurrency) {
     const amt = cashEntry.agencyIncomeAmount
     const cur = cashEntry.agencyIncomeCurrency
+    const isRest = cashEntry.incomeSubCategory === "GELIR_REST"
 
+    // REST geliri ayrı hesap kodunda (istatistik için); normal acenta geliri GELIR_ACENTA'da
     toCreate.push({
       ...base,
-      accountCode: "GELIR_ACENTA",
+      accountCode: isRest ? "GELIR_REST" : "GELIR_ACENTA",
       credit: amt,
       debit: 0,
       amount: amt,
       currency: cur,
       agencyId: cashEntry.agencyId ?? undefined,
-      description: cashEntry.description ?? "Acenta geliri",
+      description: cashEntry.description ?? (isRest ? "REST geliri" : "Acenta geliri"),
     })
 
     // Acenta carisi: ödeme aldık → borç azalır (credit)
+    // REST geliri için acenta portfolyosuna ekleme (sadece kasa geliri kaydedilir)
     // Para birimi acentanınkinden farklıysa TCMB kuruyla çevir
-    if (cashEntry.agencyId) {
+    if (cashEntry.agencyId && cashEntry.incomeSubCategory !== "GELIR_REST") {
       const agency = await prisma.agency.findUnique({
         where: { id: cashEntry.agencyId },
         select: { currency: true },
@@ -292,40 +295,8 @@ export async function syncAccountingEntries(
       description: cashEntry.description ?? "Kredi kartı geliri",
     })
 
-    // Acenta kredi kartı ödemesi → acenta carisi credit (nakit ile aynı mantık)
-    if (cashEntry.agencyId) {
-      const agency = await prisma.agency.findUnique({
-        where: { id: cashEntry.agencyId },
-        select: { currency: true },
-      })
-      const agencyCurrency = agency?.currency || "EUR"
-
-      if (cur !== agencyCurrency) {
-        const { converted, rate } = await convertCurrency(amt, cur, agencyCurrency)
-        const rateStr = rate ? ` | Kur: 1 ${cur} = ${rate} ${agencyCurrency}` : ""
-        toCreate.push({
-          ...base,
-          accountCode: agencyAccountCode(cashEntry.agencyId),
-          debit: 0,
-          credit: converted,
-          amount: converted,
-          currency: agencyCurrency,
-          agencyId: cashEntry.agencyId,
-          description: `${cashEntry.description ?? "Acenta KK ödemesi"} (${amt} ${cur} → ${converted} ${agencyCurrency}${rateStr})`,
-        })
-      } else {
-        toCreate.push({
-          ...base,
-          accountCode: agencyAccountCode(cashEntry.agencyId),
-          debit: 0,
-          credit: amt,
-          amount: amt,
-          currency: cur,
-          agencyId: cashEntry.agencyId,
-          description: cashEntry.description ?? "Acenta KK ödemesi",
-        })
-      }
-    }
+    // KK işlemlerinde acenta sadece bilgi amaçlı — acenta portfolyosuna (cari) yansıtılmaz.
+    // Portfolyoya sadece nakit acenta GENEL geliri yansır (Gelir Ekle → Acenta → Genel Gelir).
 
     // Personel kredi kartından da prim oluşur
     if (cashEntry.staffId && cashEntry.staff?.commissionRate) {

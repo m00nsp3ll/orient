@@ -62,6 +62,7 @@ interface CashEntry {
   pendingCurrency: string | null
   isPaid: boolean
   slipNo: string | null
+  voucherDesc: string | null
   createdAt: string
   agency: { id: string; name: string; companyName: string | null } | null
   hotel: { id: string; name: string } | null
@@ -115,28 +116,38 @@ const CURRENCIES = [
 type EntryKind = "agencyIncome" | "receptionIncome" | "staffIncome" | "creditCard" | "credit" | "expense"
 
 function getEntryKind(entry: CashEntry): EntryKind {
-  if (entry.agencyIncomeAmount) return "agencyIncome"
-  if (entry.receptionIncomeAmount) return "receptionIncome"
-  if (entry.staffIncomeAmount) return "staffIncome"
-  if (entry.creditCardAmount) return "creditCard"
-  if (entry.creditAmount) return "credit"
+  if (entry.agencyIncomeAmount !== null && entry.agencyIncomeAmount !== undefined) return "agencyIncome"
+  if (entry.receptionIncomeAmount !== null && entry.receptionIncomeAmount !== undefined) return "receptionIncome"
+  if (entry.staffIncomeAmount !== null && entry.staffIncomeAmount !== undefined) return "staffIncome"
+  // KK işlemleri: TÜR kolonu semantic tipi göstersin (KK bilgisi KK sütunundan anlaşılıyor)
+  if (entry.creditCardAmount !== null && entry.creditCardAmount !== undefined) {
+    if (entry.staff) return "staffIncome"
+    if (entry.agency) return "agencyIncome"
+    return "receptionIncome"
+  }
+  if (entry.creditAmount !== null && entry.creditAmount !== undefined) return "credit"
   return "expense"
 }
 
 function isIncomeEntry(entry: CashEntry): boolean {
-  return !!(entry.agencyIncomeAmount || entry.receptionIncomeAmount || entry.staffIncomeAmount || entry.creditCardAmount)
+  return (
+    entry.agencyIncomeAmount !== null && entry.agencyIncomeAmount !== undefined ||
+    entry.receptionIncomeAmount !== null && entry.receptionIncomeAmount !== undefined ||
+    entry.staffIncomeAmount !== null && entry.staffIncomeAmount !== undefined ||
+    entry.creditCardAmount !== null && entry.creditCardAmount !== undefined
+  )
 }
 
 function getEntryAmount(entry: CashEntry): { amount: number; currency: string } {
-  if (entry.agencyIncomeAmount && entry.agencyIncomeCurrency)
+  if (entry.agencyIncomeAmount !== null && entry.agencyIncomeAmount !== undefined && entry.agencyIncomeCurrency)
     return { amount: entry.agencyIncomeAmount, currency: entry.agencyIncomeCurrency }
-  if (entry.receptionIncomeAmount && entry.receptionIncomeCurrency)
+  if (entry.receptionIncomeAmount !== null && entry.receptionIncomeAmount !== undefined && entry.receptionIncomeCurrency)
     return { amount: entry.receptionIncomeAmount, currency: entry.receptionIncomeCurrency }
-  if (entry.staffIncomeAmount && entry.staffIncomeCurrency)
+  if (entry.staffIncomeAmount !== null && entry.staffIncomeAmount !== undefined && entry.staffIncomeCurrency)
     return { amount: entry.staffIncomeAmount, currency: entry.staffIncomeCurrency }
-  if (entry.creditCardAmount && entry.creditCardCurrency)
+  if (entry.creditCardAmount !== null && entry.creditCardAmount !== undefined && entry.creditCardCurrency)
     return { amount: entry.creditCardAmount, currency: entry.creditCardCurrency }
-  if (entry.creditAmount && entry.creditCurrency)
+  if (entry.creditAmount !== null && entry.creditAmount !== undefined && entry.creditCurrency)
     return { amount: entry.creditAmount, currency: entry.creditCurrency }
   if (entry.expenseAmount && entry.expenseCurrency)
     return { amount: entry.expenseAmount, currency: entry.expenseCurrency }
@@ -146,9 +157,9 @@ function getEntryAmount(entry: CashEntry): { amount: number; currency: string } 
 const KIND_META: Record<EntryKind, { label: string; badgeClass: string; borderClass: string }> = {
   agencyIncome:    { label: "Acenta",      badgeClass: "bg-blue-100 text-blue-700",      borderClass: "border-l-blue-400" },
   receptionIncome: { label: "Resepsiyon",  badgeClass: "bg-emerald-100 text-emerald-700", borderClass: "border-l-emerald-400" },
-  staffIncome:     { label: "Personel",    badgeClass: "bg-amber-100 text-amber-700",    borderClass: "border-l-amber-400" },
+  staffIncome:     { label: "İnfocu",      badgeClass: "bg-amber-100 text-amber-700",    borderClass: "border-l-amber-400" },
   creditCard:      { label: "Kredi Kartı", badgeClass: "bg-violet-100 text-violet-700",  borderClass: "border-l-violet-400" },
-  credit:          { label: "Kredi",       badgeClass: "bg-sky-100 text-sky-700",        borderClass: "border-l-sky-400" },
+  credit:          { label: "Slip",        badgeClass: "bg-sky-100 text-sky-700",        borderClass: "border-l-sky-400" },
   expense:         { label: "Gider",       badgeClass: "bg-red-100 text-red-700",        borderClass: "border-l-red-400" },
 }
 
@@ -395,41 +406,44 @@ export default function KasaPage() {
     const netCash     = (cur: string) => (summary.cashIncome[cur] || 0) - (summary.credit[cur] || 0) - (summary.expense[cur] || 0)
 
     const thBase = "px-1 py-1 text-center text-[10px] font-bold border border-gray-300 whitespace-nowrap"
-    const tdBase = "px-1 py-1 text-right text-[11px] border border-gray-200 tabular-nums"
+    const tdBase = "px-1 py-1 text-center text-[11px] border border-gray-200 tabular-nums whitespace-nowrap"
     const tdInfo = "px-1 py-1 text-[11px] border border-gray-200"
 
     return (
       <>
-      <div className="overflow-x-auto rounded-lg border border-gray-300 shadow-sm">
-        <table className="w-full border-collapse text-[11px]" style={{ minWidth: 900 }}>
+      <div className="rounded-lg border border-gray-300 shadow-sm overflow-x-auto">
+        <table className="w-full border-collapse text-[11px] table-auto">
           <thead>
             {/* Grup başlıkları */}
             <tr>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-6")}>#</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-18")}>TÜR</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-20")}>ACENTA / PERSONEL</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>#</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>VOUCHER</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>TÜR</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>HİZMET</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>ACENTA / PERSONEL</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>OTEL</th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>AÇIKLAMA</th>
               <th colSpan={4} className={cn(thBase, "bg-blue-100 text-blue-800")}>GELİR ACENTA</th>
               <th colSpan={4} className={cn(thBase, "bg-emerald-100 text-emerald-800")}>GELİR RESEPSİYON</th>
-              <th colSpan={4} className={cn(thBase, "bg-amber-100 text-amber-800")}>GELİR PERSONEL</th>
+              <th colSpan={4} className={cn(thBase, "bg-amber-100 text-amber-800")}>GELİR İNFOCU</th>
               <th colSpan={1} className={cn(thBase, "bg-violet-100 text-violet-800")}>KREDİ KARTI</th>
-              <th colSpan={1} className={cn(thBase, "bg-sky-100 text-sky-800")}>KREDİ</th>
+              <th colSpan={1} className={cn(thBase, "bg-sky-100 text-sky-800")}>SLİP</th>
               <th colSpan={4} className={cn(thBase, "bg-red-100 text-red-800")}>GİDER</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}>AÇIKLAMA</th>
-              <th rowSpan={2} className={cn(thBase, "bg-gray-100 w-12")}></th>
+              <th rowSpan={2} className={cn(thBase, "bg-gray-100")}></th>
             </tr>
             <tr>
               {/* Acenta */}
-              {CURS.map(c => <th key={`ag-${c}`} className={cn(thBase, "bg-blue-50 text-blue-700 w-12")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`ag-${c}`} className={cn(thBase, "bg-blue-50 text-blue-700")}>{CUR_SYM[c]}</th>)}
               {/* Resepsiyon */}
-              {CURS.map(c => <th key={`re-${c}`} className={cn(thBase, "bg-emerald-50 text-emerald-700 w-12")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`re-${c}`} className={cn(thBase, "bg-emerald-50 text-emerald-700")}>{CUR_SYM[c]}</th>)}
               {/* Personel */}
-              {CURS.map(c => <th key={`st-${c}`} className={cn(thBase, "bg-amber-50 text-amber-700 w-12")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`st-${c}`} className={cn(thBase, "bg-amber-50 text-amber-700")}>{CUR_SYM[c]}</th>)}
               {/* KK */}
-              <th className={cn(thBase, "bg-violet-50 text-violet-700 w-14")}>₺</th>
-              {/* Kredi */}
-              <th className={cn(thBase, "bg-sky-50 text-sky-700 w-12")}>₺</th>
+              <th className={cn(thBase, "bg-violet-50 text-violet-700")}>₺</th>
+              {/* Kredi / Slip */}
+              <th className={cn(thBase, "bg-sky-50 text-sky-700")}>Slip No</th>
               {/* Gider */}
-              {CURS.map(c => <th key={`ex-${c}`} className={cn(thBase, "bg-red-50 text-red-700 w-12")}>{CUR_SYM[c]}</th>)}
+              {CURS.map(c => <th key={`ex-${c}`} className={cn(thBase, "bg-red-50 text-red-700")}>{CUR_SYM[c]}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -441,18 +455,58 @@ export default function KasaPage() {
               const kind = getEntryKind(e)
               return (
                 <tr key={e.id} className={cn(rowBg, "hover:bg-blue-50/30 transition-colors")}>
-                  <td className={cn(tdInfo, "text-gray-400 text-center")}>{e.voucherNo}</td>
-                  <td className={cn(tdInfo, "text-center")}>
-                    <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold", KIND_META[getEntryKind(e)].badgeClass)}>
-                      {KIND_META[getEntryKind(e)].label}
+                  {/* # (voucher no) */}
+                  <td className={cn(tdInfo, "text-gray-400 text-center whitespace-nowrap")}>{e.voucherNo}</td>
+                  {/* VOUCHER (fiş no), ortalı */}
+                  <td className={cn(tdInfo, "text-gray-600 text-center whitespace-nowrap text-[10px]")}>
+                    {e.voucherDesc || ""}
+                  </td>
+                  {/* TÜR */}
+                  <td className={cn(tdInfo, "text-center whitespace-nowrap")}>
+                    <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold", KIND_META[kind].badgeClass)}>
+                      {KIND_META[kind].label}
                     </span>
+                    {kind === "staffIncome" && e.staff && (
+                      <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                        {e.staff.user.name}
+                      </span>
+                    )}
+                    {e.incomeSubCategory === "GELIR_REST" && (
+                      <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-200">REST</span>
+                    )}
                     {isPending && <span className="block text-[9px] text-yellow-600 mt-0.5">⏳</span>}
                   </td>
-                  <td className={cn(tdInfo, "text-gray-700 truncate max-w-[80px]")}>
-                    {e.incomeSubCategory === "GELIR_REST" && (
-                      <span className="inline-block mr-1 px-1 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-700 border border-rose-200">REST</span>
+                  {/* HİZMET / gelir kalemi (+ KK işareti) */}
+                  <td className={cn(tdInfo, "text-gray-600 whitespace-nowrap text-[10px]")}>
+                    {e.expenseCategory
+                      ? getExpenseCategoryLabel(e.expenseCategory)
+                      : e.incomeSubCategory
+                        ? getIncomeSubCategoryLabel(e.incomeSubCategory)
+                        : kind === "agencyIncome"
+                          ? "Acenta Genel"
+                          : ""}
+                    {e.creditCardAmount !== null && e.creditCardAmount !== undefined && (
+                      <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-violet-100 text-violet-700 border border-violet-200">KK</span>
                     )}
+                  </td>
+                  {/* ACENTA / PERSONEL */}
+                  <td className={cn(tdInfo, "text-gray-700 whitespace-nowrap")}>
                     {e.agency ? (e.agency.companyName || e.agency.name) : e.staff ? e.staff.user.name : ""}
+                  </td>
+                  {/* OTEL */}
+                  <td className={cn(tdInfo, "text-gray-600 whitespace-nowrap text-[10px]")}>
+                    {e.hotel ? e.hotel.name : ""}
+                  </td>
+                  {/* AÇIKLAMA — wrap edilebilir (okunabilirlik için) */}
+                  <td
+                    className={cn(tdInfo, "text-gray-500 break-words min-w-[120px] cursor-pointer hover:bg-blue-50/50 hover:text-blue-700")}
+                    onClick={() => setDescEntry(e)}
+                    title="Detay için tıklayın"
+                  >
+                    {e.description || <span className="text-gray-300 text-[10px]">detay</span>}
+                    {isPending && e.pendingAmount ? (
+                      <span className="block text-[9px] text-yellow-600">Kalan: {CUR_SYM[e.pendingCurrency || "TRY"]}{e.pendingAmount.toLocaleString("tr-TR")}</span>
+                    ) : null}
                   </td>
                   {/* GELİR ACENTA */}
                   {CURS.map(c => (
@@ -476,9 +530,9 @@ export default function KasaPage() {
                   <td className={cn(tdBase, "bg-violet-50/30 text-violet-700")}>
                     {e.creditCardCurrency === "TRY" ? amt(e.creditCardAmount) : ""}
                   </td>
-                  {/* KREDİ */}
-                  <td className={cn(tdBase, "bg-sky-50/30 text-sky-700")}>
-                    {amt(e.creditAmount)}
+                  {/* SLİP */}
+                  <td className={cn(tdBase, "bg-sky-50/30 text-sky-700 text-xs")}>
+                    {e.creditCardAmount && e.slipNo ? e.slipNo : ""}
                   </td>
                   {/* GİDER */}
                   {CURS.map(c => (
@@ -486,17 +540,6 @@ export default function KasaPage() {
                       {e.expenseCurrency === c ? amt(e.expenseAmount) : ""}
                     </td>
                   ))}
-                  {/* Açıklama — tüm satır bilgisi modalda */}
-                  <td
-                    className={cn(tdInfo, "text-gray-500 truncate cursor-pointer hover:bg-blue-50/50 hover:text-blue-700")}
-                    onClick={() => setDescEntry(e)}
-                    title="Detay için tıklayın"
-                  >
-                    {e.description || <span className="text-gray-300 text-[10px]">detay</span>}
-                    {isPending && e.pendingAmount ? (
-                      <span className="block text-[9px] text-yellow-600">Kalan: {CUR_SYM[e.pendingCurrency || "TRY"]}{e.pendingAmount.toLocaleString("tr-TR")}</span>
-                    ) : null}
-                  </td>
                   {/* İşlemler */}
                   <td className={cn(tdInfo, "text-center")}>
                     <div className="flex items-center justify-center gap-0.5">
@@ -524,18 +567,18 @@ export default function KasaPage() {
           <tfoot>
             {/* Toplam */}
             <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
-              <td colSpan={3} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-100")}>TOPLAM</td>
+              <td colSpan={7} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-100")}>TOPLAM</td>
               {CURS.map(c => <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-100 text-blue-800 font-bold")}>{totAgency(c) > 0 ? `${CUR_SYM[c]}${totAgency(c).toLocaleString("tr-TR")}` : ""}</td>)}
               {CURS.map(c => <td key={`re-${c}`} className={cn(tdBase, "bg-emerald-100 text-emerald-800 font-bold")}>{totRecep(c) > 0 ? `${CUR_SYM[c]}${totRecep(c).toLocaleString("tr-TR")}` : ""}</td>)}
               {CURS.map(c => <td key={`st-${c}`} className={cn(tdBase, "bg-amber-100 text-amber-800 font-bold")}>{totStaff(c) > 0 ? `${CUR_SYM[c]}${totStaff(c).toLocaleString("tr-TR")}` : ""}</td>)}
               <td className={cn(tdBase, "bg-violet-100 text-violet-800 font-bold")}>{totCC("TRY") > 0 ? `₺${totCC("TRY").toLocaleString("tr-TR")}` : ""}</td>
-              <td className={cn(tdBase, "bg-sky-100 text-sky-800 font-bold")}>{totCredit("TRY") > 0 ? `₺${totCredit("TRY").toLocaleString("tr-TR")}` : ""}</td>
+              <td className={cn(tdBase, "bg-sky-100 text-sky-800 font-bold")}></td>
               {CURS.map(c => <td key={`ex-${c}`} className={cn(tdBase, "bg-red-100 text-red-700 font-bold")}>{totExpense(c) > 0 ? `${CUR_SYM[c]}${totExpense(c).toLocaleString("tr-TR")}` : ""}</td>)}
-              <td colSpan={2} className={cn(tdInfo, "bg-gray-100")}></td>
+              <td className={cn(tdInfo, "bg-gray-100")}></td>
             </tr>
             {/* Kalan (Net nakit) */}
             <tr className="bg-gray-200 font-bold">
-              <td colSpan={3} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-200")}>KALAN</td>
+              <td colSpan={7} className={cn(tdInfo, "text-right text-xs font-bold text-gray-700 bg-gray-200")}>KALAN</td>
               {/* Acenta toplam (gelir) */}
               {CURS.map(c => <td key={`ag-${c}`} className={cn(tdBase, "bg-blue-50 text-blue-900 font-bold")}>{totAgency(c) > 0 ? `${CUR_SYM[c]}${totAgency(c).toLocaleString("tr-TR")}` : ""}</td>)}
               {/* Resepsiyon toplam */}
@@ -558,7 +601,7 @@ export default function KasaPage() {
                   })}
                 </div>
               </td>
-              <td colSpan={2} className={cn(tdInfo, "bg-gray-200")}></td>
+              <td className={cn(tdInfo, "bg-gray-200")}></td>
             </tr>
           </tfoot>
         </table>
@@ -1973,10 +2016,14 @@ interface BasketItem {
   paymentMethod: "cash" | "creditCard"
   agencyId: string
   staffId: string
+  hotelId: string
+  hotelName: string
   amount: string
   currency: string
   description: string
+  voucherDesc: string
   subCategory: string
+  agencyIncomeKind: "general" | "rest"
   slipNo: string
   hasPending: boolean
   pendingAmount: string
@@ -1985,27 +2032,52 @@ interface BasketItem {
 function buildPayload(item: BasketItem, dateStr: string, voucherNo?: number): Record<string, unknown> {
   const isPending = item.hasPending && item.paymentMethod === "cash" && parseFloat(item.pendingAmount) > 0
   const parsedAmount = parseFloat(item.amount) || 0
+  // Tüm gelir/gider/ilişki alanlarını null olarak başlat.
+  // Böylece edit senaryosunda tipi değiştirirken eski tipin alanları da temizlenir
+  // (örn. Reception → Staff'a çevrilirse receptionIncomeAmount null'a düşer, sadece staffIncomeAmount dolu kalır).
   const payload: Record<string, unknown> = {
     date: dateStr,
     description: item.description || null,
+    voucherDesc: item.voucherDesc || null,
+    agencyId: null,
+    hotelId: null,
+    staffId: null,
+    agencyIncomeAmount: null,
+    agencyIncomeCurrency: null,
+    receptionIncomeAmount: null,
+    receptionIncomeCurrency: null,
+    staffIncomeAmount: null,
+    staffIncomeCurrency: null,
+    creditCardAmount: null,
+    creditCardCurrency: null,
+    slipNo: null,
+    incomeSubCategory: null,
+    expenseAmount: null,
+    expenseCurrency: null,
+    expenseCategory: null,
+    isPaid: !isPending,
+    pendingAmount: isPending ? parseFloat(item.pendingAmount) : null,
+    pendingCurrency: isPending ? item.currency : null,
     ...(voucherNo ? { voucherNo } : {}),
-    ...(isPending ? {
-      isPaid: false,
-      pendingAmount: parseFloat(item.pendingAmount),
-      pendingCurrency: item.currency,
-    } : {}),
   }
+
+  // Ortak alanlar: acenta + otel her tip için bilgi olarak saklanır
+  if (item.agencyId && item.agencyId !== "none") payload.agencyId = item.agencyId
+  if (item.hotelId) payload.hotelId = item.hotelId
+
   if (item.paymentMethod === "creditCard") {
     payload.creditCardAmount = parsedAmount
     payload.creditCardCurrency = "TRY"
     if (item.slipNo) payload.slipNo = item.slipNo
     if (item.incomeType === "staff" && item.staffId) payload.staffId = item.staffId
-    if (item.incomeType === "agency" && item.agencyId && item.agencyId !== "none") payload.agencyId = item.agencyId
-    if (item.incomeType === "reception" && item.subCategory && item.subCategory !== "none") payload.incomeSubCategory = item.subCategory
+    if ((item.incomeType === "reception" || item.incomeType === "staff") && item.subCategory && item.subCategory !== "none") {
+      payload.incomeSubCategory = item.subCategory
+    }
+    if (item.incomeType === "agency" && item.agencyIncomeKind === "rest") payload.incomeSubCategory = "GELIR_REST"
   } else if (item.incomeType === "agency") {
-    payload.agencyId = item.agencyId && item.agencyId !== "none" ? item.agencyId : null
     payload.agencyIncomeAmount = parsedAmount
     payload.agencyIncomeCurrency = item.currency
+    if (item.agencyIncomeKind === "rest") payload.incomeSubCategory = "GELIR_REST"
   } else if (item.incomeType === "staff") {
     payload.staffId = item.staffId
     payload.staffIncomeAmount = parsedAmount
@@ -2037,6 +2109,16 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
 }) {
   const isEditing = !!editingEntry
 
+  // Hotels query
+  const { data: hotels } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["hotels"],
+    queryFn: async () => {
+      const res = await fetch("/api/hotels")
+      if (!res.ok) throw new Error("Failed")
+      return res.json()
+    },
+  })
+
   // Sepet
   const [basket, setBasket] = useState<BasketItem[]>([])
 
@@ -2045,6 +2127,12 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "creditCard">("cash")
   const [agencyId, setAgencyId] = useState("")
   const [staffId, setStaffId] = useState("")
+  const [hotelId, setHotelId] = useState("")
+  const [hotelName, setHotelName] = useState("")
+  const [hotelSearch, setHotelSearch] = useState("")
+  const [showHotelDropdown, setShowHotelDropdown] = useState(false)
+  const [voucherDesc, setVoucherDesc] = useState("")
+  const [agencyIncomeKind, setAgencyIncomeKind] = useState<"general" | "rest">("general")
   const [amount, setAmount] = useState("")
   const [currency, setCurrency] = useState("EUR")
   const [description, setDescription] = useState("")
@@ -2054,9 +2142,16 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   const [pendingAmount, setPendingAmount] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
+  const filteredHotels = hotels
+    ? hotels.filter(h => h.name.toLowerCase().includes(hotelSearch.toLowerCase())).slice(0, 10)
+    : []
+
   const resetRow = () => {
     setIncomeType("reception"); setPaymentMethod("cash")
-    setAgencyId(""); setStaffId(""); setAmount(""); setCurrency("EUR"); setDescription(""); setSubCategory(""); setSlipNo("")
+    setAgencyId(""); setStaffId("")
+    setHotelId(""); setHotelName(""); setHotelSearch(""); setShowHotelDropdown(false)
+    setVoucherDesc(""); setAgencyIncomeKind("general")
+    setAmount(""); setCurrency("EUR"); setDescription(""); setSubCategory(""); setSlipNo("")
     setHasPending(false); setPendingAmount("")
   }
 
@@ -2064,33 +2159,43 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     if (open) {
       setBasket([])
       if (editingEntry) {
-        if (editingEntry.agencyIncomeAmount) {
+        // Common fields
+        setHotelId(editingEntry.hotelId || "")
+        setHotelName(editingEntry.hotel?.name || "")
+        setHotelSearch(editingEntry.hotel?.name || "")
+        setVoucherDesc(editingEntry.voucherDesc || "")
+        setDescription(editingEntry.description || "")
+        setAgencyId(editingEntry.agencyId || "")
+        if (editingEntry.agencyIncomeAmount !== null && editingEntry.agencyIncomeAmount !== undefined) {
           setIncomeType("agency"); setPaymentMethod("cash")
-          setAgencyId(editingEntry.agencyId || ""); setStaffId("")
-          setAmount(editingEntry.agencyIncomeAmount?.toString() || "")
+          setStaffId("")
+          setAmount(editingEntry.agencyIncomeAmount.toString())
           setCurrency(editingEntry.agencyIncomeCurrency || "EUR")
           setSubCategory("")
-        } else if (editingEntry.staffIncomeAmount) {
+          setAgencyIncomeKind(editingEntry.incomeSubCategory === "GELIR_REST" ? "rest" : "general")
+        } else if (editingEntry.staffIncomeAmount !== null && editingEntry.staffIncomeAmount !== undefined) {
           setIncomeType("staff"); setPaymentMethod("cash")
           setStaffId(editingEntry.staffId || ""); setAgencyId("")
-          setAmount(editingEntry.staffIncomeAmount?.toString() || "")
+          setAmount(editingEntry.staffIncomeAmount.toString())
           setCurrency(editingEntry.staffIncomeCurrency || "EUR")
           setSubCategory(editingEntry.incomeSubCategory || "")
-        } else if (editingEntry.creditCardAmount) {
+          setAgencyIncomeKind("general")
+        } else if (editingEntry.creditCardAmount !== null && editingEntry.creditCardAmount !== undefined) {
           setIncomeType("reception"); setPaymentMethod("creditCard")
-          setAgencyId(""); setStaffId("")
-          setAmount(editingEntry.creditCardAmount?.toString() || "")
+          setStaffId("")
+          setAmount(editingEntry.creditCardAmount.toString())
           setCurrency("TRY")
           setSubCategory(editingEntry.incomeSubCategory || "")
-          setSlipNo((editingEntry as any).slipNo || "")
+          setSlipNo(editingEntry.slipNo || "")
+          setAgencyIncomeKind("general")
         } else {
           setIncomeType("reception"); setPaymentMethod("cash")
-          setAgencyId(""); setStaffId("")
+          setStaffId("")
           setAmount(editingEntry.receptionIncomeAmount?.toString() || "")
           setCurrency(editingEntry.receptionIncomeCurrency || "EUR")
           setSubCategory(editingEntry.incomeSubCategory || "")
+          setAgencyIncomeKind("general")
         }
-        setDescription(editingEntry.description || "")
       } else {
         resetRow()
       }
@@ -2110,6 +2215,10 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     if (!isPartialWithZero && (!amount || parseFloat(amount) <= 0)) { toast.error("Miktar giriniz"); return false }
     if (incomeType === "staff" && !staffId) { toast.error("Personel seçiniz"); return false }
     if (incomeType === "staff" && !subCategory) { toast.error("Alt kategori seçiniz"); return false }
+    if (incomeType === "agency" && (!agencyId || agencyId === "none")) {
+      toast.error(agencyIncomeKind === "rest" ? "REST geliri için acenta seçiniz" : "Acenta geliri için acenta seçiniz")
+      return false
+    }
     if (paymentMethod === "creditCard" && !slipNo.trim()) { toast.error("Slip No giriniz"); return false }
     if (hasPending && paymentMethod === "cash") {
       if (!pendingAmount || parseFloat(pendingAmount) <= 0) { toast.error("Kalan tutar giriniz"); return false }
@@ -2121,11 +2230,12 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     if (!validateRow()) return
     const item: BasketItem = {
       id: crypto.randomUUID(),
-      incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory, slipNo,
-      hasPending, pendingAmount,
+      incomeType, paymentMethod, agencyId, staffId, hotelId, hotelName,
+      amount, currency, description, voucherDesc, subCategory, slipNo,
+      agencyIncomeKind, hasPending, pendingAmount,
     }
     setBasket(prev => [...prev, item])
-    // Satırı sıfırla ama tipi koru
+    // Satırı sıfırla ama tipi / acenta / otel / voucher koru
     setAmount(""); setDescription(""); setSlipNo("")
     setHasPending(false); setPendingAmount("")
   }
@@ -2137,7 +2247,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
       if (!validateRow()) return
       setSubmitting(true)
       try {
-        const payload = buildPayload({ id: "", incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory, slipNo, hasPending, pendingAmount }, dateStr)
+        const payload = buildPayload({ id: "", incomeType, paymentMethod, agencyId, staffId, hotelId, hotelName, amount, currency, description, voucherDesc, subCategory, slipNo, agencyIncomeKind, hasPending, pendingAmount }, dateStr)
         const res = await fetch(`/api/kasa/${editingEntry!.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
         })
@@ -2153,10 +2263,13 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
     }
 
     // Normal mod: sepetteki + mevcut satır
-    const currentFilled = amount && parseFloat(amount) > 0
+    // Sıfır tutarlı kısmi ödeme de geçerli (hasPending=true + pendingAmount>0)
+    const currentFilled =
+      (amount && parseFloat(amount) > 0) ||
+      (hasPending && (!amount || parseFloat(amount) === 0) && pendingAmount && parseFloat(pendingAmount) > 0)
     const allItems: BasketItem[] = [
       ...basket,
-      ...(currentFilled ? [{ id: "current", incomeType, paymentMethod, agencyId, staffId, amount, currency, description, subCategory, slipNo, hasPending, pendingAmount }] : [])
+      ...(currentFilled ? [{ id: "current", incomeType, paymentMethod, agencyId, staffId, hotelId, hotelName, amount, currency, description, voucherDesc, subCategory, slipNo, agencyIncomeKind, hasPending, pendingAmount }] : [])
     ]
     if (allItems.length === 0) { toast.error("En az bir kalem giriniz"); return }
     if (currentFilled && !validateRow()) return
@@ -2193,7 +2306,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full !max-w-[520px]">
+      <DialogContent className="w-full !max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-emerald-700">{isEditing ? "Gelir Düzenle" : "Gelir Ekle"}</DialogTitle>
         </DialogHeader>
@@ -2240,7 +2353,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             {([
               { key: "reception", label: "Resepsiyon", color: "bg-emerald-600 hover:bg-emerald-700" },
               { key: "agency",    label: "Acenta",      color: "bg-blue-600 hover:bg-blue-700" },
-              { key: "staff",     label: "Personel",    color: "bg-amber-600 hover:bg-amber-700" },
+              { key: "staff",     label: "İnfocu",      color: "bg-amber-600 hover:bg-amber-700" },
             ] as const).map(({ key, label, color }) => (
               <Button key={key} type="button" variant={incomeType === key ? "default" : "outline"}
                 className={cn("flex-1", incomeType === key && color)}
@@ -2272,17 +2385,33 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             </div>
           )}
 
-          {/* Acenta seçimi */}
+          {/* Acenta seçimi — tüm tipler için opsiyonel */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">
+              Acenta{incomeType === "agency" ? "" : " (opsiyonel)"}
+            </Label>
+            <Select value={agencyId || "none"} onValueChange={v => setAgencyId(v === "none" ? "" : v)}>
+              <SelectTrigger className="h-10"><SelectValue placeholder="Acenta seçin (opsiyonel)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Seçiniz</SelectItem>
+                {agencies.map(a => <SelectItem key={a.id} value={a.id}>{a.companyName || a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Acenta gelir türü: Genel / REST — sadece agency tipinde */}
           {incomeType === "agency" && (
-            <div className="space-y-2">
-              <Label className="text-xs font-medium text-gray-600">Acenta</Label>
-              <Select value={agencyId} onValueChange={setAgencyId}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Acenta seçin (opsiyonel)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Seçiniz</SelectItem>
-                  {agencies.map(a => <SelectItem key={a.id} value={a.id}>{a.companyName || a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2">
+              <Button type="button" variant={agencyIncomeKind === "general" ? "default" : "outline"}
+                className={cn("flex-1 text-sm", agencyIncomeKind === "general" && "bg-blue-600 hover:bg-blue-700")}
+                onClick={() => setAgencyIncomeKind("general")}>
+                Genel Gelir
+              </Button>
+              <Button type="button" variant={agencyIncomeKind === "rest" ? "default" : "outline"}
+                className={cn("flex-1 text-sm", agencyIncomeKind === "rest" && "bg-rose-600 hover:bg-rose-700")}
+                onClick={() => setAgencyIncomeKind("rest")}>
+                REST Geliri
+              </Button>
             </div>
           )}
 
@@ -2304,6 +2433,44 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             </div>
           )}
 
+          {/* Otel autocomplete — tüm tipler için */}
+          <div className="space-y-2 relative">
+            <Label className="text-xs font-medium text-gray-600">Otel (opsiyonel)</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Otel ara..."
+                value={hotelSearch}
+                onChange={e => { setHotelSearch(e.target.value); setShowHotelDropdown(true); if (!e.target.value) { setHotelId(""); setHotelName("") } }}
+                onFocus={() => setShowHotelDropdown(true)}
+                onBlur={() => setTimeout(() => setShowHotelDropdown(false), 150)}
+                className="flex-1 h-10"
+              />
+              {hotelId && (
+                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-gray-400 hover:text-red-500"
+                  onClick={() => { setHotelId(""); setHotelName(""); setHotelSearch("") }}>
+                  ×
+                </Button>
+              )}
+            </div>
+            {showHotelDropdown && filteredHotels.length > 0 && (
+              <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto top-[calc(100%-4px)]">
+                {filteredHotels.map(h => (
+                  <button key={h.id} type="button"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 hover:text-blue-700"
+                    onMouseDown={() => { setHotelId(h.id); setHotelName(h.name); setHotelSearch(h.name); setShowHotelDropdown(false) }}>
+                    {h.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Voucher / Fiş No */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">Voucher / Fiş No (opsiyonel)</Label>
+            <Input placeholder="Fiş no..." value={voucherDesc} onChange={e => setVoucherDesc(e.target.value)} className="h-10" />
+          </div>
+
           {/* Alt kategori + Slip No (KK için) */}
           {(incomeType === "reception" || incomeType === "staff") && (
             <div className="flex gap-2 items-end">
@@ -2315,9 +2482,11 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
                     {incomeType === "reception" && (
                       <SelectItem value="none">Genel Resepsiyon Geliri</SelectItem>
                     )}
-                    {INCOME_SUB_CATEGORIES.map(c => (
-                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                    ))}
+                    {INCOME_SUB_CATEGORIES
+                      .filter(c => c.code !== "GELIR_REST")
+                      .map(c => (
+                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -2334,7 +2503,7 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
               )}
             </div>
           )}
-          {/* Slip No — agency veya staff + creditCard (alt kategori gösterilmiyorsa) */}
+          {/* Slip No — agency + creditCard */}
           {incomeType === "agency" && paymentMethod === "creditCard" && (
             <div className="w-full space-y-2">
               <Label className="text-xs font-medium text-violet-700">Slip No *</Label>
