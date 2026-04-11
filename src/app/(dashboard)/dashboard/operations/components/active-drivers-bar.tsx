@@ -8,7 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Car, MapPin, ArrowRight, User, Hotel, Clock, Coffee, Send, Trash2, Copy, Check } from "lucide-react"
+import { Car, MapPin, ArrowRight, User, Hotel, Clock, Coffee, Send, Trash2, Copy, Check, XCircle } from "lucide-react"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -77,6 +77,7 @@ interface ActiveDriversBarProps {
   onStatusChange?: (transferId: string, newStatus: string) => void
   onDriverChange?: (transferId: string, driverId: string | null) => void
   onStartRoute?: (driverTransfers: Transfer[]) => Promise<void> | void
+  onCancelRoute?: (driverTransfers: Transfer[]) => Promise<void> | void
 }
 
 type DriverGroup = {
@@ -91,7 +92,8 @@ export function ActiveDriversBar({
   drivers,
   onStatusChange,
   onDriverChange,
-  onStartRoute
+  onStartRoute,
+  onCancelRoute
 }: ActiveDriversBarProps) {
   const [openDriverId, setOpenDriverId] = useState<string | null>(null)
   const [copiedDriverId, setCopiedDriverId] = useState<string | null>(null)
@@ -421,8 +423,8 @@ export function ActiveDriversBar({
                         </Badge>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-96 p-3">
-                      <div className="space-y-3">
+                    <PopoverContent className="w-96 p-0">
+                      <div className="p-3 space-y-3 max-h-80 overflow-y-auto">
                         {/* Alınış İşlemleri */}
                         {pickupTransfers.length > 0 && (
                           <div>
@@ -479,6 +481,24 @@ export function ActiveDriversBar({
                           </div>
                         )}
                       </div>
+
+                      {onCancelRoute && (
+                        <div className="p-3 border-t bg-muted/30">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full h-8 text-xs border-red-300 bg-red-50 hover:bg-red-100 text-red-700"
+                            onClick={() => {
+                              const total = pickupTransfers.length + dropoffTransfers.length
+                              if (!window.confirm(`${driver.user.name} şoförünün aracını geri çağır? ${total} müşteri "Araç Hazırlık" listesine geri dönecek.`)) return
+                              onCancelRoute(driverTransfers)
+                            }}
+                          >
+                            <XCircle className="h-3.5 w-3.5 mr-1.5" />
+                            Gönderimi İptal Et
+                          </Button>
+                        </div>
+                      )}
                     </PopoverContent>
                   </Popover>
                 )

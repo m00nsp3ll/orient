@@ -187,6 +187,44 @@ export default function OperationsPage() {
     }
   }
 
+  const handleCancelRoute = async (driverTransfers: Transfer[]) => {
+    try {
+      setLoading(true)
+
+      for (const transfer of driverTransfers) {
+        // PICKING_UP → PENDING (alınış): pickupTime ve arrivalTime temizle
+        // DROPPING_OFF (bırakılış): status aynı kalır, sadece arrivalTime ve departureTime temizle
+        const body: {
+          status?: string
+          arrivalTime: null
+          pickupTime?: null
+          departureTime?: null
+        } = { arrivalTime: null }
+
+        if (transfer.status === "PICKING_UP") {
+          body.status = "PENDING"
+          body.pickupTime = null
+        } else if (transfer.status === "DROPPING_OFF") {
+          body.departureTime = null
+        }
+
+        await fetch(`/api/transfers/${transfer.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      }
+
+      await fetchData()
+      toast.success("Araç gönderimi iptal edildi")
+    } catch (error) {
+      console.error("Gönderim iptal hatası:", error)
+      toast.error("Gönderim iptal edilemedi")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDriverChange = async (transferId: string, driverId: string | null) => {
     try {
       // DROPPING_OFF durumunda şoför seçildiğinde arrivalTime null kalmalı
@@ -324,6 +362,7 @@ export default function OperationsPage() {
           onStatusChange={canEditOps ? handleStatusChange : undefined}
           onDriverChange={canEditOps ? handleDriverChange : undefined}
           onStartRoute={canEditOps ? handleStartRoute : undefined}
+          onCancelRoute={canEditOps ? handleCancelRoute : undefined}
         />
       )}
 

@@ -96,18 +96,18 @@ export async function PATCH(
       updateData.notes = validatedData.notes
     }
 
-    // Manual time overrides
-    if (validatedData.pickupTime) {
-      updateData.pickupTime = new Date(validatedData.pickupTime)
+    // Manual time overrides (null explicitly clears the field)
+    if (validatedData.pickupTime !== undefined) {
+      updateData.pickupTime = validatedData.pickupTime ? new Date(validatedData.pickupTime) : null
     }
-    if (validatedData.arrivalTime) {
-      updateData.arrivalTime = new Date(validatedData.arrivalTime)
+    if (validatedData.arrivalTime !== undefined) {
+      updateData.arrivalTime = validatedData.arrivalTime ? new Date(validatedData.arrivalTime) : null
     }
-    if (validatedData.departureTime) {
-      updateData.departureTime = new Date(validatedData.departureTime)
+    if (validatedData.departureTime !== undefined) {
+      updateData.departureTime = validatedData.departureTime ? new Date(validatedData.departureTime) : null
     }
-    if (validatedData.dropoffTime) {
-      updateData.dropoffTime = new Date(validatedData.dropoffTime)
+    if (validatedData.dropoffTime !== undefined) {
+      updateData.dropoffTime = validatedData.dropoffTime ? new Date(validatedData.dropoffTime) : null
     }
 
     const transfer = await prisma.transfer.update({
