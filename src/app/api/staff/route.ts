@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkPermission } from "@/lib/permissions"
 import { z } from "zod"
 
 const staffSchema = z.object({
@@ -29,7 +30,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
+    return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  const allowed = session.user.role === "ADMIN" ||
+    await checkPermission(session.user.role, session.user.id, "personel_view")
+  if (!allowed) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 

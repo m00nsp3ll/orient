@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkPermission } from "@/lib/permissions"
 
 export async function PUT(
   req: NextRequest,
@@ -10,7 +11,12 @@ export async function PUT(
   const session = await getServerSession(authOptions)
   const { id } = await params
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
+    return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+
+  const hasPermission = await checkPermission(session.user.role, session.user.id, "oteller_view")
+  if (!hasPermission) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 

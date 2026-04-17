@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkPermission } from "@/lib/permissions"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
 
@@ -47,7 +48,12 @@ export async function PATCH(
   const session = await getServerSession(authOptions)
   const { id } = await params
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
+    return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  const allowed = session.user.role === "ADMIN" ||
+    await checkPermission(session.user.role, session.user.id, "personel_view")
+  if (!allowed) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 
@@ -108,7 +114,12 @@ export async function DELETE(
   const session = await getServerSession(authOptions)
   const { id } = await params
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
+    return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
+  }
+  const allowed = session.user.role === "ADMIN" ||
+    await checkPermission(session.user.role, session.user.id, "personel_view")
+  if (!allowed) {
     return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 })
   }
 

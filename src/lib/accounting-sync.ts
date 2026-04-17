@@ -283,16 +283,18 @@ export async function syncAccountingEntries(
   if (cashEntry.creditCardAmount && cashEntry.creditCardCurrency) {
     const amt = cashEntry.creditCardAmount
     const cur = cashEntry.creditCardCurrency
+    const isRestKK = cashEntry.incomeSubCategory === "GELIR_REST"
 
     toCreate.push({
       ...base,
-      accountCode: "GELIR_KREDI_KARTI",
+      accountCode: isRestKK ? "GELIR_REST" : "GELIR_KREDI_KARTI",
       credit: amt,
       debit: 0,
       amount: amt,
       currency: cur,
+      agencyId: isRestKK ? (cashEntry.agencyId ?? undefined) : undefined,
       staffId: cashEntry.staffId ?? undefined,
-      description: cashEntry.description ?? "Kredi kartı geliri",
+      description: cashEntry.description ?? (isRestKK ? "REST geliri (KK)" : "Kredi kartı geliri"),
     })
 
     // KK işlemlerinde acenta sadece bilgi amaçlı — acenta portfolyosuna (cari) yansıtılmaz.

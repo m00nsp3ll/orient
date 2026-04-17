@@ -912,15 +912,23 @@ export default function KasaPage() {
 
         // Rest toplamları — kasa girişlerindeki GELIR_REST kayıtlarından
         const restByCurrency: Record<string, number> = {}
+        const restKKByCurrency: Record<string, number> = {}
         for (const e of kasaEntries) {
           if (e.incomeSubCategory === "GELIR_REST") {
-            const { amount, currency } = getEntryAmount(e)
-            if (amount > 0) restByCurrency[currency] = (restByCurrency[currency] || 0) + amount
+            const isKK = e.creditCardAmount !== null && e.creditCardAmount !== undefined && e.creditCardAmount > 0
+            if (isKK) {
+              const cur = e.creditCardCurrency || "TRY"
+              restKKByCurrency[cur] = (restKKByCurrency[cur] || 0) + e.creditCardAmount!
+            } else {
+              const { amount, currency } = getEntryAmount(e)
+              if (amount > 0) restByCurrency[currency] = (restByCurrency[currency] || 0) + amount
+            }
           }
         }
         const restRows = Object.entries(restByCurrency)
+        const restKKRows = Object.entries(restKKByCurrency)
 
-        if (cashRows.length === 0 && ccRows.length === 0 && muhasebeRows.length === 0 && restRows.length === 0) return null
+        if (cashRows.length === 0 && ccRows.length === 0 && muhasebeRows.length === 0 && restRows.length === 0 && restKKRows.length === 0) return null
 
         return (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -983,7 +991,7 @@ export default function KasaPage() {
                         </div>
                       )}
                       <div className="flex items-center justify-between pt-3 border-t border-dashed border-blue-200 mt-2">
-                        <span className="text-xs font-medium text-blue-600">Genel Toplam (Nakit + KK)</span>
+                        <span className="text-xs font-medium text-blue-600" title="Net nakit kasa (gider ve slip düşülmüş) + KK toplamının € karşılığı">Net Kasa + KK (€)</span>
                         <span className={cn("text-lg font-bold", grandEur >= 0 ? "text-blue-700" : "text-red-600")}>
                           {grandEur < 0 ? "-" : ""}€ {Math.abs(grandEur).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
@@ -992,6 +1000,13 @@ export default function KasaPage() {
                         // RESTSİZ: rest tutarlarını EUR'a çevir ve grandEur'dan çıkar
                         let restEur = 0
                         for (const [cur, amt] of restRows) {
+                          if (cur === "EUR") { restEur += amt }
+                          else {
+                            const c = convertCurrency(amt, cur, "EUR", exchangeRates.rates)
+                            if (c !== null) restEur += c
+                          }
+                        }
+                        for (const [cur, amt] of restKKRows) {
                           if (cur === "EUR") { restEur += amt }
                           else {
                             const c = convertCurrency(amt, cur, "EUR", exchangeRates.rates)
@@ -1043,11 +1058,11 @@ export default function KasaPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <div className="h-2.5 w-2.5 rounded-full bg-rose-500" />
                     <h3 className="font-semibold text-gray-700">Toplam Rest</h3>
-                    {restRows.length > 0 && (
-                      <span className="text-[10px] text-rose-400">({restRows.length} kalem)</span>
+                    {(restRows.length > 0 || restKKRows.length > 0) && (
+                      <span className="text-[10px] text-rose-400">({restRows.length + restKKRows.length} kalem)</span>
                     )}
                   </div>
-                  {restRows.length === 0 ? (
+                  {restRows.length === 0 && restKKRows.length === 0 ? (
                     <p className="text-sm text-gray-400">Rest işlemi yok</p>
                   ) : (
                     <div
@@ -1063,6 +1078,20 @@ export default function KasaPage() {
                           <div key={cur} className="flex items-center justify-between py-1">
                             <Badge className={cn("text-white text-xs", c?.bg ?? "bg-gray-500")}>{c?.symbol} {cur}</Badge>
                             <div className="text-xl font-bold text-rose-700">
+                              {c?.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {restKKRows.map(([cur, amt]) => {
+                        const c = CURRENCIES.find(x => x.value === cur)
+                        return (
+                          <div key={`kk-${cur}`} className="flex items-center justify-between py-1">
+                            <div className="flex items-center gap-1.5">
+                              <Badge className="text-white text-xs bg-violet-500">{c?.symbol} {cur}</Badge>
+                              <span className="text-[10px] font-bold text-violet-600">KK</span>
+                            </div>
+                            <div className="text-xl font-bold text-violet-700">
                               {c?.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                             </div>
                           </div>
@@ -1464,11 +1493,15 @@ function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary, exch
   const incomeEntries = entries.filter(e => !!(e.agencyIncomeAmount || e.receptionIncomeAmount || e.staffIncomeAmount || e.creditCardAmount))
   const expenseEntries = entries.filter(e => !!(e.expenseAmount) && !e.agencyIncomeAmount && !e.receptionIncomeAmount && !e.staffIncomeAmount && !e.creditCardAmount)
 
+  // Kategori = hizmet türü (alt kategori). Ödeme yöntemi (nakit/KK) ayrı blokta gösterilir.
   const incomeByCat: Record<string, Record<string, number>> = {}
   for (const e of incomeEntries) {
-    const cat = e.agencyIncomeAmount ? "Acenta Geliri"
-      : e.creditCardAmount ? "Kredi Kartı Geliri"
-      : e.incomeSubCategory ? getIncomeSubCategoryLabel(e.incomeSubCategory)
+    const cat = e.incomeSubCategory
+      ? getIncomeSubCategoryLabel(e.incomeSubCategory)
+      : e.agencyIncomeAmount
+      ? "Acenta Geliri"
+      : e.creditCardAmount
+      ? "Kredi Kartı Geliri"
       : "Resepsiyon Geliri"
     const { amount, currency } = getEntryAmount(e)
     if (!incomeByCat[cat]) incomeByCat[cat] = {}
@@ -1523,14 +1556,16 @@ function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary, exch
   const currencyBlocks = CURRENCIES.map(cur => {
     const cashIn = summary.cashIncome[cur.value] || 0
     const ccIn = summary.creditCardIncome[cur.value] || 0
+    const credit = summary.credit[cur.value] || 0
     const exp = summary.expense[cur.value] || 0
-    const net = cashIn - exp
-    if (cashIn === 0 && ccIn === 0 && exp === 0) return ""
+    const net = cashIn - credit - exp
+    if (cashIn === 0 && ccIn === 0 && credit === 0 && exp === 0) return ""
     return `
       <div class="summary-block">
         <div class="summary-cur">${cur.symbol} ${cur.value}</div>
         <div class="summary-row"><span>Nakit Gelir</span><span>${fmtAmt(cashIn, cur.value)}</span></div>
         ${ccIn > 0 ? `<div class="summary-row"><span>Kredi Kartı</span><span>${fmtAmt(ccIn, cur.value)}</span></div>` : ""}
+        ${credit > 0 ? `<div class="summary-row"><span>Slip (tahsil edilmedi)</span><span style="color:#0369a1">- ${fmtAmt(credit, cur.value)}</span></div>` : ""}
         ${exp > 0 ? `<div class="summary-row"><span>Gider</span><span style="color:#b91c1c">- ${fmtAmt(exp, cur.value)}</span></div>` : ""}
         <div class="summary-row net"><span>Net Nakit</span><span style="color:${net >= 0 ? "#000" : "#b91c1c"}">${fmtAmt(net, cur.value)}</span></div>
       </div>`
@@ -1566,23 +1601,50 @@ function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary, exch
       }
     }
 
-    // Nakit toplam EUR
-    let cashEur = 0
+    // Brüt nakit gelir toplam EUR (gider/slip çıkarılmamış)
+    let grossCashEur = 0
     for (const cur of CURRENCIES) {
-      const net = (summary.cashIncome[cur.value] || 0) - (summary.credit[cur.value] || 0) - (summary.expense[cur.value] || 0)
-      if (cur.value === "EUR") { cashEur += net }
+      const cashIn = summary.cashIncome[cur.value] || 0
+      if (cashIn === 0) continue
+      if (cur.value === "EUR") { grossCashEur += cashIn }
       else {
-        const c = convertCurrency(Math.abs(net), cur.value, "EUR", exchangeRates)
-        if (c !== null) cashEur += net >= 0 ? c : -c
+        const c = convertCurrency(cashIn, cur.value, "EUR", exchangeRates)
+        if (c !== null) grossCashEur += c
       }
     }
 
-    // Nakit + KK toplam TRY
-    const cashTRY = (summary.cashIncome["TRY"] || 0) - (summary.credit["TRY"] || 0) - (summary.expense["TRY"] || 0)
-    const ccTRY = summary.creditCardIncome["TRY"] || 0
-    const grandTRY = cashTRY + ccTRY
+    // Net nakit toplam EUR (gider + slip çıkarılmış)
+    let netCashEur = 0
+    for (const cur of CURRENCIES) {
+      const net = (summary.cashIncome[cur.value] || 0) - (summary.credit[cur.value] || 0) - (summary.expense[cur.value] || 0)
+      if (cur.value === "EUR") { netCashEur += net }
+      else {
+        const c = convertCurrency(Math.abs(net), cur.value, "EUR", exchangeRates)
+        if (c !== null) netCashEur += net >= 0 ? c : -c
+      }
+    }
 
-    const grandEur = cashEur + ccEur
+    // Gider toplam EUR
+    let expenseEur = 0
+    for (const cur of CURRENCIES) {
+      const exp = summary.expense[cur.value] || 0
+      if (exp === 0) continue
+      if (cur.value === "EUR") { expenseEur += exp }
+      else {
+        const c = convertCurrency(exp, cur.value, "EUR", exchangeRates)
+        if (c !== null) expenseEur += c
+      }
+    }
+
+    // TRY tarafı: brüt ve net ayrı
+    const grossCashTRY = summary.cashIncome["TRY"] || 0
+    const netCashTRY = grossCashTRY - (summary.credit["TRY"] || 0) - (summary.expense["TRY"] || 0)
+    const ccTRY = summary.creditCardIncome["TRY"] || 0
+    const grossTRY = grossCashTRY + ccTRY
+    const netTRY = netCashTRY + ccTRY
+
+    const grossEur = grossCashEur + ccEur
+    const netEur = netCashEur + ccEur
     const hasCc = CURRENCIES.some(cur => (summary.creditCardIncome[cur.value] || 0) > 0)
     if (!hasCc) return ""
 
@@ -1596,11 +1658,17 @@ function buildPrintHTML({ dateLabel, printedAt, userName, entries, summary, exch
         </div>
       </div>
       <div class="summary-block" style="border-color:#1d4ed8;margin-top:6px">
-        <div class="summary-cur" style="color:#1d4ed8">GENEL TOPLAM (NAKİT + KK)</div>
-        <div class="summary-row"><span>Toplam TL (Nakit + KK)</span><span style="font-weight:600">₺ ${grandTRY.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-        <div class="summary-row" style="font-weight:bold;border-top:1px solid #ccc;margin-top:4px;padding-top:4px">
-          <span>Toplam € Karşılığı (Nakit + KK)</span>
-          <span style="color:#1d4ed8">€ ${grandEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        <div class="summary-cur" style="color:#1d4ed8">GENEL TOPLAM</div>
+        <div class="summary-row"><span>Brüt Gelir TL (Nakit + KK)</span><span style="font-weight:600">₺ ${grossTRY.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+        <div class="summary-row"><span>Brüt Gelir € Karşılığı (Nakit + KK)</span><span style="font-weight:600">€ ${grossEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+        ${expenseEur > 0 ? `<div class="summary-row" style="color:#b91c1c"><span>(-) Gider € Karşılığı</span><span>- € ${expenseEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>` : ""}
+        <div class="summary-row" style="font-weight:600;border-top:1px solid #ccc;margin-top:4px;padding-top:4px">
+          <span>Net Kasa TL (Net Nakit + KK)</span>
+          <span>₺ ${netTRY.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+        <div class="summary-row" style="font-weight:bold">
+          <span>Net Kasa € Karşılığı</span>
+          <span style="color:#1d4ed8">€ ${netEur.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
       </div>`
   })()
@@ -1789,9 +1857,16 @@ function RestSummaryCard({ restEntries }: { restEntries: CashEntry[] }) {
   }, [])
 
   const byCurrency: Record<string, number> = {}
+  const kkByCurrency: Record<string, number> = {}
   for (const e of restEntries) {
-    const { amount, currency } = getEntryAmount(e)
-    if (amount > 0) byCurrency[currency] = (byCurrency[currency] || 0) + amount
+    const isKK = e.creditCardAmount !== null && e.creditCardAmount !== undefined && e.creditCardAmount > 0
+    if (isKK) {
+      const cur = e.creditCardCurrency || "TRY"
+      kkByCurrency[cur] = (kkByCurrency[cur] || 0) + e.creditCardAmount!
+    } else {
+      const { amount, currency } = getEntryAmount(e)
+      if (amount > 0) byCurrency[currency] = (byCurrency[currency] || 0) + amount
+    }
   }
 
   return (
@@ -1802,14 +1877,17 @@ function RestSummaryCard({ restEntries }: { restEntries: CashEntry[] }) {
         </DialogHeader>
         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
           {restEntries.map(e => {
-            const { amount, currency } = getEntryAmount(e)
+            const isKK = e.creditCardAmount !== null && e.creditCardAmount !== undefined && e.creditCardAmount > 0
+            const amount = isKK ? e.creditCardAmount! : getEntryAmount(e).amount
+            const currency = isKK ? (e.creditCardCurrency || "TRY") : getEntryAmount(e).currency
             const c = CURRENCIES.find(x => x.value === currency)
             return (
-              <div key={e.id} className="border border-rose-100 rounded-lg p-3 bg-rose-50/30">
+              <div key={e.id} className={cn("border rounded-lg p-3", isKK ? "border-violet-100 bg-violet-50/30" : "border-rose-100 bg-rose-50/30")}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className="text-[10px]">#{e.voucherNo}</Badge>
+                      {isKK && <Badge className="text-[9px] bg-violet-500 text-white">KK</Badge>}
                       {e.agency && <span className="text-sm font-semibold text-gray-800">{e.agency.companyName || e.agency.name}</span>}
                       {e.staff && <span className="text-xs text-gray-600">{e.staff.user.name}</span>}
                       <span className="text-xs text-gray-400">{format(new Date(e.createdAt), "HH:mm")}</span>
@@ -1818,10 +1896,11 @@ function RestSummaryCard({ restEntries }: { restEntries: CashEntry[] }) {
                       {e.hotel && <span>{e.hotel.name}{e.roomNumber ? ` · ${e.roomNumber}` : ""}</span>}
                       {e.serviceName && <span>· {e.serviceName}</span>}
                       {e.pax && <span>· {e.pax} PAX</span>}
+                      {isKK && e.slipNo && <span>· Slip: {e.slipNo}</span>}
                     </div>
                     {e.description && <p className="text-xs text-gray-400 mt-1">{e.description}</p>}
                   </div>
-                  <div className="text-lg font-bold text-rose-700 shrink-0">
+                  <div className={cn("text-lg font-bold shrink-0", isKK ? "text-violet-700" : "text-rose-700")}>
                     {c?.symbol ?? currency} {amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
@@ -1836,6 +1915,15 @@ function RestSummaryCard({ restEntries }: { restEntries: CashEntry[] }) {
               <div key={cur} className="flex items-center justify-between bg-rose-100 rounded-lg px-4 py-2">
                 <span className="text-sm text-rose-800 font-medium">Toplam Rest ({cur})</span>
                 <span className="text-base font-bold text-rose-900">{c?.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )
+          })}
+          {Object.entries(kkByCurrency).map(([cur, amt]) => {
+            const c = CURRENCIES.find(x => x.value === cur)
+            return (
+              <div key={`kk-${cur}`} className="flex items-center justify-between bg-violet-100 rounded-lg px-4 py-2">
+                <span className="text-sm text-violet-800 font-medium">KK Rest ({cur})</span>
+                <span className="text-base font-bold text-violet-900">{c?.symbol} {amt.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             )
           })}
@@ -2181,13 +2269,14 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
           setSubCategory(editingEntry.incomeSubCategory || "")
           setAgencyIncomeKind("general")
         } else if (editingEntry.creditCardAmount !== null && editingEntry.creditCardAmount !== undefined) {
-          setIncomeType("reception"); setPaymentMethod("creditCard")
+          const isRestKK = editingEntry.incomeSubCategory === "GELIR_REST"
+          setIncomeType(isRestKK ? "agency" : "reception"); setPaymentMethod("creditCard")
           setStaffId("")
           setAmount(editingEntry.creditCardAmount.toString())
           setCurrency("TRY")
-          setSubCategory(editingEntry.incomeSubCategory || "")
+          setSubCategory(isRestKK ? "" : (editingEntry.incomeSubCategory || ""))
           setSlipNo(editingEntry.slipNo || "")
-          setAgencyIncomeKind("general")
+          setAgencyIncomeKind(isRestKK ? "rest" : "general")
         } else {
           setIncomeType("reception"); setPaymentMethod("cash")
           setStaffId("")
@@ -2203,8 +2292,8 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
   }, [open, editingEntry])
 
   useEffect(() => {
-    if (incomeType === "agency") setPaymentMethod("cash")
-  }, [incomeType])
+    if (incomeType === "agency" && agencyIncomeKind !== "rest") setPaymentMethod("cash")
+  }, [incomeType, agencyIncomeKind])
 
   useEffect(() => {
     if (paymentMethod === "creditCard") setCurrency("TRY")
@@ -2363,8 +2452,8 @@ function IncomeFormDialog({ open, onOpenChange, editingEntry, agencies, staffLis
             ))}
           </div>
 
-          {/* Ödeme Yöntemi — Acenta hariç */}
-          {incomeType !== "agency" && (
+          {/* Ödeme Yöntemi — Acenta REST'te de göster */}
+          {(incomeType !== "agency" || agencyIncomeKind === "rest") && (
             <div className="flex gap-2">
               <Button type="button" variant={paymentMethod === "cash" ? "default" : "outline"}
                 className={cn("flex-1", paymentMethod === "cash" && "bg-gray-700 hover:bg-gray-800")}
