@@ -26,6 +26,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { usePermissions } from "@/hooks/use-permissions"
@@ -42,6 +43,7 @@ const navigation: { name: string; href: string; icon: any; roles: string[]; perm
   { name: "Oteller", href: "/dashboard/hotels", icon: Hotel, roles: ["ADMIN", "STAFF"], permissionKey: "oteller_view" },
   { name: "Alınış Saatleri", href: "/dashboard/session-times", icon: Timer, roles: ["ADMIN", "STAFF"], permissionKey: "oteller_view" },
   { name: "Günlük Kasa", href: "/dashboard/kasa", icon: Wallet, roles: ["ADMIN", "STAFF"], permissionKey: "kasa_view" },
+  { name: "Terapistler", href: "/dashboard/terapistler", icon: Sparkles, roles: ["ADMIN", "STAFF"], permissionKey: "terapistler_view" },
   { name: "Muhasebe", href: "/dashboard/muhasebe", icon: BookOpen, roles: ["ADMIN", "STAFF"], permissionKey: "muhasebe_view" },
   { name: "İstatistikler", href: "/dashboard/statistics", icon: BarChart3, roles: ["ADMIN", "STAFF"], permissionKey: "istatistik_view" },
   { name: "Acentalar", href: "/dashboard/agencies", icon: Building2, roles: ["ADMIN", "STAFF"], permissionKey: "acentalar_view" },

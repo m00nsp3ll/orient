@@ -172,5 +172,26 @@ export async function GET(req: NextRequest) {
     return { accountCode: code, label: s.user.name, type: "staff", balances }
   })
 
-  return NextResponse.json({ accounts: [...staticAccounts, ...staffAccounts, ...agencyAccounts] })
+  // Terapist carileri — TherapistEntry üzerinden prim toplamları
+  const allTherapists = await prisma.therapist.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+  })
+  const therapistEntries = await prisma.therapistEntry.groupBy({
+    by: ["therapistId", "currency"],
+    _sum: { primAmount: true, count: true },
+  })
+  const therapistAccounts = allTherapists.map(t => {
+    const entries = therapistEntries.filter(e => e.therapistId === t.id)
+    const balances: Record<string, { debit: number; credit: number; bakiye: number }> = {}
+    for (const e of entries) {
+      const prim = e._sum.primAmount ?? 0
+      if (prim > 0) {
+        balances[e.currency] = { debit: prim, credit: 0, bakiye: prim }
+      }
+    }
+    return { accountCode: `CARI_TERAPIST_${t.id}`, label: t.name, type: "therapist", balances }
+  })
+
+  return NextResponse.json({ accounts: [...staticAccounts, ...staffAccounts, ...agencyAccounts, ...therapistAccounts] })
 }

@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   { key: "hizmetler_view", label: "Hizmetler", description: "Hizmetler sayfası görüntüleme", isSpecial: false },
   { key: "oteller_view", label: "Oteller", description: "Oteller sayfası görüntüleme", isSpecial: false },
   { key: "acentalar_view", label: "Acentalar", description: "Acentalar sayfası görüntüleme", isSpecial: false },
+  { key: "terapistler_view", label: "Terapistler", description: "Terapistler sayfası görüntüleme", isSpecial: false },
 ] as const
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"]
@@ -30,6 +31,7 @@ export const DEFAULT_STAFF_PERMISSIONS: Record<string, PermissionKey[]> = {
     "dashboard_view", "randevu_view", "operasyon_view", "kasa_view",
     "muhasebe_view", "istatistik_view", "personel_view", "hizmetler_view",
     "oteller_view", "acentalar_view", "operasyon_duzenleme", "kasa_yonetimi",
+    "terapistler_view",
   ],
   Operasyon: [
     "dashboard_view", "randevu_view", "operasyon_view", "soforer_view", "istatistik_view",
@@ -38,7 +40,7 @@ export const DEFAULT_STAFF_PERMISSIONS: Record<string, PermissionKey[]> = {
   "Müdür": [
     "dashboard_view", "randevu_view", "operasyon_view", "kasa_view",
     "muhasebe_view", "istatistik_view", "personel_view", "hizmetler_view",
-    "oteller_view", "acentalar_view",
+    "oteller_view", "acentalar_view", "terapistler_view",
   ],
   Resepsiyon: [
     "dashboard_view", "randevu_view", "kasa_view",
@@ -62,6 +64,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, PermissionKey> = {
   "/dashboard/hotels": "oteller_view",
   "/dashboard/session-times": "oteller_view",
   "/dashboard/agencies": "acentalar_view",
+  "/dashboard/terapistler": "terapistler_view",
 }
 
 // ── Server-side Yetki Çözümle ────────────────────────────────────────────────

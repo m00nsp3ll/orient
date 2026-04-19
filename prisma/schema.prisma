@@ -27,6 +27,7 @@ model User {
   staff                 Staff?
   accountingEntries     AccountingEntry[] @relation("AccountingEntryCreatedBy")
   cashEntries           CashEntry[]       @relation("CashEntryCreatedBy")
+  therapistEntries      TherapistEntry[]  @relation("TherapistEntryCreatedBy")
 }
 
 model Account {
@@ -457,4 +458,33 @@ model AccountingEntry {
   @@index([staffId])
   @@index([agencyId])
   @@index([transferGroupId])
+}
+
+model Therapist {
+  id        String           @id @default(cuid())
+  name      String
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  entries   TherapistEntry[]
+}
+
+model TherapistEntry {
+  id          String    @id @default(cuid())
+  date        DateTime
+  therapistId String
+  serviceType String
+  count       Int       @default(0)
+  primAmount  Float     @default(0)
+  currency    String    @default("EUR")
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  therapist     Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  createdByUser User      @relation("TherapistEntryCreatedBy", fields: [createdBy], references: [id])
+
+  @@unique([date, therapistId, serviceType])
+  @@index([date])
+  @@index([therapistId])
 }

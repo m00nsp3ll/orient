@@ -1248,7 +1248,7 @@ export default function MuhasebePage() {
   const [incomeSort, setIncomeSort] = useState<SortDir>("desc")
   const [expSort,    setExpSort]    = useState<SortDir>("desc")
 
-  const [cariFilter,    setCariFilter]    = useState<"all" | "expense" | "income" | "staff" | "agency">("all")
+  const [cariFilter,    setCariFilter]    = useState<"all" | "expense" | "income" | "staff" | "agency" | "therapist">("all")
   const [detailAccount, setDetailAccount] = useState<{ code: string; label: string; type: string } | null>(null)
   const [manuelDialog,  setManuelDialog]  = useState(false)
   const [editEntry,     setEditEntry]     = useState<DetailEntry | null>(null)
@@ -1714,8 +1714,9 @@ export default function MuhasebePage() {
               { key: "all",     label: "Tümü" },
               { key: "income",  label: "Gelir Kalemleri" },
               { key: "expense", label: "Gider Kalemleri" },
-              { key: "staff",   label: "Personel" },
-              { key: "agency",  label: "Acentalar" },
+              { key: "staff",     label: "Personel" },
+              { key: "agency",    label: "Acentalar" },
+              { key: "therapist", label: "Terapistler" },
             ] as const).map(b => (
               <Button key={b.key} size="sm" variant={cariFilter === b.key ? "default" : "outline"}
                 className={cn("h-8 text-xs", cariFilter === b.key && "bg-blue-600 hover:bg-blue-700")}
@@ -1742,7 +1743,8 @@ export default function MuhasebePage() {
                 const C = {
                   expense: { border: "border-l-red-400",     badge: "bg-red-100 text-red-700",        label: "Gider" },
                   income:  { border: "border-l-emerald-400", badge: "bg-emerald-100 text-emerald-700", label: "Gelir" },
-                  staff:   { border: "border-l-amber-400",   badge: "bg-amber-100 text-amber-700",     label: "Personel" },
+                  staff:     { border: "border-l-amber-400",   badge: "bg-amber-100 text-amber-700",     label: "Personel" },
+                  therapist: { border: "border-l-purple-400",  badge: "bg-purple-100 text-purple-700",   label: "Terapist" },
                   agency:  { border: "border-l-blue-400",    badge: "bg-blue-100 text-blue-700",       label: "Acenta" },
                 }[acc.type] ?? { border: "border-l-gray-300", badge: "bg-gray-100 text-gray-600", label: acc.type }
 
