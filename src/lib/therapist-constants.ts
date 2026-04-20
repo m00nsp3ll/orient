@@ -8,6 +8,7 @@ export const THERAPIST_SERVICE_TYPES = [
   { code: "60DK_PAKET",  label: "60 dk Paket", primEur: 3 },
   { code: "90DK_PAKET",  label: "90 dk Paket", primEur: 5 },
   { code: "CILT_BAKIMI", label: "Cilt Bakımı", primEur: 2 },
+  { code: "KESE_KOPUK", label: "Kese Köpük", primEur: 0.5 },
 ] as const
 
 export type TherapistServiceCode = typeof THERAPIST_SERVICE_TYPES[number]["code"]

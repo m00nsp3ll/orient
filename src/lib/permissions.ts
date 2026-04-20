@@ -21,6 +21,7 @@ export const PERMISSIONS = [
   { key: "oteller_view", label: "Oteller", description: "Oteller sayfası görüntüleme", isSpecial: false },
   { key: "acentalar_view", label: "Acentalar", description: "Acentalar sayfası görüntüleme", isSpecial: false },
   { key: "terapistler_view", label: "Terapistler", description: "Terapistler sayfası görüntüleme", isSpecial: false },
+  { key: "terapistler_yonetim", label: "Terapist Yönetimi", description: "Terapist ekleme, giriş silme ve düzenleme", isSpecial: true },
 ] as const
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"]
@@ -31,11 +32,12 @@ export const DEFAULT_STAFF_PERMISSIONS: Record<string, PermissionKey[]> = {
     "dashboard_view", "randevu_view", "operasyon_view", "kasa_view",
     "muhasebe_view", "istatistik_view", "personel_view", "hizmetler_view",
     "oteller_view", "acentalar_view", "operasyon_duzenleme", "kasa_yonetimi",
-    "terapistler_view",
+    "terapistler_view", "terapistler_yonetim",
   ],
   Operasyon: [
     "dashboard_view", "randevu_view", "operasyon_view", "soforer_view", "istatistik_view",
     "operasyon_duzenleme", "kasa_view", "kasa_yonetimi", "oteller_view",
+    "terapistler_view", "terapistler_yonetim",
   ],
   "Müdür": [
     "dashboard_view", "randevu_view", "operasyon_view", "kasa_view",

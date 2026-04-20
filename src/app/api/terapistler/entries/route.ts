@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getServicePrim, THERAPIST_SERVICE_TYPES } from "@/lib/therapist-constants"
+import { checkPermission } from "@/lib/permissions"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -66,5 +67,27 @@ export async function POST(req: NextRequest) {
     })
 
   await prisma.$transaction(operations)
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const canManage = await checkPermission(session.user.role, session.user.id, "terapistler_yonetim")
+  if (!canManage) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const { date } = await req.json() as { date: string }
+  if (!date) return NextResponse.json({ error: "date parametresi gerekli" }, { status: 400 })
+
+  const dayStart = new Date(date + "T00:00:00.000Z")
+  const dayEnd = new Date(date + "T23:59:59.999Z")
+
+  await prisma.therapistEntry.deleteMany({
+    where: { date: { gte: dayStart, lte: dayEnd } },
+  })
+
   return NextResponse.json({ ok: true })
 }

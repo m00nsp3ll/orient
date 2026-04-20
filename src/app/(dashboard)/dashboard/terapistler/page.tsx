@@ -17,7 +17,7 @@ import { toast } from "sonner"
 import {
   CalendarIcon, Save, Sparkles, TrendingUp, Users, Plus,
   ChevronLeft, ChevronRight, UserPlus, BarChart3, Zap,
-  Table2, Minus, Check, Clock, Award, Star,
+  Table2, Minus, Check, Clock, Award, Star, Trash2,
 } from "lucide-react"
 
 type Therapist = { id: string; name: string; isActive: boolean }
@@ -46,6 +46,7 @@ const SERVICE_COLORS: Record<string, string> = {
   "60DK_PAKET": "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100",
   "90DK_PAKET": "bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100",
   "CILT_BAKIMI": "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100",
+  "KESE_KOPUK": "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
 }
 
 // ── Animasyonlu sayı ──
@@ -259,6 +260,23 @@ export default function TerapistlerPage() {
     onError: () => toast.error("Ekleme başarısız"),
   })
 
+  const deleteDayMutation = useMutation({
+    mutationFn: async (date: string) => {
+      const res = await fetch("/api/terapistler/entries", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
+      })
+      if (!res.ok) throw new Error()
+    },
+    onSuccess: () => {
+      toast.success("Günün girişleri silindi")
+      queryClient.invalidateQueries({ queryKey: ["therapist-entries"] })
+      queryClient.invalidateQueries({ queryKey: ["therapist-stats"] })
+    },
+    onError: () => toast.error("Silme başarısız"),
+  })
+
   // ── Quick mode handlers ──
   const quickIncrement = (therapistId: string, serviceType: string) => {
     setQuickData(prev => ({
@@ -347,7 +365,7 @@ export default function TerapistlerPage() {
             <Zap className="h-4 w-4" /> Anlık Giriş
           </TabsTrigger>
           <TabsTrigger value="table" className="gap-1.5 text-sm">
-            <Table2 className="h-4 w-4" /> Günlük Tablo
+            <Table2 className="h-4 w-4" /> Toplu Giriş Yap
           </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5 text-sm">
             <BarChart3 className="h-4 w-4" /> İstatistikler
@@ -383,6 +401,11 @@ export default function TerapistlerPage() {
                 <span className="text-gray-500"><span className="font-semibold text-gray-900">{quickGrandCount}</span> hizmet</span>
                 <span className="text-lg font-black text-purple-600"><AnimatedNumber value={quickGrandTotal} /> €</span>
               </div>
+              <Button variant="destructive" size="sm" className="gap-1.5"
+                disabled={deleteDayMutation.isPending || quickGrandCount === 0}
+                onClick={() => { if (confirm("Bu günün tüm girişleri silinecek. Emin misiniz?")) deleteDayMutation.mutate(quickDate) }}>
+                <Trash2 className="h-4 w-4" /> Günü Sil
+              </Button>
               <Button className="gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-200"
                 disabled={!quickDirty || quickSaveMutation.isPending}
                 onClick={() => quickSaveMutation.mutate()}>
@@ -543,6 +566,11 @@ export default function TerapistlerPage() {
                 <span className="text-gray-500"><span className="font-semibold text-gray-900">{tableGrandCount}</span> hizmet</span>
                 <span className="text-lg font-black text-purple-600">{tableGrandTotal.toFixed(2)} €</span>
               </div>
+              <Button variant="destructive" size="sm" className="gap-1.5"
+                disabled={deleteDayMutation.isPending || tableGrandCount === 0}
+                onClick={() => { if (confirm("Bu günün tüm girişleri silinecek. Emin misiniz?")) deleteDayMutation.mutate(tableDate) }}>
+                <Trash2 className="h-4 w-4" /> Günü Sil
+              </Button>
               <Button className="gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-200"
                 disabled={!tableDirty || tableSaveMutation.isPending}
                 onClick={() => tableSaveMutation.mutate()}>
