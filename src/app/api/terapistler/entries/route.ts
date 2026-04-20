@@ -17,7 +17,10 @@ export async function GET(req: NextRequest) {
 
   const entries = await prisma.therapistEntry.findMany({
     where: { date: { gte: dayStart, lte: dayEnd } },
-    include: { therapist: { select: { name: true } } },
+    include: {
+      therapist: { select: { name: true } },
+      createdByUser: { select: { name: true, email: true } },
+    },
   })
 
   return NextResponse.json(entries)
@@ -79,15 +82,16 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const { date } = await req.json() as { date: string }
+  const { date, therapistId } = await req.json() as { date: string; therapistId?: string }
   if (!date) return NextResponse.json({ error: "date parametresi gerekli" }, { status: 400 })
 
   const dayStart = new Date(date + "T00:00:00.000Z")
   const dayEnd = new Date(date + "T23:59:59.999Z")
 
-  await prisma.therapistEntry.deleteMany({
-    where: { date: { gte: dayStart, lte: dayEnd } },
-  })
+  const where: any = { date: { gte: dayStart, lte: dayEnd } }
+  if (therapistId) where.therapistId = therapistId
+
+  await prisma.therapistEntry.deleteMany({ where })
 
   return NextResponse.json({ ok: true })
 }
