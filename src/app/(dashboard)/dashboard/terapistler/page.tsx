@@ -377,11 +377,11 @@ export default function TerapistlerPage() {
           <TabsTrigger value="table" className="gap-1.5 text-sm">
             <Table2 className="h-4 w-4" /> Toplu Giriş Yap
           </TabsTrigger>
-          <TabsTrigger value="logs" className="gap-1.5 text-sm">
-            <Clock className="h-4 w-4" /> Giriş Listesi
-          </TabsTrigger>
           <TabsTrigger value="stats" className="gap-1.5 text-sm">
             <BarChart3 className="h-4 w-4" /> İstatistikler
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="gap-1.5 text-sm data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+            <Clock className="h-4 w-4" /> Giriş Listesi
           </TabsTrigger>
         </TabsList>
 
@@ -716,105 +716,7 @@ export default function TerapistlerPage() {
           )}
         </TabsContent>
 
-        {/* ══ TAB 3: GİRİŞ LİSTESİ ═══════════════════════════════════════ */}
-        <TabsContent value="logs" className="space-y-4 mt-0">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => navigateDate(logDate, -1, setLogDate)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Popover open={logCalOpen} onOpenChange={setLogCalOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-9 gap-2 text-sm font-medium min-w-[200px]">
-                    <CalendarIcon className="h-4 w-4" />
-                    {format(new Date(logDate + "T12:00:00"), "d MMMM yyyy, EEEE", { locale: tr })}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={new Date(logDate + "T12:00:00")}
-                    onSelect={d => { if (d) { setLogDate(format(d, "yyyy-MM-dd")); setLogCalOpen(false) } }} locale={tr} />
-                </PopoverContent>
-              </Popover>
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => navigateDate(logDate, 1, setLogDate)}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="sm:ml-auto text-sm text-gray-500">
-              <span className="font-semibold text-gray-900">{logEntries.filter(e => e.count > 0).length}</span> kayıt
-            </div>
-          </div>
-
-          {logLoading ? (
-            <div className="flex items-center justify-center py-20 gap-3 text-gray-400">
-              <div className="h-6 w-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : logEntries.filter(e => e.count > 0).length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <Clock className="h-10 w-10 mb-3 text-gray-300" />
-                <p className="text-sm font-medium">Bu tarihte giriş bulunamadı</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="shadow-sm">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gradient-to-r from-gray-50 to-slate-50">
-                        <th className="text-left p-3 font-semibold text-gray-700">Terapist</th>
-                        <th className="text-left p-3 font-semibold text-gray-700">Hizmet</th>
-                        <th className="text-center p-3 font-semibold text-gray-700">Adet</th>
-                        <th className="text-center p-3 font-semibold text-purple-700">Prim</th>
-                        <th className="text-left p-3 font-semibold text-gray-700">Giren Kullanıcı</th>
-                        <th className="text-left p-3 font-semibold text-gray-700">Saat</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logEntries
-                        .filter(e => e.count > 0)
-                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                        .map((entry, i) => {
-                          const t = activeTherapists.find(t => t.id === entry.therapistId)
-                          const gradient = COLORS[activeTherapists.findIndex(t => t.id === entry.therapistId) % COLORS.length]
-                          return (
-                            <tr key={entry.id} className={cn("border-b transition-colors hover:bg-purple-50/30", i % 2 === 0 ? "bg-white" : "bg-gray-50/30")}>
-                              <td className="p-3">
-                                <div className="flex items-center gap-2">
-                                  <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center text-white text-xs font-bold", gradient)}>
-                                    {t?.name.charAt(0) ?? "?"}
-                                  </div>
-                                  <span className="font-medium text-gray-900">{t?.name ?? "—"}</span>
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border", SERVICE_COLORS[entry.serviceType] || "bg-gray-50 border-gray-200 text-gray-700")}>
-                                  {getServiceLabel(entry.serviceType)}
-                                </span>
-                              </td>
-                              <td className="p-3 text-center font-semibold text-gray-900">{entry.count}</td>
-                              <td className="p-3 text-center font-bold text-purple-600">{entry.primAmount.toFixed(2)} €</td>
-                              <td className="p-3">
-                                <div>
-                                  <div className="font-medium text-gray-900 text-xs">{entry.createdByUser?.name ?? "—"}</div>
-                                  <div className="text-[10px] text-gray-400">{entry.createdByUser?.email ?? ""}</div>
-                                </div>
-                              </td>
-                              <td className="p-3 text-xs text-gray-500">
-                                {format(new Date(entry.createdAt), "HH:mm", { locale: tr })}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* ══ TAB 4: İSTATİSTİKLER ══════════════════════════════════════════ */}
+        {/* ══ TAB 3: İSTATİSTİKLER ══════════════════════════════════════════ */}
         <TabsContent value="stats" className="space-y-4 mt-0">
           <div className="flex flex-wrap items-center gap-2">
             {([
@@ -961,6 +863,104 @@ export default function TerapistlerPage() {
                 <BarChart3 className="h-10 w-10 mb-3 text-gray-300" />
                 <p className="text-sm font-medium">Bu dönemde kayıt bulunamadı</p>
                 <p className="text-xs mt-1">Farklı bir tarih aralığı deneyin</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ══ TAB 4: GİRİŞ LİSTESİ ═══════════════════════════════════════ */}
+        <TabsContent value="logs" className="space-y-4 mt-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => navigateDate(logDate, -1, setLogDate)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Popover open={logCalOpen} onOpenChange={setLogCalOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-9 gap-2 text-sm font-medium min-w-[200px]">
+                    <CalendarIcon className="h-4 w-4" />
+                    {format(new Date(logDate + "T12:00:00"), "d MMMM yyyy, EEEE", { locale: tr })}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={new Date(logDate + "T12:00:00")}
+                    onSelect={d => { if (d) { setLogDate(format(d, "yyyy-MM-dd")); setLogCalOpen(false) } }} locale={tr} />
+                </PopoverContent>
+              </Popover>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => navigateDate(logDate, 1, setLogDate)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="sm:ml-auto text-sm text-gray-500">
+              <span className="font-semibold text-amber-600">{logEntries.filter(e => e.count > 0).length}</span> kayıt
+            </div>
+          </div>
+
+          {logLoading ? (
+            <div className="flex items-center justify-center py-20 gap-3 text-gray-400">
+              <div className="h-6 w-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : logEntries.filter(e => e.count > 0).length === 0 ? (
+            <Card className="border-dashed border-amber-200">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-gray-400">
+                <Clock className="h-10 w-10 mb-3 text-amber-300" />
+                <p className="text-sm font-medium">Bu tarihte giriş bulunamadı</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="shadow-sm border-amber-100">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gradient-to-r from-amber-50 to-orange-50">
+                        <th className="text-left p-3 font-semibold text-gray-700">Terapist</th>
+                        <th className="text-left p-3 font-semibold text-gray-700">Hizmet</th>
+                        <th className="text-center p-3 font-semibold text-gray-700">Adet</th>
+                        <th className="text-center p-3 font-semibold text-amber-700">Prim</th>
+                        <th className="text-left p-3 font-semibold text-gray-700">Giren Kullanıcı</th>
+                        <th className="text-left p-3 font-semibold text-gray-700">Saat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logEntries
+                        .filter(e => e.count > 0)
+                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                        .map((entry, i) => {
+                          const t = activeTherapists.find(th => th.id === entry.therapistId)
+                          const gradient = COLORS[activeTherapists.findIndex(th => th.id === entry.therapistId) % COLORS.length]
+                          return (
+                            <tr key={entry.id} className={cn("border-b transition-colors hover:bg-amber-50/40", i % 2 === 0 ? "bg-white" : "bg-amber-50/20")}>
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center text-white text-xs font-bold", gradient)}>
+                                    {t?.name.charAt(0) ?? "?"}
+                                  </div>
+                                  <span className="font-medium text-gray-900">{t?.name ?? "—"}</span>
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border", SERVICE_COLORS[entry.serviceType] || "bg-gray-50 border-gray-200 text-gray-700")}>
+                                  {getServiceLabel(entry.serviceType)}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center font-semibold text-gray-900">{entry.count}</td>
+                              <td className="p-3 text-center font-bold text-amber-600">{entry.primAmount.toFixed(2)} €</td>
+                              <td className="p-3">
+                                <div>
+                                  <div className="font-medium text-gray-900 text-xs">{entry.createdByUser?.name ?? "—"}</div>
+                                  <div className="text-[10px] text-gray-400">{entry.createdByUser?.email ?? ""}</div>
+                                </div>
+                              </td>
+                              <td className="p-3 text-xs text-gray-500">
+                                {format(new Date(entry.createdAt), "HH:mm", { locale: tr })}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
