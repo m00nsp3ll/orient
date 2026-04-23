@@ -59,6 +59,8 @@ export async function GET(req: NextRequest) {
 
   if (status) {
     where.status = status
+  } else {
+    where.status = { not: "CANCELLED" }
   }
 
   if (approvalStatus) {
